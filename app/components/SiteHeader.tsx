@@ -1,0 +1,457 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import * as React from "react";
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+/* ---------------- 3D / Glass Orb Icon ---------------- */
+function GlassOrb({
+  tone = "violet",
+  children,
+}: {
+  tone?: "violet" | "emerald" | "indigo";
+  children: React.ReactNode;
+}) {
+  const tint =
+    tone === "emerald"
+      ? "rgba(16,185,129,0.24)"
+      : tone === "indigo"
+      ? "rgba(99,102,241,0.24)"
+      : "rgba(139,92,246,0.24)";
+
+  return (
+    <span
+      className={cn(
+        "relative grid h-9 w-9 place-items-center rounded-2xl",
+        "border border-white/40 bg-white/20 backdrop-blur-md",
+        "ring-1 ring-black/8",
+        "shadow-[0_18px_45px_-32px_rgba(0,0,0,0.45)]",
+        "transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-[1.03]"
+      )}
+      aria-hidden="true"
+    >
+      {/* 3D highlight + tint */}
+      <span
+        className="absolute inset-0 rounded-2xl"
+        style={{
+          background: `
+            radial-gradient(circle at 30% 22%, rgba(255,255,255,0.80), rgba(255,255,255,0.12) 55%, rgba(255,255,255,0.0) 75%),
+            radial-gradient(circle at 70% 85%, ${tint}, rgba(255,255,255,0.0) 62%)
+          `,
+        }}
+      />
+      {/* specular */}
+      <span className="absolute left-1.5 top-1.5 h-3.5 w-3.5 rounded-full bg-white/55 blur-[1px]" />
+      <span className="relative text-slate-900/85">{children}</span>
+    </span>
+  );
+}
+
+/* ---------------- Icons (revize: daha fonksiyonel) ---------------- */
+function TilesIcon() {
+  // Keşfet: galeri/koleksiyon hissi
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h5A1.5 1.5 0 0 1 12 5.5v5A1.5 1.5 0 0 1 10.5 12h-5A1.5 1.5 0 0 1 4 10.5z" />
+      <path d="M12.8 5.5A1.5 1.5 0 0 1 14.3 4h4.2A1.5 1.5 0 0 1 20 5.5v5A1.5 1.5 0 0 1 18.5 12h-4.2a1.5 1.5 0 0 1-1.5-1.5z" />
+      <path d="M4 14.3A1.5 1.5 0 0 1 5.5 12.8h5A1.5 1.5 0 0 1 12 14.3v4.2A1.5 1.5 0 0 1 10.5 20h-5A1.5 1.5 0 0 1 4 18.5z" />
+      <path d="M14 13.2l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" />
+    </svg>
+  );
+}
+
+function ProStarIcon() {
+  // Tasarımcılar: profesyonel + yıldız (seçkinlik)
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 12a4.2 4.2 0 1 0-4.2-4.2A4.2 4.2 0 0 0 12 12z" />
+      <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+      <path d="M18.3 6.2l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7z" />
+    </svg>
+  );
+}
+
+function SwipeCardsIcon() {
+  // Keşfetme Oyunu: kart swipe
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 7.2A2.2 2.2 0 0 1 10.2 5h7.6A2.2 2.2 0 0 1 20 7.2v9.6A2.2 2.2 0 0 1 17.8 19h-7.6A2.2 2.2 0 0 1 8 16.8z" />
+      <path d="M4 9.2A2.2 2.2 0 0 1 6.2 7h.7" />
+      <path d="M4 14.8A2.2 2.2 0 0 0 6.2 17h.7" />
+      <path d="M12.2 11l-1.6 1.6 1.6 1.6" />
+      <path d="M15.8 11l1.6 1.6-1.6 1.6" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 21l-4.35-4.35" />
+      <path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" />
+    </svg>
+  );
+}
+
+/* ---------------- Brand ---------------- */
+function Brand() {
+  return (
+    <Link
+      href="/"
+      className="group inline-flex items-center gap-3 rounded-2xl px-2 py-1.5 hover:bg-white/45 transition"
+    >
+      <div className="relative grid h-11 w-11 place-items-center overflow-hidden rounded-2xl ring-1 ring-black/8 shadow-[0_14px_35px_-28px_rgba(0,0,0,0.35)]">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(139,92,246,1) 0%, rgba(99,102,241,1) 35%, rgba(16,185,129,1) 100%)",
+          }}
+        />
+        <div className="absolute -left-6 -top-6 h-16 w-16 rounded-full bg-white/18 blur-xl" />
+        <span className="relative text-white font-extrabold tracking-tight">E</span>
+      </div>
+
+      <div className="leading-tight">
+        <div className="text-[15px] font-extrabold tracking-tight text-slate-900">
+          Evlumba
+        </div>
+        <div className="hidden xl:block text-[11.5px] text-slate-500">
+          Keşfet • Kaydet • Eşleş
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+/* ---------------- Nav Item ---------------- */
+function NavItem({
+  href,
+  label,
+  icon,
+  active,
+}: {
+  href: string;
+  label: React.ReactNode;
+  icon: React.ReactNode;
+  active?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "group inline-flex items-center gap-2 rounded-2xl px-3 py-2",
+        "border border-black/10 bg-white/55 backdrop-blur",
+        "shadow-[0_12px_35px_-30px_rgba(0,0,0,0.22)]",
+        "hover:bg-white/80 transition",
+        active && "bg-white/90"
+      )}
+      aria-current={active ? "page" : undefined}
+    >
+      {icon}
+      <span className="text-sm font-semibold text-slate-900 whitespace-nowrap">
+        {label}
+      </span>
+    </Link>
+  );
+}
+
+/* ---------------- Glass Register Button ---------------- */
+function GlassRegisterButton({
+  href,
+  labelDesktop = "Ücretsiz kayıt",
+  labelCompact = "Kayıt",
+  className = "",
+}: {
+  href: string;
+  labelDesktop?: string;
+  labelCompact?: string;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl",
+        "border border-black/10 backdrop-blur-xl",
+        "text-slate-900 font-semibold whitespace-nowrap",
+        "shadow-[0_16px_45px_-34px_rgba(0,0,0,0.28)]",
+        "transition hover:shadow-[0_22px_60px_-40px_rgba(0,0,0,0.32)]",
+        "px-4 py-2.5 text-sm",
+        className
+      )}
+      style={{
+        background:
+          "linear-gradient(135deg, rgba(139,92,246,0.16), rgba(99,102,241,0.12), rgba(16,185,129,0.14))",
+      }}
+    >
+      {/* subtle inner sheen */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-70"
+        style={{
+          background:
+            "radial-gradient(circle at 25% 20%, rgba(255,255,255,0.70), rgba(255,255,255,0.0) 58%)",
+        }}
+      />
+      <span className="relative hidden xl:inline">{labelDesktop}</span>
+      <span className="relative xl:hidden">{labelCompact}</span>
+      <span aria-hidden="true" className="relative text-slate-700">
+        →
+      </span>
+    </Link>
+  );
+}
+
+export default function SiteHeader() {
+  const pathname = usePathname();
+
+  const nav = [
+    {
+      href: "/kesfet",
+      label: "Keşfet",
+      icon: (
+        <GlassOrb tone="emerald">
+          <TilesIcon />
+        </GlassOrb>
+      ),
+    },
+    {
+      href: "/tasarimcilar",
+      label: "Tasarımcılar",
+      icon: (
+        <GlassOrb tone="indigo">
+          <ProStarIcon />
+        </GlassOrb>
+      ),
+    },
+    {
+      href: "/oyun",
+      label: (
+        <>
+          <span className="hidden xl:inline">Keşfetme Oyunu</span>
+          <span className="xl:hidden">Oyun</span>
+        </>
+      ),
+      icon: (
+        <GlassOrb tone="violet">
+          <SwipeCardsIcon />
+        </GlassOrb>
+      ),
+    },
+  ];
+
+  return (
+    /* ✅ Mobilde sticky yok — sadece lg+ sticky */
+<header className="relative mt-3 sm:mt-4 lg:mt-0 lg:sticky lg:top-4 z-50">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
+        <div className="rounded-[28px] border border-black/5 bg-white/60 backdrop-blur-xl shadow-[0_30px_80px_-65px_rgba(0,0,0,0.55)]">
+          {/* MOBILE/TABLET */}
+          <div className="lg:hidden">
+            <div className="flex items-center justify-between gap-3 px-3.5 pt-3.5">
+              <Brand />
+
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/giris"
+                  className={cn(
+                    "inline-flex items-center justify-center rounded-2xl border border-black/10",
+                    "bg-white/55 text-slate-700 hover:bg-white/85 hover:text-slate-900 transition",
+                    "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                    "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
+                  )}
+                >
+                  Giriş
+                </Link>
+
+                {/* ✅ Mobil kayıt: glass renkli, alt çizgi yok */}
+                <GlassRegisterButton
+                  href="/kayit"
+                  labelDesktop="Ücretsiz kayıt"
+                  labelCompact="Kayıt"
+                  className="px-3.5 py-2"
+                />
+              </div>
+            </div>
+
+            {/* yatay scroll nav (hamburger yok) */}
+            <div className="px-3.5 pt-3">
+              <div
+                className={cn(
+                  "flex items-center gap-2 overflow-x-auto pb-1",
+                  "[-ms-overflow-style:none] [scrollbar-width:none]"
+                )}
+                style={{ WebkitOverflowScrolling: "touch" as any }}
+              >
+                <style jsx>{`
+                  div::-webkit-scrollbar {
+                    display: none;
+                  }
+                `}</style>
+                {nav.map((n) => (
+                  <NavItem
+                    key={n.href}
+                    href={n.href}
+                    label={n.label}
+                    icon={n.icon}
+                    active={pathname === n.href}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* search */}
+            <div className="px-3.5 pt-3 pb-3.5">
+              <form action="/kesfet" method="GET" className="flex items-center gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    name="q"
+                    placeholder="tarz, oda, şehir, profesyonel…"
+                    className={cn(
+                      "w-full rounded-2xl border border-black/10 bg-white/75",
+                      "pl-10 pr-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400",
+                      "outline-none focus:ring-2 focus:ring-black/10"
+                    )}
+                    autoComplete="off"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className={cn(
+                    "shrink-0 rounded-2xl border border-black/10 bg-white/70 text-slate-800 font-semibold",
+                    "backdrop-blur hover:bg-white/95 transition",
+                    "shadow-[0_12px_35px_-28px_rgba(0,0,0,0.25)]",
+                    "px-4 py-2.5 text-sm"
+                  )}
+                >
+                  Ara
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* DESKTOP */}
+          <div className="hidden lg:flex items-center gap-3 px-4 py-3.5 min-w-0">
+            <div className="shrink-0">
+              <Brand />
+            </div>
+
+            <nav className="shrink-0 flex items-center gap-2">
+              {nav.map((n) => (
+                <NavItem
+                  key={n.href}
+                  href={n.href}
+                  label={n.label}
+                  icon={n.icon}
+                  active={pathname === n.href}
+                />
+              ))}
+            </nav>
+
+            {/* search */}
+            <div className="min-w-0 flex-1 flex items-center justify-center">
+              <form
+                action="/kesfet"
+                method="GET"
+                className="flex items-center gap-2 w-full max-w-155"
+              >
+                <div className="relative flex-1 min-w-0">
+                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    name="q"
+                    placeholder="tarz, oda, şehir, profesyonel…"
+                    className={cn(
+                      "w-full rounded-2xl border border-black/10 bg-white/70",
+                      "pl-10 pr-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400",
+                      "outline-none focus:ring-2 focus:ring-black/10"
+                    )}
+                    autoComplete="off"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className={cn(
+                    "shrink-0 rounded-2xl border border-black/10 bg-white/65 text-slate-700 font-semibold",
+                    "backdrop-blur hover:bg-white/85 hover:text-slate-900 transition",
+                    "shadow-[0_12px_35px_-28px_rgba(0,0,0,0.25)]",
+                    "px-4 py-2.5 text-sm"
+                  )}
+                  title="Ara"
+                >
+                  Ara
+                </button>
+              </form>
+            </div>
+
+            {/* actions */}
+            <div className="shrink-0 flex items-center gap-2">
+              <Link
+                href="/giris"
+                className={cn(
+                  "inline-flex items-center justify-center rounded-2xl border border-black/10",
+                  "bg-white/55 text-slate-700 hover:bg-white/85 hover:text-slate-900 transition",
+                  "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                  "px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
+                )}
+              >
+                Giriş
+              </Link>
+
+              {/* ✅ Desktop kayıt: glass renkli, alt çizgi yok */}
+              <GlassRegisterButton href="/kayit" />
+            </div>
+          </div>
+        </div>
+
+        <div className="h-3 lg:h-0" />
+      </div>
+    </header>
+  );
+}

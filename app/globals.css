@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+html, body { height: 100%; }
+
+@keyframes evl-float {
+  0%,100% { transform: translate(0,0); }
+  25% { transform: translate(6px,-6px); }
+  50% { transform: translate(0,-10px); }
+  75% { transform: translate(-6px,-4px); }
+}
+@keyframes evl-float-soft {
+  0%,100% { transform: translate(0,0); }
+  50% { transform: translate(0,-6px); }
+}
+.evl-float { animation: evl-float 14s ease-in-out infinite; will-change: transform; }
+.evl-float-soft { animation: evl-float-soft 10s ease-in-out infinite; will-change: transform; }
+
+@media (prefers-reduced-motion: reduce) {
+  .evl-float, .evl-float-soft { animation: none !important; }
+}
+@keyframes evl-swipe-knob {
+  0%, 20%   { transform: translateX(0); }
+  45%, 60%  { transform: translateX(46px); }
+  85%, 100% { transform: translateX(0); }
+}
+@keyframes evl-swipe-card {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  30% { transform: translateX(10px) rotate(2.5deg); }
+  60% { transform: translateX(-10px) rotate(-2.5deg); }
+}
+@keyframes evl-swipe-left {
+  0%, 100% { transform: translateX(0); opacity: .55; }
+  50% { transform: translateX(-4px); opacity: 1; }
+}
+@keyframes evl-swipe-right {
+  0%, 100% { transform: translateX(0); opacity: .55; }
+  50% { transform: translateX(4px); opacity: 1; }
+}
+
+.evl-swipe-left  { animation: evl-swipe-left 1.6s ease-in-out infinite; will-change: transform, opacity; }
+.evl-swipe-right { animation: evl-swipe-right 1.6s ease-in-out infinite; will-change: transform, opacity; }
+
+@media (prefers-reduced-motion: reduce) {
+  .evl-swipe-left, .evl-swipe-right { animation: none !important; }
+}
+/* swipe preview animasyonu (mini kart sağ-sol nudge) */
+@keyframes evl-swipe-card {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  18%      { transform: translateX(-10px) rotate(-2.2deg); }
+  38%      { transform: translateX(-4px)  rotate(-0.8deg); }
+  62%      { transform: translateX(10px)  rotate(2.2deg); }
+  82%      { transform: translateX(4px)   rotate(0.8deg); }
+}
+
+.evl-swipe-card {
+  animation: evl-swipe-card 2.6s ease-in-out infinite;
+  will-change: transform;
+  transform-origin: 50% 85%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evl-swipe-card { animation: none !important; }
+}
+/* --- Swipe mikro animasyonları (Keşfetme Oyunu) --- */
+@keyframes evl-swipe-nudge {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  18% { transform: translateX(-7px) rotate(-1.2deg); }
+  36% { transform: translateX(7px) rotate(1.2deg); }
+  54% { transform: translateX(-4px) rotate(-0.6deg); }
+  72% { transform: translateX(4px) rotate(0.6deg); }
+}
+
+@keyframes evl-swipe-left {
+  0%, 100% { transform: translateX(0); opacity: .55; }
+  50% { transform: translateX(-2px); opacity: 1; }
+}
+
+@keyframes evl-swipe-right {
+  0%, 100% { transform: translateX(0); opacity: .55; }
+  50% { transform: translateX(2px); opacity: 1; }
+}
+
+/* default: animasyon yok (sadece hover/focus ile çalışır) */
+.evl-swipe-nudge,
+.evl-swipe-left,
+.evl-swipe-right {
+  animation: none;
+  will-change: transform, opacity;
+}
+
+/* Hover (ve klavye ile focus) olunca çalışsın */
+.group:hover .evl-swipe-nudge,
+.group:focus-within .evl-swipe-nudge {
+  animation: evl-swipe-nudge 1.6s ease-in-out infinite;
+}
+
+.group:hover .evl-swipe-left,
+.group:focus-within .evl-swipe-left {
+  animation: evl-swipe-left 0.9s ease-in-out infinite;
+}
+
+.group:hover .evl-swipe-right,
+.group:focus-within .evl-swipe-right {
+  animation: evl-swipe-right 0.9s ease-in-out infinite;
+}

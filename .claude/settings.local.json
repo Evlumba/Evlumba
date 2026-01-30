@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"c:\\\\Dev\\\\evlumba\\\\app\\\\tasarimcilar\\\\[slug]\\\\_components\\\\ReviewsSection.tsx\")",
+      "Bash(\"c:/Dev/evlumba/app/tasarimcilar/[slug]/_components/ReviewsSection.tsx\")"
+    ]
+  }
+}
