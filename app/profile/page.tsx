@@ -123,6 +123,11 @@ function ProfilePageContent() {
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [queryHandled, setQueryHandled] = useState(false);
   const isProfessional = role === "designer" || role === "designer_pending";
+  const visibleTabs = tabs.filter((tab) => {
+    if (tab.id === "professional" && isProfessional) return false;
+    if (tab.id === "cover-photo" && !isProfessional) return false;
+    return true;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -197,12 +202,12 @@ function ProfilePageContent() {
     if (loading || queryHandled) return;
 
     const requestedTab = searchParams.get("tab");
-    if (requestedTab && tabs.some((tab) => tab.id === requestedTab)) {
+    if (requestedTab && visibleTabs.some((tab) => tab.id === requestedTab)) {
       setActiveTab(requestedTab as TabId);
     }
 
     setQueryHandled(true);
-  }, [loading, queryHandled, searchParams]);
+  }, [loading, queryHandled, searchParams, visibleTabs]);
 
   async function onPickAvatar(file: File | null) {
     if (!file) return;
@@ -376,9 +381,7 @@ function ProfilePageContent() {
             </button>
           </div>
           <div className="mt-4 space-y-1">
-            {tabs
-              .filter((tab) => !(tab.id === "professional" && isProfessional))
-              .map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -465,7 +468,7 @@ function ProfilePageContent() {
             </div>
           ) : null}
 
-          {!loading && activeTab === "cover-photo" ? (
+          {!loading && isProfessional && activeTab === "cover-photo" ? (
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">Kapak Fotoğrafı</h2>
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
