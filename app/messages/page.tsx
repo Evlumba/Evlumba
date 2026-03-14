@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -76,7 +76,7 @@ function initials(name: string) {
   return chars.join("") || "K";
 }
 
-export default function MessagesPage() {
+function MessagesPageContent() {
   const searchParams = useSearchParams();
   const requestedDesignerId = useMemo(
     () => normalizeDesignerId(searchParams.get("designer")),
@@ -514,5 +514,17 @@ export default function MessagesPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-5xl px-4 py-8 text-sm text-slate-500">Yukleniyor...</main>
+      }
+    >
+      <MessagesPageContent />
+    </Suspense>
   );
 }

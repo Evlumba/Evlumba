@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type PublicProfile = {
@@ -46,7 +46,7 @@ function firstNameOnly(fullName: string) {
   return normalized.split(" ")[0] || "Kullanıcı";
 }
 
-export default function PublicProProfilePage() {
+function PublicProProfilePageContent() {
   const sp = useSearchParams();
   const designerId = sp.get("designerId");
   const [loading, setLoading] = useState(true);
@@ -315,5 +315,17 @@ export default function PublicProProfilePage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function PublicProProfilePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-100 px-4 py-8">Profil yukleniyor...</main>
+      }
+    >
+      <PublicProProfilePageContent />
+    </Suspense>
   );
 }

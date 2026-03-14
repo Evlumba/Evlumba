@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { loginUser, syncSessionFromSupabase, type Role } from "@/lib/storage";
@@ -38,7 +38,7 @@ function RoleCard({
   );
 }
 
-export default function KayitPage() {
+function KayitPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [role, setRole] = useState<Role>("homeowner");
@@ -311,5 +311,17 @@ export default function KayitPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function KayitPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-100 px-4 py-10">Kayit sayfasi yukleniyor...</main>
+      }
+    >
+      <KayitPageContent />
+    </Suspense>
   );
 }

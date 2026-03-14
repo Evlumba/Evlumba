@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "@/lib/toast";
@@ -56,7 +56,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabId>("general");
@@ -518,5 +518,15 @@ export default function ProfilePage() {
       ) : null}
 
     </main>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense
+      fallback={<main className="min-h-screen bg-slate-100 px-4 py-8">Profil yukleniyor...</main>}
+    >
+      <ProfilePageContent />
+    </Suspense>
   );
 }

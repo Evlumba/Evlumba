@@ -1484,7 +1484,7 @@ function Pagination({
 }
 
 /** -------------------- PAGE -------------------- **/
-export default function KesfetPage() {
+function KesfetPageContent() {
   const router = useRouter();
   const spRaw = useSearchParams();
   const params = useParams() as { room?: string[] };
@@ -2022,5 +2022,15 @@ export default function KesfetPage() {
         ideas={allIdeas}
       />
     </div>
+  );
+}
+
+export default function KesfetPage() {
+  return (
+    <React.Suspense
+      fallback={<main className="mx-auto max-w-[1280px] px-4 py-6">Kesfet yukleniyor...</main>}
+    >
+      <KesfetPageContent />
+    </React.Suspense>
   );
 }
