@@ -214,11 +214,14 @@ function ProfilePageContent() {
             const mergedRole = profile?.role || metadataRole;
             const mergedIsProfessional =
               mergedRole === "designer" || mergedRole === "designer_pending";
+            const profileFullName = String(profile?.full_name ?? "").trim();
+            const mergedFullName =
+              profileFullName ||
+              (googleAccount ? googleName : "") ||
+              baseDraft.fullName;
             const mergedDraft: ProfileDraft = {
               ...baseDraft,
-              fullName: googleAccount
-                ? googleName || profile?.full_name || baseDraft.fullName
-                : profile?.full_name || baseDraft.fullName,
+              fullName: mergedFullName,
               avatarUrl: profile?.avatar_url || baseDraft.avatarUrl,
               city: profile?.city || baseDraft.city,
               phone: profile?.phone || baseDraft.phone,
@@ -234,6 +237,7 @@ function ProfilePageContent() {
             };
 
             setRole(mergedRole);
+            setGoogleLockedName(googleAccount ? mergedFullName : "");
             setDraft(mergedDraft);
 
             if (mergedRole === "homeowner" && googleEmail) {
@@ -520,15 +524,12 @@ function ProfilePageContent() {
               <h2 className="text-xl font-semibold">İletişim</h2>
               <input
                 className={`${inputCls}${!isProfessional ? " bg-slate-100 text-slate-500" : ""}`}
-                value={draft.contactEmail}
+                value={isProfessional ? draft.contactEmail : draft.contactEmail || authEmail}
                 onChange={(e) => setDraft((p) => ({ ...p, contactEmail: e.target.value }))}
                 placeholder="İletişim e-posta"
                 readOnly={!isProfessional}
                 aria-readonly={!isProfessional}
               />
-              {!isProfessional ? (
-                <p className="text-xs text-slate-500">İletişim e-postası kayıt olduğun e-posta ile otomatik doldurulur ve değiştirilemez.</p>
-              ) : null}
               <input className={inputCls} value={draft.phone} onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))} placeholder="Telefon" />
               <input className={inputCls} value={draft.address} onChange={(e) => setDraft((p) => ({ ...p, address: e.target.value }))} placeholder="Adres" />
               <input className={inputCls} value={draft.website} onChange={(e) => setDraft((p) => ({ ...p, website: e.target.value }))} placeholder="Website" />

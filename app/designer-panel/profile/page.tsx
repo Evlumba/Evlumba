@@ -340,12 +340,17 @@ export default function DesignerProfileEditPage() {
           const workingHours = (businessDetails.workingHours ?? {}) as Record<string, unknown>;
 
           if (!cancelled) {
+            const profileFullName = String(profile?.full_name ?? "").trim();
+            const resolvedFullName =
+              profileFullName ||
+              (googleAccount ? googleName : "") ||
+              String(local.fullName ?? "").trim() ||
+              metadataName;
+
             setDraft({
               ...DEFAULT_DRAFT,
               ...local,
-              fullName: googleAccount
-                ? googleName || profile?.full_name || local.fullName || metadataName
-                : profile?.full_name ?? local.fullName ?? metadataName,
+              fullName: resolvedFullName,
               avatarUrl: profile?.avatar_url ?? local.avatarUrl ?? "",
               businessName: profile?.business_name ?? local.businessName ?? "",
               specialty: profile?.specialty ?? local.specialty ?? "",
@@ -376,6 +381,7 @@ export default function DesignerProfileEditPage() {
               workingSaturday: (workingHours.saturday as string | undefined) ?? local.workingSaturday ?? "",
               workingSunday: (workingHours.sunday as string | undefined) ?? local.workingSunday ?? "",
             });
+            setGoogleLockedName(googleAccount ? resolvedFullName : "");
 
             if (googleAccount && googleEmail) {
               const normalizedGoogleName = (googleName || metadataName).trim();

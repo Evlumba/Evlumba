@@ -336,6 +336,7 @@ export default function SiteHeader() {
   const [isLoggedIn, setIsLoggedIn] = React.useState(false);
   const [role, setRole] = React.useState<"designer" | "homeowner" | null>(null);
   const [unreadCount, setUnreadCount] = React.useState(0);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   React.useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -449,6 +450,18 @@ export default function SiteHeader() {
   const collectionsHref = "/profile/collections";
   const showCollectionsShortcut = role === "homeowner";
 
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      router.push("/");
+      router.refresh();
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   const nav = [
     {
       href: "/kesfet",
@@ -552,17 +565,17 @@ export default function SiteHeader() {
                     <button
                       type="button"
                       onClick={() => {
-                        logout();
-                        router.push("/");
+                        void handleLogout();
                       }}
+                      disabled={isLoggingOut}
                       className={cn(
                         "inline-flex items-center justify-center rounded-2xl border border-black/10",
-                        "bg-white/65 text-slate-800 hover:bg-white transition",
+                        "bg-white/65 text-slate-800 hover:bg-white transition disabled:cursor-not-allowed disabled:opacity-60",
                         "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
                         "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
                       )}
                     >
-                      Çıkış
+                      {isLoggingOut ? "Çıkış..." : "Çıkış"}
                     </button>
                   </>
                 ) : (
@@ -728,17 +741,17 @@ export default function SiteHeader() {
                   <button
                     type="button"
                     onClick={() => {
-                      logout();
-                      router.push("/");
+                      void handleLogout();
                     }}
+                    disabled={isLoggingOut}
                     className={cn(
                       "inline-flex items-center justify-center rounded-2xl border border-black/10",
-                      "bg-white/65 text-slate-800 hover:bg-white transition",
+                      "bg-white/65 text-slate-800 hover:bg-white transition disabled:cursor-not-allowed disabled:opacity-60",
                       "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
                       "px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
                     )}
                   >
-                    Çıkış
+                    {isLoggingOut ? "Çıkış..." : "Çıkış"}
                   </button>
                 </>
               ) : (

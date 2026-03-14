@@ -43,6 +43,7 @@ export default function Header() {
   const [session, setSession] = useState<SessionLike | null>(() => (getSession() as SessionLike | null) ?? null);
   const [q, setQ] = useState("");
   const [menu, setMenu] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -160,14 +161,17 @@ export default function Header() {
               ) : (
                 <button
                   className="rounded-xl bg-white/10 px-3 py-2 text-left text-sm hover:bg-white/15"
-                  onClick={() => {
-                    logout?.();
+                  onClick={async () => {
+                    if (isLoggingOut) return;
+                    setIsLoggingOut(true);
+                    await logout();
                     setSession(null);
                     setMenu(false);
                     window.location.href = "/";
                   }}
+                  disabled={isLoggingOut}
                 >
-                  Çıkış
+                  {isLoggingOut ? "Çıkış..." : "Çıkış"}
                 </button>
               )}
             </div>

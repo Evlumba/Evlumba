@@ -54,6 +54,8 @@ const COLLECTIONS_KEY = "evlumba_collections_v1";
 const EMAIL_LOGS_KEY = "evlumba_email_logs_v1";
 const SAVED_PROJECTS_KEY = "evlumba_saved_projects_v1";
 let isHydratingSession = false;
+let isLoggingOut = false;
+let logoutInFlight: Promise<void> | null = null;
 
 function emitSessionChanged() {
   if (typeof window === "undefined") return;
@@ -203,17 +205,17 @@ export async function syncSessionFromSupabase(): Promise<{
 }
 
 function hydrateSessionInBackground() {
-  if (typeof window === "undefined" || isHydratingSession) return;
+  if (typeof window === "undefined" || isHydratingSession || isLoggingOut) return;
   isHydratingSession = true;
   try {
     const supabase = getSupabaseBrowserClient();
     supabase.auth
       .getSession()
       .then(async ({ data }) => {
-        if (data.session?.user) {
-          const next = await buildSessionFromAuthUser(data.session.user);
-          setSession(next);
-        }
+        if (isLoggingOut || !data.session?.user) return;
+        const next = await buildSessionFromAuthUser(data.session.user);
+        if (isLoggingOut) return;
+        setSession(next);
       })
       .finally(() => {
         isHydratingSession = false;
@@ -227,7 +229,7 @@ function hydrateSessionInBackground() {
 /** Session helpers */
 export function getSession(): Session | null {
   const cached = _load<Session | null>(SESSION_KEY, null);
-  if (!cached) hydrateSessionInBackground();
+  if (!cached && !isLoggingOut) hydrateSessionInBackground();
   return cached;
 }
 
@@ -236,13 +238,29 @@ export function setSession(session: Session) {
   emitSessionChanged();
 }
 
-export function logout() {
+export async function logout(): Promise<void> {
+  if (logoutInFlight) return logoutInFlight;
+
+  isLoggingOut = true;
   _remove(SESSION_KEY);
   emitSessionChanged();
-  if (typeof window !== "undefined") {
-    const supabase = getSupabaseBrowserClient();
-    void supabase.auth.signOut();
-  }
+
+  logoutInFlight = (async () => {
+    try {
+      if (typeof window === "undefined") return;
+      const supabase = getSupabaseBrowserClient();
+      await supabase.auth.signOut({ scope: "local" });
+    } catch (error) {
+      console.warn("Supabase sign out failed:", error);
+    } finally {
+      _remove(SESSION_KEY);
+      emitSessionChanged();
+      isLoggingOut = false;
+      logoutInFlight = null;
+    }
+  })();
+
+  return logoutInFlight;
 }
 
 /** Intended Action */
