@@ -146,6 +146,14 @@ function splitCsv(value: string) {
     .filter(Boolean);
 }
 
+function firstNonEmpty(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
 function toCsv(value?: string[]) {
   return value?.join(", ") ?? "";
 }
@@ -297,24 +305,30 @@ export default function DesignerProfileEditPage() {
         const googleAccount = isGoogleUser(data.user);
         const googleEmail = data.user.email ?? "";
         const metadata = data.user.user_metadata ?? {};
-        const metadataName =
-          String(metadata.full_name ?? metadata.name ?? "").trim() ||
-          (googleEmail ? googleEmail.split("@")[0] : "");
+        const metadataName = firstNonEmpty(
+          typeof metadata.full_name === "string" ? metadata.full_name : "",
+          typeof metadata.name === "string" ? metadata.name : "",
+          googleEmail ? googleEmail.split("@")[0] : ""
+        );
         const googleName = pickGoogleFullName(data.user, googleEmail);
         const local = loadLocalDraft(id);
+        const initialFullName = firstNonEmpty(
+          googleAccount ? googleName : "",
+          local.fullName,
+          metadataName
+        );
+        const initialContactEmail = firstNonEmpty(local.contactEmail, googleEmail);
 
         if (cancelled) return;
         setUserId(id);
         setAuthEmail(googleEmail);
         setIsGoogleAuthUser(googleAccount);
-        setGoogleLockedName(googleAccount ? googleName : "");
+        setGoogleLockedName(googleAccount ? initialFullName : "");
         setDraft({
           ...DEFAULT_DRAFT,
           ...local,
-          fullName: googleAccount
-            ? googleName || local.fullName || metadataName
-            : local.fullName || metadataName,
-          contactEmail: local.contactEmail || googleEmail,
+          fullName: initialFullName,
+          contactEmail: initialContactEmail,
         });
         setLoading(false);
 
@@ -340,12 +354,17 @@ export default function DesignerProfileEditPage() {
           const workingHours = (businessDetails.workingHours ?? {}) as Record<string, unknown>;
 
           if (!cancelled) {
-            const profileFullName = String(profile?.full_name ?? "").trim();
-            const resolvedFullName =
-              profileFullName ||
-              (googleAccount ? googleName : "") ||
-              String(local.fullName ?? "").trim() ||
-              metadataName;
+            const resolvedFullName = firstNonEmpty(
+              profile?.full_name,
+              googleAccount ? googleName : "",
+              local.fullName,
+              metadataName
+            );
+            const resolvedContactEmail = firstNonEmpty(
+              profile?.contact_email,
+              local.contactEmail,
+              googleEmail
+            );
 
             setDraft({
               ...DEFAULT_DRAFT,
@@ -358,7 +377,7 @@ export default function DesignerProfileEditPage() {
               servicesText: toCsv(aboutDetails.services as string[] | undefined),
               city: profile?.city ?? local.city ?? "",
               phone: profile?.phone ?? local.phone ?? "",
-              contactEmail: profile?.contact_email ?? local.contactEmail ?? googleEmail,
+              contactEmail: resolvedContactEmail,
               address: profile?.address ?? local.address ?? "",
               website: profile?.website ?? local.website ?? "",
               instagram: profile?.instagram ?? local.instagram ?? "",
@@ -381,11 +400,11 @@ export default function DesignerProfileEditPage() {
               workingSaturday: (workingHours.saturday as string | undefined) ?? local.workingSaturday ?? "",
               workingSunday: (workingHours.sunday as string | undefined) ?? local.workingSunday ?? "",
             });
-            setGoogleLockedName(googleAccount ? resolvedFullName : "");
+            setGoogleLockedName(googleAccount ? firstNonEmpty(resolvedFullName, googleName) : "");
 
             if (googleAccount && googleEmail) {
-              const normalizedGoogleName = (googleName || metadataName).trim();
-              const currentProfileName = String(profile?.full_name ?? "").trim();
+              const normalizedGoogleName = firstNonEmpty(googleName, resolvedFullName, metadataName);
+              const currentProfileName = firstNonEmpty(profile?.full_name);
 
               if (normalizedGoogleName && currentProfileName !== normalizedGoogleName) {
                 void supabase.from("profiles").upsert(
@@ -664,9 +683,6 @@ async function onPickCover(file: File | null) {
                     readOnly={isGoogleAuthUser}
                     aria-readonly={isGoogleAuthUser}
                   />
-                  {isGoogleAuthUser ? (
-                    <p className="text-xs text-slate-500">Tam ad Google hesabından otomatik alınır.</p>
-                  ) : null}
                   <input className={inputCls} value={draft.specialty} onChange={(e) => setDraft((p) => ({ ...p, specialty: e.target.value }))} placeholder="İş Türü (zorunlu önerilir)" />
                   <input
                     className={inputCls}
@@ -707,7 +723,7 @@ async function onPickCover(file: File | null) {
               <h2 className="text-xl font-semibold">İletişim</h2>
               <input
                 className={inputCls}
-                value={draft.contactEmail}
+                value={firstNonEmpty(draft.contactEmail, authEmail)}
                 onChange={(e) => setDraft((p) => ({ ...p, contactEmail: e.target.value }))}
                 placeholder="İletişim e-posta (zorunlu)"
                 readOnly={false}

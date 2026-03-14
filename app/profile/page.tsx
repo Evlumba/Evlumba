@@ -50,6 +50,14 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function firstNonEmpty(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -172,14 +180,16 @@ function ProfilePageContent() {
         const googleAccount = isGoogleUser(data.user);
         const googleEmail = data.user.email ?? "";
         const googleName = pickGoogleFullName(data.user, googleEmail);
-        const metadataName =
-          String(metadata.full_name ?? metadata.name ?? "").trim() ||
-          (googleEmail ? googleEmail.split("@")[0] : "");
-        const fallbackName = googleAccount ? googleName : metadataName;
+        const metadataName = firstNonEmpty(
+          typeof metadata.full_name === "string" ? metadata.full_name : "",
+          typeof metadata.name === "string" ? metadata.name : "",
+          googleEmail ? googleEmail.split("@")[0] : ""
+        );
+        const fallbackName = firstNonEmpty(googleAccount ? googleName : "", metadataName);
         const baseDraft: ProfileDraft = {
           ...DEFAULT_DRAFT,
           fullName: fallbackName,
-          contactEmail: googleEmail,
+          contactEmail: firstNonEmpty(googleEmail),
         };
 
         if (cancelled) return;
@@ -188,8 +198,8 @@ function ProfilePageContent() {
         setAuthEmail(googleEmail);
         setRole(metadataRole);
         setIsGoogleAuthUser(googleAccount);
-        setGoogleLockedName(googleAccount ? googleName : "");
-        setGoogleLockedEmail(googleAccount ? googleEmail : "");
+        setGoogleLockedName(googleAccount ? firstNonEmpty(googleName, fallbackName) : "");
+        setGoogleLockedEmail(googleAccount ? firstNonEmpty(googleEmail) : "");
         setDraft(baseDraft);
         setLoading(false);
 
@@ -214,20 +224,21 @@ function ProfilePageContent() {
             const mergedRole = profile?.role || metadataRole;
             const mergedIsProfessional =
               mergedRole === "designer" || mergedRole === "designer_pending";
-            const profileFullName = String(profile?.full_name ?? "").trim();
-            const mergedFullName =
-              profileFullName ||
-              (googleAccount ? googleName : "") ||
-              baseDraft.fullName;
+            const mergedFullName = firstNonEmpty(
+              profile?.full_name,
+              googleAccount ? googleName : "",
+              baseDraft.fullName
+            );
+            const mergedContactEmail = mergedIsProfessional
+              ? firstNonEmpty(profile?.contact_email, baseDraft.contactEmail)
+              : firstNonEmpty(googleEmail, profile?.contact_email, baseDraft.contactEmail);
             const mergedDraft: ProfileDraft = {
               ...baseDraft,
               fullName: mergedFullName,
               avatarUrl: profile?.avatar_url || baseDraft.avatarUrl,
               city: profile?.city || baseDraft.city,
               phone: profile?.phone || baseDraft.phone,
-              contactEmail: mergedIsProfessional
-                ? profile?.contact_email || baseDraft.contactEmail
-                : googleEmail || profile?.contact_email || baseDraft.contactEmail,
+              contactEmail: mergedContactEmail,
               address: profile?.address || baseDraft.address,
               website: profile?.website || baseDraft.website,
               instagram: profile?.instagram || baseDraft.instagram,
@@ -237,16 +248,15 @@ function ProfilePageContent() {
             };
 
             setRole(mergedRole);
-            setGoogleLockedName(googleAccount ? mergedFullName : "");
+            setGoogleLockedName(googleAccount ? firstNonEmpty(mergedFullName, googleName) : "");
+            setGoogleLockedEmail(googleAccount ? firstNonEmpty(googleEmail, mergedContactEmail) : "");
             setDraft(mergedDraft);
 
             if (mergedRole === "homeowner" && googleEmail) {
-              const currentProfileName = String(profile?.full_name ?? "").trim();
-              const currentProfileEmail = String(profile?.contact_email ?? "")
-                .trim()
-                .toLowerCase();
-              const normalizedGoogleName = googleName.trim();
-              const normalizedGoogleEmail = googleEmail.trim().toLowerCase();
+              const currentProfileName = firstNonEmpty(profile?.full_name);
+              const currentProfileEmail = firstNonEmpty(profile?.contact_email).toLowerCase();
+              const normalizedGoogleName = firstNonEmpty(googleName, mergedDraft.fullName);
+              const normalizedGoogleEmail = firstNonEmpty(googleEmail, mergedDraft.contactEmail).toLowerCase();
 
               if (
                 (normalizedGoogleName && currentProfileName !== normalizedGoogleName) ||
@@ -510,9 +520,6 @@ function ProfilePageContent() {
                     readOnly={isGoogleAuthUser}
                     aria-readonly={isGoogleAuthUser}
                   />
-                  {isGoogleAuthUser ? (
-                    <p className="text-xs text-slate-500">Tam ad Google hesabından otomatik alınır.</p>
-                  ) : null}
                   <input className={inputCls} value={draft.city} onChange={(e) => setDraft((p) => ({ ...p, city: e.target.value }))} placeholder="Şehir" />
                 </div>
               </div>
@@ -524,7 +531,7 @@ function ProfilePageContent() {
               <h2 className="text-xl font-semibold">İletişim</h2>
               <input
                 className={`${inputCls}${!isProfessional ? " bg-slate-100 text-slate-500" : ""}`}
-                value={isProfessional ? draft.contactEmail : draft.contactEmail || authEmail}
+                value={firstNonEmpty(draft.contactEmail, authEmail)}
                 onChange={(e) => setDraft((p) => ({ ...p, contactEmail: e.target.value }))}
                 placeholder="İletişim e-posta"
                 readOnly={!isProfessional}
