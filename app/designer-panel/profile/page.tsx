@@ -93,6 +93,9 @@ const DEFAULT_DRAFT: DesignerProfileDraft = {
   avatarUrl: "",
 };
 
+const AUTH_REQUEST_TIMEOUT_MS = 6000;
+const PROFILE_REQUEST_TIMEOUT_MS = 5000;
+
 function draftStorageKey(userId: string) {
   return `evlumba_designer_profile_v3_${userId}`;
 }
@@ -219,7 +222,10 @@ function withTimeout<T>(
   });
 }
 
-function isGoogleUser(user: { app_metadata?: Record<string, unknown> | null }) {
+function isGoogleUser(user: {
+  app_metadata?: Record<string, unknown> | null;
+  identities?: Array<{ provider?: string | null }> | null;
+}) {
   const metadata = user.app_metadata ?? {};
   const provider = String(metadata.provider ?? "").toLowerCase();
   if (provider === "google") return true;
@@ -227,10 +233,18 @@ function isGoogleUser(user: { app_metadata?: Record<string, unknown> | null }) {
   const providers = Array.isArray(metadata.providers)
     ? metadata.providers.map((item) => String(item).toLowerCase())
     : [];
-  return providers.includes("google");
+  if (providers.includes("google")) return true;
+
+  const identityProviders = Array.isArray(user.identities)
+    ? user.identities.map((identity) => String(identity?.provider ?? "").toLowerCase())
+    : [];
+  return identityProviders.includes("google");
 }
 
-function pickGoogleFullName(user: { user_metadata?: Record<string, unknown> | null }) {
+function pickGoogleFullName(
+  user: { user_metadata?: Record<string, unknown> | null },
+  fallbackEmail = ""
+) {
   const metadata = user.user_metadata ?? {};
   const fullName = String(metadata.full_name ?? "").trim();
   if (fullName) return fullName;
@@ -240,7 +254,10 @@ function pickGoogleFullName(user: { user_metadata?: Record<string, unknown> | nu
 
   const givenName = String(metadata.given_name ?? "").trim();
   const familyName = String(metadata.family_name ?? "").trim();
-  return `${givenName} ${familyName}`.trim();
+  const combined = `${givenName} ${familyName}`.trim();
+  if (combined) return combined;
+
+  return fallbackEmail ? fallbackEmail.split("@")[0] : "";
 }
 
 export default function DesignerProfileEditPage() {
@@ -269,7 +286,7 @@ export default function DesignerProfileEditPage() {
         const supabase = getSupabaseBrowserClient();
         const { data, error } = await withTimeout(
           supabase.auth.getUser(),
-          12000,
+          AUTH_REQUEST_TIMEOUT_MS,
           "Oturum kontrolü zaman aşımına uğradı."
         );
         if (error || !data.user) {
@@ -279,71 +296,121 @@ export default function DesignerProfileEditPage() {
 
         const id = data.user.id;
         const googleAccount = isGoogleUser(data.user);
-        const googleName = pickGoogleFullName(data.user);
         const googleEmail = data.user.email ?? "";
+        const metadata = data.user.user_metadata ?? {};
+        const metadataName =
+          String(metadata.full_name ?? metadata.name ?? "").trim() ||
+          (googleEmail ? googleEmail.split("@")[0] : "");
+        const googleName = pickGoogleFullName(data.user, googleEmail);
+        const local = loadLocalDraft(id);
+
         if (cancelled) return;
         setUserId(id);
         setAuthEmail(googleEmail);
         setIsGoogleAuthUser(googleAccount);
         setGoogleLockedName(googleAccount ? googleName : "");
         setGoogleLockedEmail(googleAccount ? googleEmail : "");
+        setDraft({
+          ...DEFAULT_DRAFT,
+          ...local,
+          fullName: googleAccount
+            ? googleName || local.fullName || metadataName
+            : local.fullName || metadataName,
+          contactEmail: googleAccount
+            ? googleEmail
+            : local.contactEmail || googleEmail,
+        });
+        setLoading(false);
 
-        const local = loadLocalDraft(id);
-        const { data: profile } = await withTimeout(
-          supabase
-            .from("profiles")
-            .select(
-              "full_name, avatar_url, business_name, specialty, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url, tags, starting_from, about_details, business_details"
-            )
-            .eq("id", id)
-            .maybeSingle(),
-          12000,
-          "Profil verisi alınırken zaman aşımı oldu."
-        );
+        try {
+          const { data: profile, error: profileError } = await withTimeout(
+            supabase
+              .from("profiles")
+              .select(
+                "full_name, avatar_url, business_name, specialty, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url, tags, starting_from, about_details, business_details"
+              )
+              .eq("id", id)
+              .maybeSingle(),
+            PROFILE_REQUEST_TIMEOUT_MS,
+            "Profil verisi alınırken zaman aşımı oldu."
+          );
 
-        const aboutDetails = (profile?.about_details ?? {}) as Record<string, unknown>;
-        const businessDetails = (profile?.business_details ?? {}) as Record<string, unknown>;
-        const workingHours = (businessDetails.workingHours ?? {}) as Record<string, unknown>;
+          if (profileError) {
+            throw profileError;
+          }
 
-        if (!cancelled) {
-          setDraft({
-            ...DEFAULT_DRAFT,
-            ...local,
-            fullName: googleAccount
-              ? googleName || profile?.full_name || local.fullName || ""
-              : profile?.full_name ?? local.fullName ?? "",
-            avatarUrl: profile?.avatar_url ?? local.avatarUrl ?? "",
-            businessName: profile?.business_name ?? local.businessName ?? "",
-            specialty: profile?.specialty ?? local.specialty ?? "",
-            projectTypesText: toCsv(aboutDetails.projectTypes as string[] | undefined),
-            servicesText: toCsv(aboutDetails.services as string[] | undefined),
-            city: profile?.city ?? local.city ?? "",
-            phone: profile?.phone ?? local.phone ?? "",
-            contactEmail: googleAccount
-              ? googleEmail
-              : profile?.contact_email ?? local.contactEmail ?? googleEmail,
-            address: profile?.address ?? local.address ?? "",
-            website: profile?.website ?? local.website ?? "",
-            instagram: profile?.instagram ?? local.instagram ?? "",
-            facebook: profile?.facebook ?? local.facebook ?? "",
-            linkedin: profile?.linkedin ?? local.linkedin ?? "",
-            coverPhotoUrl: profile?.cover_photo_url ?? local.coverPhotoUrl ?? "",
-            tagsText: toCsv(profile?.tags as string[] | undefined),
-            startingFrom: profile?.starting_from ?? local.startingFrom ?? "",
-            aboutHeadline: (aboutDetails.headline as string | undefined) ?? local.aboutHeadline ?? "",
-            aboutBio: (aboutDetails.bio as string | undefined) ?? local.aboutBio ?? "",
-            aboutSpecialtiesText: toCsv(aboutDetails.specialties as string[] | undefined),
-            aboutServiceAreasText: toCsv(aboutDetails.serviceAreas as string[] | undefined),
-            aboutLanguagesText: toCsv(aboutDetails.languages as string[] | undefined),
-            aboutTeamSize: (aboutDetails.teamSize as string | undefined) ?? local.aboutTeamSize ?? "",
-            aboutAvailability: (aboutDetails.availability as string | undefined) ?? local.aboutAvailability ?? "",
-            employees: (businessDetails.employees as string | undefined) ?? local.employees ?? "",
-            founded: (businessDetails.founded as string | undefined) ?? local.founded ?? "",
-            license: (businessDetails.license as string | undefined) ?? local.license ?? "",
-            workingWeekdays: (workingHours.weekdays as string | undefined) ?? local.workingWeekdays ?? "",
-            workingSaturday: (workingHours.saturday as string | undefined) ?? local.workingSaturday ?? "",
-            workingSunday: (workingHours.sunday as string | undefined) ?? local.workingSunday ?? "",
-          });
+          const aboutDetails = (profile?.about_details ?? {}) as Record<string, unknown>;
+          const businessDetails = (profile?.business_details ?? {}) as Record<string, unknown>;
+          const workingHours = (businessDetails.workingHours ?? {}) as Record<string, unknown>;
+
+          if (!cancelled) {
+            setDraft({
+              ...DEFAULT_DRAFT,
+              ...local,
+              fullName: googleAccount
+                ? googleName || profile?.full_name || local.fullName || metadataName
+                : profile?.full_name ?? local.fullName ?? metadataName,
+              avatarUrl: profile?.avatar_url ?? local.avatarUrl ?? "",
+              businessName: profile?.business_name ?? local.businessName ?? "",
+              specialty: profile?.specialty ?? local.specialty ?? "",
+              projectTypesText: toCsv(aboutDetails.projectTypes as string[] | undefined),
+              servicesText: toCsv(aboutDetails.services as string[] | undefined),
+              city: profile?.city ?? local.city ?? "",
+              phone: profile?.phone ?? local.phone ?? "",
+              contactEmail: googleAccount
+                ? googleEmail
+                : profile?.contact_email ?? local.contactEmail ?? googleEmail,
+              address: profile?.address ?? local.address ?? "",
+              website: profile?.website ?? local.website ?? "",
+              instagram: profile?.instagram ?? local.instagram ?? "",
+              facebook: profile?.facebook ?? local.facebook ?? "",
+              linkedin: profile?.linkedin ?? local.linkedin ?? "",
+              coverPhotoUrl: profile?.cover_photo_url ?? local.coverPhotoUrl ?? "",
+              tagsText: toCsv(profile?.tags as string[] | undefined),
+              startingFrom: profile?.starting_from ?? local.startingFrom ?? "",
+              aboutHeadline: (aboutDetails.headline as string | undefined) ?? local.aboutHeadline ?? "",
+              aboutBio: (aboutDetails.bio as string | undefined) ?? local.aboutBio ?? "",
+              aboutSpecialtiesText: toCsv(aboutDetails.specialties as string[] | undefined),
+              aboutServiceAreasText: toCsv(aboutDetails.serviceAreas as string[] | undefined),
+              aboutLanguagesText: toCsv(aboutDetails.languages as string[] | undefined),
+              aboutTeamSize: (aboutDetails.teamSize as string | undefined) ?? local.aboutTeamSize ?? "",
+              aboutAvailability: (aboutDetails.availability as string | undefined) ?? local.aboutAvailability ?? "",
+              employees: (businessDetails.employees as string | undefined) ?? local.employees ?? "",
+              founded: (businessDetails.founded as string | undefined) ?? local.founded ?? "",
+              license: (businessDetails.license as string | undefined) ?? local.license ?? "",
+              workingWeekdays: (workingHours.weekdays as string | undefined) ?? local.workingWeekdays ?? "",
+              workingSaturday: (workingHours.saturday as string | undefined) ?? local.workingSaturday ?? "",
+              workingSunday: (workingHours.sunday as string | undefined) ?? local.workingSunday ?? "",
+            });
+
+            if (googleAccount && googleEmail) {
+              const normalizedGoogleName = (googleName || metadataName).trim();
+              const currentProfileName = String(profile?.full_name ?? "").trim();
+              const currentProfileEmail = String(profile?.contact_email ?? "")
+                .trim()
+                .toLowerCase();
+              const normalizedGoogleEmail = googleEmail.trim().toLowerCase();
+
+              if (
+                (normalizedGoogleName && currentProfileName !== normalizedGoogleName) ||
+                currentProfileEmail !== normalizedGoogleEmail
+              ) {
+                void supabase.from("profiles").upsert(
+                  {
+                    id,
+                    role: "designer",
+                    full_name: normalizedGoogleName || null,
+                    contact_email: googleEmail,
+                  },
+                  { onConflict: "id" }
+                );
+              }
+            }
+          }
+        } catch (profileLoadError) {
+          if (!cancelled) {
+            console.warn("Designer profile fetch warning:", profileLoadError);
+          }
         }
       } catch (loadError) {
         if (!cancelled) {

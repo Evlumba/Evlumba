@@ -92,6 +92,10 @@ function GoogleIcon() {
   );
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function AuthLoginView({
   title,
   subtitle,
@@ -104,6 +108,9 @@ export default function AuthLoginView({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [showGoogleConsent, setShowGoogleConsent] = useState(false);
+  const [googleConsentChecked, setGoogleConsentChecked] = useState(false);
+  const [googleConsentError, setGoogleConsentError] = useState<string | null>(null);
   const oauthHandledRef = useRef(false);
 
   const nextPath = useMemo(() => {
@@ -141,8 +148,26 @@ export default function AuthLoginView({
     oauthHandledRef.current = true;
 
     let cancelled = false;
+    const syncSessionWithRetry = async (
+      attempts = 6,
+      delayMs = 250
+    ): Promise<Awaited<ReturnType<typeof syncSessionFromSupabase>>> => {
+      let lastResult: Awaited<ReturnType<typeof syncSessionFromSupabase>> = {
+        ok: false,
+        error: "Google ile giriş tamamlanamadı.",
+      };
+      for (let index = 0; index < attempts; index += 1) {
+        lastResult = await syncSessionFromSupabase();
+        if (lastResult.ok && lastResult.session?.id) return lastResult;
+        if (index < attempts - 1) {
+          await sleep(delayMs);
+        }
+      }
+      return lastResult;
+    };
+
     const completeOauthLogin = async () => {
-      const synced = await syncSessionFromSupabase();
+      const synced = await syncSessionWithRetry();
       if (cancelled) return;
       if (!synced.ok) {
         setFormError(synced.error || "Google ile giriş tamamlanamadı.");
@@ -156,6 +181,23 @@ export default function AuthLoginView({
       cancelled = true;
     };
   }, [afterLogin, isOAuthReturn]);
+
+  useEffect(() => {
+    if (isOAuthReturn) return;
+
+    let cancelled = false;
+    const redirectIfAlreadyLoggedIn = async () => {
+      const synced = await syncSessionFromSupabase();
+      if (cancelled) return;
+      if (!synced.ok || !synced.session?.id) return;
+      router.replace(nextPath || "/");
+    };
+
+    void redirectIfAlreadyLoggedIn();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOAuthReturn, nextPath, router]);
 
   async function handleEmailLogin() {
     if (loading || googleLoading) return;
@@ -181,7 +223,7 @@ export default function AuthLoginView({
     void handleEmailLogin();
   }
 
-  async function handleGoogleLogin() {
+  async function startGoogleLogin() {
     if (loading || googleLoading) return;
     setFormError(null);
     setGoogleLoading(true);
@@ -206,6 +248,22 @@ export default function AuthLoginView({
     }
   }
 
+  function handleGoogleLogin() {
+    if (loading || googleLoading) return;
+    setGoogleConsentChecked(false);
+    setGoogleConsentError(null);
+    setShowGoogleConsent(true);
+  }
+
+  function confirmGoogleConsent() {
+    if (!googleConsentChecked) {
+      setGoogleConsentError("Google ile devam etmek için iletişim onayı zorunlu.");
+      return;
+    }
+    setShowGoogleConsent(false);
+    void startGoogleLogin();
+  }
+
   return (
     <section className="mx-auto w-full max-w-5xl py-2">
       <div className="overflow-hidden rounded-[30px] border border-black/10 bg-white/65 shadow-[0_40px_95px_-70px_rgba(15,23,42,0.5)] backdrop-blur">
@@ -220,7 +278,7 @@ export default function AuthLoginView({
             <div className="mt-6 space-y-4">
               <button
                 type="button"
-                onClick={() => void handleGoogleLogin()}
+                onClick={handleGoogleLogin}
                 disabled={loading || googleLoading}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -284,6 +342,56 @@ export default function AuthLoginView({
           <ArchitectureSide />
         </div>
       </div>
+
+      {showGoogleConsent ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.55)]">
+            <h3 className="text-lg font-semibold text-slate-900">Google ile Devam Et</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Devam etmeden önce iletişim metnini onaylamalısın.
+            </p>
+
+            <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={googleConsentChecked}
+                onChange={(event) => {
+                  setGoogleConsentChecked(event.target.checked);
+                  setGoogleConsentError(null);
+                }}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300"
+              />
+              <span>
+                <Link href="/iletisim" className="font-semibold text-sky-700 hover:underline">
+                  İletişim
+                </Link>{" "}
+                sayfasını okudum ve onaylıyorum.
+              </span>
+            </label>
+
+            {googleConsentError ? (
+              <p className="mt-2 text-sm font-medium text-red-600">{googleConsentError}</p>
+            ) : null}
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowGoogleConsent(false)}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={confirmGoogleConsent}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Devam Et
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

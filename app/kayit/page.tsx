@@ -92,17 +92,18 @@ function KayitPageContent() {
   }, [selectedRoleFromQuery]);
 
   useEffect(() => {
-    if (isOAuthReturn) return;
-
     let cancelled = false;
     const redirectIfAlreadyLoggedIn = async () => {
       const synced = await syncSessionFromSupabase();
       if (cancelled) return;
       if (!synced.ok || !synced.session?.id) return;
 
-      const targetPath = targetPathForRole(
-        typeof synced.session.role === "string" ? synced.session.role : null
-      );
+      const targetPath =
+        nextPathFromQuery !== "/"
+          ? nextPathFromQuery
+          : isOAuthReturn
+          ? targetPathForRole(selectedRoleFromQuery)
+          : targetPathForRole(typeof synced.session.role === "string" ? synced.session.role : null);
       router.replace(targetPath);
     };
 
@@ -110,7 +111,7 @@ function KayitPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [isOAuthReturn, router]);
+  }, [isOAuthReturn, nextPathFromQuery, router, selectedRoleFromQuery]);
 
   useEffect(() => {
     if (!isOAuthReturn || oauthHandledRef.current) return;
@@ -153,11 +154,20 @@ function KayitPageContent() {
         nextPathFromQuery !== "/" ? nextPathFromQuery : targetPathForRole(desiredRole);
       const fallbackName = synced.session.name || "Yeni Kullanıcı";
       const supabase = getSupabaseBrowserClient();
+      const { data: authUserData } = await supabase.auth.getUser();
+      const oauthUser = authUserData.user;
+      const oauthMetadata = oauthUser?.user_metadata || {};
+      const oauthName =
+        (oauthMetadata.full_name as string | undefined) ||
+        (oauthMetadata.name as string | undefined) ||
+        fallbackName;
+      const oauthEmail = oauthUser?.email || synced.session.email || "";
 
       const { error: profileError } = await supabase.from("profiles").upsert({
         id: userId,
-        full_name: fallbackName,
+        full_name: oauthName,
         role: desiredRole,
+        contact_email: oauthEmail || null,
       });
 
       if (cancelled) return;

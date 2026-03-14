@@ -43,6 +43,9 @@ const DEFAULT_DRAFT: ProfileDraft = {
   avatarUrl: "",
 };
 
+const AUTH_REQUEST_TIMEOUT_MS = 6000;
+const PROFILE_REQUEST_TIMEOUT_MS = 5000;
+
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
@@ -75,7 +78,10 @@ function withTimeout<T>(
   });
 }
 
-function isGoogleUser(user: { app_metadata?: Record<string, unknown> | null }) {
+function isGoogleUser(user: {
+  app_metadata?: Record<string, unknown> | null;
+  identities?: Array<{ provider?: string | null }> | null;
+}) {
   const metadata = user.app_metadata ?? {};
   const provider = String(metadata.provider ?? "").toLowerCase();
   if (provider === "google") return true;
@@ -83,10 +89,18 @@ function isGoogleUser(user: { app_metadata?: Record<string, unknown> | null }) {
   const providers = Array.isArray(metadata.providers)
     ? metadata.providers.map((item) => String(item).toLowerCase())
     : [];
-  return providers.includes("google");
+  if (providers.includes("google")) return true;
+
+  const identityProviders = Array.isArray(user.identities)
+    ? user.identities.map((identity) => String(identity?.provider ?? "").toLowerCase())
+    : [];
+  return identityProviders.includes("google");
 }
 
-function pickGoogleFullName(user: { user_metadata?: Record<string, unknown> | null }) {
+function pickGoogleFullName(
+  user: { user_metadata?: Record<string, unknown> | null },
+  fallbackEmail = ""
+) {
   const metadata = user.user_metadata ?? {};
   const fullName = String(metadata.full_name ?? "").trim();
   if (fullName) return fullName;
@@ -96,7 +110,10 @@ function pickGoogleFullName(user: { user_metadata?: Record<string, unknown> | nu
 
   const givenName = String(metadata.given_name ?? "").trim();
   const familyName = String(metadata.family_name ?? "").trim();
-  return `${givenName} ${familyName}`.trim();
+  const combined = `${givenName} ${familyName}`.trim();
+  if (combined) return combined;
+
+  return fallbackEmail ? fallbackEmail.split("@")[0] : "";
 }
 
 function ProfilePageContent() {
@@ -139,7 +156,7 @@ function ProfilePageContent() {
         const supabase = getSupabaseBrowserClient();
         const { data, error } = await withTimeout(
           supabase.auth.getUser(),
-          12000,
+          AUTH_REQUEST_TIMEOUT_MS,
           "Oturum kontrolü zaman aşımına uğradı."
         );
         if (error || !data.user) {
@@ -147,43 +164,104 @@ function ProfilePageContent() {
           return;
         }
 
+        const metadata = data.user.user_metadata ?? {};
+        const metadataRole =
+          metadata.role === "designer" || metadata.role === "designer_pending"
+            ? metadata.role
+            : "homeowner";
         const googleAccount = isGoogleUser(data.user);
-        const googleName = pickGoogleFullName(data.user);
         const googleEmail = data.user.email ?? "";
+        const googleName = pickGoogleFullName(data.user, googleEmail);
+        const metadataName =
+          String(metadata.full_name ?? metadata.name ?? "").trim() ||
+          (googleEmail ? googleEmail.split("@")[0] : "");
+        const fallbackName = googleAccount ? googleName : metadataName;
+        const baseDraft: ProfileDraft = {
+          ...DEFAULT_DRAFT,
+          fullName: fallbackName,
+          contactEmail: googleEmail,
+        };
+
+        if (cancelled) return;
 
         setUserId(data.user.id);
         setAuthEmail(googleEmail);
+        setRole(metadataRole);
         setIsGoogleAuthUser(googleAccount);
         setGoogleLockedName(googleAccount ? googleName : "");
         setGoogleLockedEmail(googleAccount ? googleEmail : "");
-        const { data: profile } = await withTimeout(
-          supabase
-            .from("profiles")
-            .select(
-              "full_name, role, avatar_url, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url"
-            )
-            .eq("id", data.user.id)
-            .maybeSingle(),
-          12000,
-          "Profil verisi alınırken zaman aşımı oldu."
-        );
+        setDraft(baseDraft);
+        setLoading(false);
 
-        if (!cancelled) {
-          setRole(profile?.role || "homeowner");
-          setDraft({
-            ...DEFAULT_DRAFT,
-            fullName: googleAccount ? googleName || profile?.full_name || "" : profile?.full_name || "",
-            avatarUrl: profile?.avatar_url || "",
-            city: profile?.city || "",
-            phone: profile?.phone || "",
-            contactEmail: googleAccount ? googleEmail : profile?.contact_email || googleEmail,
-            address: profile?.address || "",
-            website: profile?.website || "",
-            instagram: profile?.instagram || "",
-            facebook: profile?.facebook || "",
-            linkedin: profile?.linkedin || "",
-            coverPhotoUrl: profile?.cover_photo_url || "",
-          });
+        try {
+          const { data: profile, error: profileError } = await withTimeout(
+            supabase
+              .from("profiles")
+              .select(
+                "full_name, role, avatar_url, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url"
+              )
+              .eq("id", data.user.id)
+              .maybeSingle(),
+            PROFILE_REQUEST_TIMEOUT_MS,
+            "Profil verisi alınırken zaman aşımı oldu."
+          );
+
+          if (profileError) {
+            throw profileError;
+          }
+
+          if (!cancelled) {
+            const mergedRole = profile?.role || metadataRole;
+            const mergedDraft: ProfileDraft = {
+              ...baseDraft,
+              fullName: googleAccount
+                ? googleName || profile?.full_name || baseDraft.fullName
+                : profile?.full_name || baseDraft.fullName,
+              avatarUrl: profile?.avatar_url || baseDraft.avatarUrl,
+              city: profile?.city || baseDraft.city,
+              phone: profile?.phone || baseDraft.phone,
+              contactEmail: googleAccount
+                ? googleEmail
+                : profile?.contact_email || baseDraft.contactEmail,
+              address: profile?.address || baseDraft.address,
+              website: profile?.website || baseDraft.website,
+              instagram: profile?.instagram || baseDraft.instagram,
+              facebook: profile?.facebook || baseDraft.facebook,
+              linkedin: profile?.linkedin || baseDraft.linkedin,
+              coverPhotoUrl: profile?.cover_photo_url || baseDraft.coverPhotoUrl,
+            };
+
+            setRole(mergedRole);
+            setDraft(mergedDraft);
+
+            if (googleAccount && googleEmail) {
+              const currentProfileName = String(profile?.full_name ?? "").trim();
+              const currentProfileEmail = String(profile?.contact_email ?? "")
+                .trim()
+                .toLowerCase();
+              const normalizedGoogleName = googleName.trim();
+              const normalizedGoogleEmail = googleEmail.trim().toLowerCase();
+
+              if (
+                (normalizedGoogleName && currentProfileName !== normalizedGoogleName) ||
+                currentProfileEmail !== normalizedGoogleEmail
+              ) {
+                void supabase.from("profiles").upsert(
+                  {
+                    id: data.user.id,
+                    role: mergedRole,
+                    full_name: normalizedGoogleName || mergedDraft.fullName || null,
+                    contact_email: googleEmail,
+                  },
+                  { onConflict: "id" }
+                );
+              }
+            }
+          }
+        } catch (profileLoadError) {
+          if (!cancelled) {
+            console.warn("Profile fetch warning:", profileLoadError);
+          }
         }
       } catch (loadError) {
         if (!cancelled) setMessage(loadError instanceof Error ? loadError.message : "Profil yüklenemedi.");
