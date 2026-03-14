@@ -116,6 +116,11 @@ export default function AuthLoginView({
     () => searchParams.get("oauth") === "1" || searchParams.has("code"),
     [searchParams]
   );
+  const authError = searchParams.get("auth_error");
+  const authErrorMessage =
+    authError === "oauth_exchange_failed"
+      ? "Google ile giriş tamamlanamadı. Lütfen tekrar deneyin."
+      : null;
 
   const afterLogin = useCallback((successMessage: string) => {
     const action = consumeIntendedAction();
@@ -182,9 +187,11 @@ export default function AuthLoginView({
     setGoogleLoading(true);
 
     const supabase = getSupabaseBrowserClient();
-    const redirectUrl = new URL(window.location.pathname, window.location.origin);
-    redirectUrl.searchParams.set("oauth", "1");
-    if (nextPath && nextPath !== "/") redirectUrl.searchParams.set("next", nextPath);
+    const redirectUrl = new URL("/auth/callback", window.location.origin);
+    redirectUrl.searchParams.set("flow", "login");
+    if (nextPath && nextPath !== "/") {
+      redirectUrl.searchParams.set("next", nextPath);
+    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -257,9 +264,9 @@ export default function AuthLoginView({
                 </button>
               </form>
 
-              {formError ? (
+              {formError || authErrorMessage ? (
                 <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {formError}
+                  {formError || authErrorMessage}
                 </p>
               ) : null}
 

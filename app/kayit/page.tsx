@@ -59,6 +59,11 @@ function KayitPageContent() {
     () => searchParams.get("oauth") === "1" || searchParams.has("code"),
     [searchParams]
   );
+  const authError = searchParams.get("auth_error");
+  const authErrorMessage =
+    authError === "oauth_exchange_failed"
+      ? "Google ile kayıt tamamlanamadı. Lütfen tekrar deneyin."
+      : "";
 
   useEffect(() => {
     setRole(selectedRoleFromQuery);
@@ -188,9 +193,10 @@ function KayitPageContent() {
     setGoogleLoading(true);
 
     const supabase = getSupabaseBrowserClient();
-    const redirectUrl = new URL(window.location.pathname, window.location.origin);
-    redirectUrl.searchParams.set("oauth", "1");
+    const redirectUrl = new URL("/auth/callback", window.location.origin);
+    redirectUrl.searchParams.set("flow", "signup");
     redirectUrl.searchParams.set("role", role);
+    redirectUrl.searchParams.set("next", role === "designer" ? "/designer-panel" : "/");
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -299,7 +305,9 @@ function KayitPageContent() {
                 sayfasını okudum ve onaylıyorum.
               </span>
             </label>
-            {feedback ? <p className="text-sm text-slate-600">{feedback}</p> : null}
+            {feedback || authErrorMessage ? (
+              <p className="text-sm text-slate-600">{feedback || authErrorMessage}</p>
+            ) : null}
           </div>
           <p className="mt-4 text-sm text-slate-600">
             Zaten bir hesabın var mı?{" "}

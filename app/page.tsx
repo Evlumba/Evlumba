@@ -13,6 +13,8 @@ type Project = {
   tag: string;
   imageUrl: string;
   href: string;
+  likeCount: number;
+  commentCount: number;
 };
 
 type Designer = {
@@ -50,6 +52,11 @@ type HomeProjectRow = {
   designer_id: string;
 };
 
+type HomeCollectionItemRow = {
+  design_id: string;
+  collection_id: string;
+};
+
 type HomeInspirationProjectRow = {
   id: string;
   designer_id: string;
@@ -68,6 +75,10 @@ type HomeReviewRow = {
   designer_id: string;
   rating: number | null;
   review_text: string | null;
+};
+
+type HomeProjectCommentRow = {
+  project_id: string | null;
 };
 
 type HomeTestimonialReviewRow = {
@@ -100,6 +111,15 @@ function firstNameOnly(fullName: string | null | undefined) {
   const normalized = (fullName ?? "").trim().replace(/\s+/g, " ");
   if (!normalized) return "Kullanıcı";
   return normalized.split(" ")[0] || "Kullanıcı";
+}
+
+function formatCompactCount(value: number) {
+  if (value < 1000) return value.toLocaleString("tr-TR");
+  return new Intl.NumberFormat("tr-TR", {
+    notation: "compact",
+    compactDisplay: "short",
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 function isRoomTag(value: string) {
@@ -136,12 +156,54 @@ async function loadHomeProjects(limit = 3): Promise<Project[]> {
 
     if (error || !data) return [];
 
-    return (data as HomeInspirationProjectRow[]).slice(0, limit).map((project) => ({
+    const selectedProjects = (data as HomeInspirationProjectRow[]).slice(0, limit);
+    const projectIds = selectedProjects.map((project) => project.id);
+
+    const [{ data: savedRows }, { data: commentRows }] = await Promise.all([
+      projectIds.length > 0
+        ? admin
+            .from("collection_items")
+            .select("design_id, collection_id")
+            .in("design_id", projectIds)
+        : Promise.resolve({ data: [] as HomeCollectionItemRow[] }),
+      projectIds.length > 0
+        ? admin
+            .from("designer_reviews")
+            .select("project_id")
+            .in("project_id", projectIds)
+        : Promise.resolve({ data: [] as HomeProjectCommentRow[] }),
+    ]);
+
+    const likeCountByProject = new Map<string, number>();
+    const seenProjectCollectionPairs = new Set<string>();
+    for (const row of (savedRows ?? []) as HomeCollectionItemRow[]) {
+      if (!row.design_id || !row.collection_id) continue;
+      const uniquePair = `${row.design_id}::${row.collection_id}`;
+      if (seenProjectCollectionPairs.has(uniquePair)) continue;
+      seenProjectCollectionPairs.add(uniquePair);
+      likeCountByProject.set(
+        row.design_id,
+        (likeCountByProject.get(row.design_id) ?? 0) + 1
+      );
+    }
+
+    const commentCountByProject = new Map<string, number>();
+    for (const row of (commentRows ?? []) as HomeProjectCommentRow[]) {
+      if (!row.project_id) continue;
+      commentCountByProject.set(
+        row.project_id,
+        (commentCountByProject.get(row.project_id) ?? 0) + 1
+      );
+    }
+
+    return selectedProjects.map((project) => ({
       id: project.id,
       title: project.title?.trim() || "Yeni Proje",
       tag: formatProjectTag(project.project_type, project.tags),
       imageUrl: pickProjectImage(project),
       href: `/tasarimcilar/supa_${project.designer_id}/proje/${project.id}`,
+      likeCount: likeCountByProject.get(project.id) ?? 0,
+      commentCount: commentCountByProject.get(project.id) ?? 0,
     }));
   } catch {
     return [];
@@ -380,6 +442,8 @@ function SectionTitle({
 function ProjectCard({ p }: { p: Project }) {
   const safeHref = p.href?.trim() || "/kesfet";
   const tagText = p.tag.replace("•", "·");
+  const likesLabel = formatCompactCount(p.likeCount);
+  const commentsLabel = formatCompactCount(p.commentCount);
 
   const [t1, t2] = p.title.split("—").map((x) => x?.trim());
   const titleMain = t1 || p.title;
@@ -448,7 +512,7 @@ function ProjectCard({ p }: { p: Project }) {
               >
                 <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
               </svg>
-              <span className="font-semibold tabular-nums">1.2k</span>
+              <span className="font-semibold tabular-nums">{likesLabel}</span>
             </span>
 
             <span className="inline-flex items-center gap-1.5">
@@ -464,7 +528,7 @@ function ProjectCard({ p }: { p: Project }) {
               >
                 <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
               </svg>
-              <span className="font-semibold tabular-nums">142</span>
+              <span className="font-semibold tabular-nums">{commentsLabel}</span>
             </span>
           </div>
 
