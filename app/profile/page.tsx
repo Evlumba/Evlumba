@@ -419,13 +419,6 @@ function ProfilePageContent() {
                     )}
                   </div>
                   <input type="file" accept="image/*" className="mt-3 w-full text-xs" onChange={(e) => void onPickAvatar(e.target.files?.[0] ?? null)} />
-                  <button
-                    type="button"
-                    onClick={() => router.push("/messages")}
-                    className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Mesajlar
-                  </button>
                 </div>
                 <div className="space-y-3">
                   <input
