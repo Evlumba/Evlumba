@@ -26,15 +26,23 @@ export async function GET(request: Request) {
   const roleFromQuery: Role | null = isRole(rawRole) ? rawRole : null;
   const nextPath = sanitizeNextPath(requestUrl.searchParams.get("next"));
   const fallbackAfterSignup = roleFromQuery === "designer" ? "/designer-panel" : "/";
-  const targetPath = flow === "signup" ? (nextPath === "/" ? fallbackAfterSignup : nextPath) : nextPath;
+  const targetPath =
+    flow === "signup" ? (nextPath === "/" ? fallbackAfterSignup : nextPath) : nextPath;
+  const completionPath = flow === "signup" ? "/kayit" : "/giris";
 
   const supabase = await getSupabaseServerClient();
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
-      const errorUrl = new URL("/giris", requestUrl.origin);
+      const errorUrl = new URL(completionPath, requestUrl.origin);
       errorUrl.searchParams.set("auth_error", "oauth_exchange_failed");
+      if (flow === "signup" && roleFromQuery) {
+        errorUrl.searchParams.set("role", roleFromQuery);
+      }
+      if (targetPath !== "/") {
+        errorUrl.searchParams.set("next", targetPath);
+      }
       return NextResponse.redirect(errorUrl);
     }
   }
@@ -76,5 +84,14 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.redirect(new URL(targetPath, requestUrl.origin));
+  const completeUrl = new URL(completionPath, requestUrl.origin);
+  completeUrl.searchParams.set("oauth", "1");
+  if (flow === "signup" && roleFromQuery) {
+    completeUrl.searchParams.set("role", roleFromQuery);
+  }
+  if (targetPath !== "/") {
+    completeUrl.searchParams.set("next", targetPath);
+  }
+
+  return NextResponse.redirect(completeUrl);
 }
