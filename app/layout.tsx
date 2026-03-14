@@ -7,6 +7,11 @@ import LayoutWrapper from "./components/LayoutWrapper";
 export const metadata: Metadata = {
   title: "Evlumba",
   description: "Keşfet • Kaydet • Eşleş",
+  icons: {
+    icon: "/evlumba-icon.svg",
+    shortcut: "/evlumba-icon.svg",
+    apple: "/evlumba-icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
