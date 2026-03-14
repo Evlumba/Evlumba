@@ -75,6 +75,30 @@ function withTimeout<T>(
   });
 }
 
+function isGoogleUser(user: { app_metadata?: Record<string, unknown> | null }) {
+  const metadata = user.app_metadata ?? {};
+  const provider = String(metadata.provider ?? "").toLowerCase();
+  if (provider === "google") return true;
+
+  const providers = Array.isArray(metadata.providers)
+    ? metadata.providers.map((item) => String(item).toLowerCase())
+    : [];
+  return providers.includes("google");
+}
+
+function pickGoogleFullName(user: { user_metadata?: Record<string, unknown> | null }) {
+  const metadata = user.user_metadata ?? {};
+  const fullName = String(metadata.full_name ?? "").trim();
+  if (fullName) return fullName;
+
+  const name = String(metadata.name ?? "").trim();
+  if (name) return name;
+
+  const givenName = String(metadata.given_name ?? "").trim();
+  const familyName = String(metadata.family_name ?? "").trim();
+  return `${givenName} ${familyName}`.trim();
+}
+
 function ProfilePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,6 +106,9 @@ function ProfilePageContent() {
   const [userId, setUserId] = useState<string | null>(null);
   const [role, setRole] = useState<string>("homeowner");
   const [authEmail, setAuthEmail] = useState("");
+  const [isGoogleAuthUser, setIsGoogleAuthUser] = useState(false);
+  const [googleLockedName, setGoogleLockedName] = useState("");
+  const [googleLockedEmail, setGoogleLockedEmail] = useState("");
   const [draft, setDraft] = useState<ProfileDraft>(DEFAULT_DRAFT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -115,8 +142,15 @@ function ProfilePageContent() {
           return;
         }
 
+        const googleAccount = isGoogleUser(data.user);
+        const googleName = pickGoogleFullName(data.user);
+        const googleEmail = data.user.email ?? "";
+
         setUserId(data.user.id);
-        setAuthEmail(data.user.email ?? "");
+        setAuthEmail(googleEmail);
+        setIsGoogleAuthUser(googleAccount);
+        setGoogleLockedName(googleAccount ? googleName : "");
+        setGoogleLockedEmail(googleAccount ? googleEmail : "");
         const { data: profile } = await withTimeout(
           supabase
             .from("profiles")
@@ -133,11 +167,11 @@ function ProfilePageContent() {
           setRole(profile?.role || "homeowner");
           setDraft({
             ...DEFAULT_DRAFT,
-            fullName: profile?.full_name || "",
+            fullName: googleAccount ? googleName || profile?.full_name || "" : profile?.full_name || "",
             avatarUrl: profile?.avatar_url || "",
             city: profile?.city || "",
             phone: profile?.phone || "",
-            contactEmail: profile?.contact_email || data.user.email || "",
+            contactEmail: googleAccount ? googleEmail : profile?.contact_email || googleEmail,
             address: profile?.address || "",
             website: profile?.website || "",
             instagram: profile?.instagram || "",
@@ -192,12 +226,19 @@ function ProfilePageContent() {
 
   async function saveProfile() {
     if (!userId) return;
-    if (!draft.fullName.trim()) {
+    const normalizedFullName =
+      isGoogleAuthUser && googleLockedName.trim() ? googleLockedName.trim() : draft.fullName.trim();
+    const normalizedContactEmail =
+      isGoogleAuthUser && googleLockedEmail.trim()
+        ? googleLockedEmail.trim()
+        : draft.contactEmail.trim();
+
+    if (!normalizedFullName) {
       setMessage("Tam ad zorunlu.");
       setActiveTab("general");
       return;
     }
-    if (!draft.contactEmail.trim() || !isValidEmail(draft.contactEmail.trim())) {
+    if (!normalizedContactEmail || !isValidEmail(normalizedContactEmail)) {
       setMessage("Geçerli bir iletişim e-postası zorunlu.");
       setActiveTab("contact");
       return;
@@ -210,12 +251,12 @@ function ProfilePageContent() {
       const { error } = await supabase.from("profiles").upsert({
         id: userId,
         role,
-        full_name: draft.fullName.trim(),
+        full_name: normalizedFullName,
         city: draft.city || null,
         avatar_url: draft.avatarUrl || null,
         cover_photo_url: draft.coverPhotoUrl || null,
         phone: draft.phone || null,
-        contact_email: draft.contactEmail.trim(),
+        contact_email: normalizedContactEmail,
         address: draft.address || null,
         website: draft.website || null,
         instagram: draft.instagram || null,
@@ -223,6 +264,13 @@ function ProfilePageContent() {
         linkedin: draft.linkedin || null,
       });
 
+      if (!error) {
+        setDraft((prev) => ({
+          ...prev,
+          fullName: normalizedFullName,
+          contactEmail: normalizedContactEmail,
+        }));
+      }
       setMessage(error ? error.message : "Profil kaydedildi ✅");
     } finally {
       setSaving(false);
@@ -377,7 +425,17 @@ function ProfilePageContent() {
                   </button>
                 </div>
                 <div className="space-y-3">
-                  <input className={inputCls} value={draft.fullName} onChange={(e) => setDraft((p) => ({ ...p, fullName: e.target.value }))} placeholder="Tam Ad" />
+                  <input
+                    className={`${inputCls}${isGoogleAuthUser ? " bg-slate-100 text-slate-500" : ""}`}
+                    value={draft.fullName}
+                    onChange={(e) => setDraft((p) => ({ ...p, fullName: e.target.value }))}
+                    placeholder="Tam Ad"
+                    readOnly={isGoogleAuthUser}
+                    aria-readonly={isGoogleAuthUser}
+                  />
+                  {isGoogleAuthUser ? (
+                    <p className="text-xs text-slate-500">Tam ad Google hesabından otomatik alınır.</p>
+                  ) : null}
                   <input className={inputCls} value={draft.city} onChange={(e) => setDraft((p) => ({ ...p, city: e.target.value }))} placeholder="Şehir" />
                 </div>
               </div>
@@ -387,7 +445,17 @@ function ProfilePageContent() {
           {!loading && activeTab === "contact" ? (
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">İletişim</h2>
-              <input className={inputCls} value={draft.contactEmail} onChange={(e) => setDraft((p) => ({ ...p, contactEmail: e.target.value }))} placeholder="İletişim e-posta" />
+              <input
+                className={`${inputCls}${isGoogleAuthUser ? " bg-slate-100 text-slate-500" : ""}`}
+                value={draft.contactEmail}
+                onChange={(e) => setDraft((p) => ({ ...p, contactEmail: e.target.value }))}
+                placeholder="İletişim e-posta"
+                readOnly={isGoogleAuthUser}
+                aria-readonly={isGoogleAuthUser}
+              />
+              {isGoogleAuthUser ? (
+                <p className="text-xs text-slate-500">İletişim e-postası Google hesabından otomatik alınır.</p>
+              ) : null}
               <input className={inputCls} value={draft.phone} onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))} placeholder="Telefon" />
               <input className={inputCls} value={draft.address} onChange={(e) => setDraft((p) => ({ ...p, address: e.target.value }))} placeholder="Adres" />
               <input className={inputCls} value={draft.website} onChange={(e) => setDraft((p) => ({ ...p, website: e.target.value }))} placeholder="Website" />

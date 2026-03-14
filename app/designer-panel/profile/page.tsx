@@ -219,6 +219,30 @@ function withTimeout<T>(
   });
 }
 
+function isGoogleUser(user: { app_metadata?: Record<string, unknown> | null }) {
+  const metadata = user.app_metadata ?? {};
+  const provider = String(metadata.provider ?? "").toLowerCase();
+  if (provider === "google") return true;
+
+  const providers = Array.isArray(metadata.providers)
+    ? metadata.providers.map((item) => String(item).toLowerCase())
+    : [];
+  return providers.includes("google");
+}
+
+function pickGoogleFullName(user: { user_metadata?: Record<string, unknown> | null }) {
+  const metadata = user.user_metadata ?? {};
+  const fullName = String(metadata.full_name ?? "").trim();
+  if (fullName) return fullName;
+
+  const name = String(metadata.name ?? "").trim();
+  if (name) return name;
+
+  const givenName = String(metadata.given_name ?? "").trim();
+  const familyName = String(metadata.family_name ?? "").trim();
+  return `${givenName} ${familyName}`.trim();
+}
+
 export default function DesignerProfileEditPage() {
   const [activeTab, setActiveTab] = useState<TabId>("general");
   const [userId, setUserId] = useState<string | null>(null);
@@ -227,6 +251,9 @@ export default function DesignerProfileEditPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [authEmail, setAuthEmail] = useState("");
+  const [isGoogleAuthUser, setIsGoogleAuthUser] = useState(false);
+  const [googleLockedName, setGoogleLockedName] = useState("");
+  const [googleLockedEmail, setGoogleLockedEmail] = useState("");
   const [securityLoading, setSecurityLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -251,9 +278,15 @@ export default function DesignerProfileEditPage() {
         }
 
         const id = data.user.id;
+        const googleAccount = isGoogleUser(data.user);
+        const googleName = pickGoogleFullName(data.user);
+        const googleEmail = data.user.email ?? "";
         if (cancelled) return;
         setUserId(id);
-        setAuthEmail(data.user.email ?? "");
+        setAuthEmail(googleEmail);
+        setIsGoogleAuthUser(googleAccount);
+        setGoogleLockedName(googleAccount ? googleName : "");
+        setGoogleLockedEmail(googleAccount ? googleEmail : "");
 
         const local = loadLocalDraft(id);
         const { data: profile } = await withTimeout(
@@ -276,7 +309,9 @@ export default function DesignerProfileEditPage() {
           setDraft({
             ...DEFAULT_DRAFT,
             ...local,
-            fullName: profile?.full_name ?? local.fullName ?? "",
+            fullName: googleAccount
+              ? googleName || profile?.full_name || local.fullName || ""
+              : profile?.full_name ?? local.fullName ?? "",
             avatarUrl: profile?.avatar_url ?? local.avatarUrl ?? "",
             businessName: profile?.business_name ?? local.businessName ?? "",
             specialty: profile?.specialty ?? local.specialty ?? "",
@@ -284,7 +319,9 @@ export default function DesignerProfileEditPage() {
             servicesText: toCsv(aboutDetails.services as string[] | undefined),
             city: profile?.city ?? local.city ?? "",
             phone: profile?.phone ?? local.phone ?? "",
-            contactEmail: profile?.contact_email ?? local.contactEmail ?? data.user.email ?? "",
+            contactEmail: googleAccount
+              ? googleEmail
+              : profile?.contact_email ?? local.contactEmail ?? googleEmail,
             address: profile?.address ?? local.address ?? "",
             website: profile?.website ?? local.website ?? "",
             instagram: profile?.instagram ?? local.instagram ?? "",
@@ -346,7 +383,14 @@ async function onPickCover(file: File | null) {
 
   async function saveProfile() {
     if (!userId) return;
-    if (!draft.fullName.trim()) {
+    const normalizedFullName =
+      isGoogleAuthUser && googleLockedName.trim() ? googleLockedName.trim() : draft.fullName.trim();
+    const normalizedContactEmail =
+      isGoogleAuthUser && googleLockedEmail.trim()
+        ? googleLockedEmail.trim()
+        : draft.contactEmail.trim();
+
+    if (!normalizedFullName) {
       setMessage("Tam ad zorunlu.");
       setActiveTab("general");
       return;
@@ -356,7 +400,7 @@ async function onPickCover(file: File | null) {
       setActiveTab("general");
       return;
     }
-    if (!draft.contactEmail.trim() || !isValidEmail(draft.contactEmail.trim())) {
+    if (!normalizedContactEmail || !isValidEmail(normalizedContactEmail)) {
       setMessage("Geçerli bir iletişim e-postası zorunlu.");
       setActiveTab("contact");
       return;
@@ -390,7 +434,7 @@ async function onPickCover(file: File | null) {
       const { error } = await supabase.from("profiles").upsert({
         id: userId,
         role: "designer",
-        full_name: draft.fullName.trim(),
+        full_name: normalizedFullName,
         business_name: draft.businessName || null,
         specialty: draft.specialty || null,
         city: draft.city.trim(),
@@ -399,7 +443,7 @@ async function onPickCover(file: File | null) {
         avatar_url: draft.avatarUrl || null,
         cover_photo_url: draft.coverPhotoUrl || null,
         phone: draft.phone || null,
-        contact_email: draft.contactEmail.trim(),
+        contact_email: normalizedContactEmail,
         address: draft.address || null,
         website: draft.website || null,
         instagram: draft.instagram || null,
@@ -415,7 +459,13 @@ async function onPickCover(file: File | null) {
         return;
       }
 
-      saveLocalDraft(userId, draft);
+      const draftToPersist = {
+        ...draft,
+        fullName: normalizedFullName,
+        contactEmail: normalizedContactEmail,
+      };
+      setDraft(draftToPersist);
+      saveLocalDraft(userId, draftToPersist);
       setMessage("Profil kaydedildi.");
       toast("Profil kaydedildi");
     } finally {
@@ -550,7 +600,17 @@ async function onPickCover(file: File | null) {
                   <input type="file" accept="image/*" className="mt-3 w-full text-xs" onChange={(e) => void onPickAvatar(e.target.files?.[0] ?? null)} />
                 </div>
                 <div className="space-y-3">
-                  <input className={inputCls} value={draft.fullName} onChange={(e) => setDraft((p) => ({ ...p, fullName: e.target.value }))} placeholder="Tam Ad (zorunlu)" />
+                  <input
+                    className={`${inputCls}${isGoogleAuthUser ? " bg-slate-100 text-slate-500" : ""}`}
+                    value={draft.fullName}
+                    onChange={(e) => setDraft((p) => ({ ...p, fullName: e.target.value }))}
+                    placeholder="Tam Ad (zorunlu)"
+                    readOnly={isGoogleAuthUser}
+                    aria-readonly={isGoogleAuthUser}
+                  />
+                  {isGoogleAuthUser ? (
+                    <p className="text-xs text-slate-500">Tam ad Google hesabından otomatik alınır.</p>
+                  ) : null}
                   <input className={inputCls} value={draft.specialty} onChange={(e) => setDraft((p) => ({ ...p, specialty: e.target.value }))} placeholder="İş Türü (zorunlu önerilir)" />
                   <input
                     className={inputCls}
@@ -589,7 +649,17 @@ async function onPickCover(file: File | null) {
           {!loading && activeTab === "contact" ? (
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">İletişim</h2>
-              <input className={inputCls} value={draft.contactEmail} onChange={(e) => setDraft((p) => ({ ...p, contactEmail: e.target.value }))} placeholder="İletişim e-posta (zorunlu)" />
+              <input
+                className={`${inputCls}${isGoogleAuthUser ? " bg-slate-100 text-slate-500" : ""}`}
+                value={draft.contactEmail}
+                onChange={(e) => setDraft((p) => ({ ...p, contactEmail: e.target.value }))}
+                placeholder="İletişim e-posta (zorunlu)"
+                readOnly={isGoogleAuthUser}
+                aria-readonly={isGoogleAuthUser}
+              />
+              {isGoogleAuthUser ? (
+                <p className="text-xs text-slate-500">İletişim e-postası Google hesabından otomatik alınır.</p>
+              ) : null}
               <input className={inputCls} value={draft.phone} onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))} placeholder="Telefon" />
               <input className={inputCls} value={draft.address} onChange={(e) => setDraft((p) => ({ ...p, address: e.target.value }))} placeholder="Adres" />
               <input className={inputCls} value={draft.website} onChange={(e) => setDraft((p) => ({ ...p, website: e.target.value }))} placeholder="Website" />
