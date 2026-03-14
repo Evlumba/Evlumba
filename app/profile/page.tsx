@@ -56,6 +56,25 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+function withTimeout<T>(
+  promise: PromiseLike<T>,
+  timeoutMs = 12000,
+  timeoutMessage = "İşlem zaman aşımına uğradı."
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    Promise.resolve(promise)
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
 function ProfilePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -86,7 +105,11 @@ function ProfilePageContent() {
       setMessage(null);
       try {
         const supabase = getSupabaseBrowserClient();
-        const { data, error } = await supabase.auth.getUser();
+        const { data, error } = await withTimeout(
+          supabase.auth.getUser(),
+          12000,
+          "Oturum kontrolü zaman aşımına uğradı."
+        );
         if (error || !data.user) {
           if (!cancelled) setMessage("Profil için önce giriş yapmalısın.");
           return;
@@ -94,13 +117,17 @@ function ProfilePageContent() {
 
         setUserId(data.user.id);
         setAuthEmail(data.user.email ?? "");
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select(
-            "full_name, role, avatar_url, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url"
-          )
-          .eq("id", data.user.id)
-          .maybeSingle();
+        const { data: profile } = await withTimeout(
+          supabase
+            .from("profiles")
+            .select(
+              "full_name, role, avatar_url, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url"
+            )
+            .eq("id", data.user.id)
+            .maybeSingle(),
+          12000,
+          "Profil verisi alınırken zaman aşımı oldu."
+        );
 
         if (!cancelled) {
           setRole(profile?.role || "homeowner");

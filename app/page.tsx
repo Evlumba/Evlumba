@@ -13,8 +13,7 @@ type Project = {
   tag: string;
   imageUrl: string;
   href: string;
-  likeCount: number;
-  commentCount: number;
+  saveCount: number;
 };
 
 type Designer = {
@@ -54,7 +53,14 @@ type HomeProjectRow = {
 
 type HomeCollectionItemRow = {
   design_id: string;
-  collection_id: string;
+  collections:
+    | {
+        user_id: string;
+      }
+    | Array<{
+        user_id: string;
+      }>
+    | null;
 };
 
 type HomeInspirationProjectRow = {
@@ -75,10 +81,6 @@ type HomeReviewRow = {
   designer_id: string;
   rating: number | null;
   review_text: string | null;
-};
-
-type HomeProjectCommentRow = {
-  project_id: string | null;
 };
 
 type HomeTestimonialReviewRow = {
@@ -159,40 +161,29 @@ async function loadHomeProjects(limit = 3): Promise<Project[]> {
     const selectedProjects = (data as HomeInspirationProjectRow[]).slice(0, limit);
     const projectIds = selectedProjects.map((project) => project.id);
 
-    const [{ data: savedRows }, { data: commentRows }] = await Promise.all([
+    const { data: savedRows } = await (
       projectIds.length > 0
         ? admin
             .from("collection_items")
-            .select("design_id, collection_id")
+            .select("design_id, collections!inner(user_id)")
             .in("design_id", projectIds)
-        : Promise.resolve({ data: [] as HomeCollectionItemRow[] }),
-      projectIds.length > 0
-        ? admin
-            .from("designer_reviews")
-            .select("project_id")
-            .in("project_id", projectIds)
-        : Promise.resolve({ data: [] as HomeProjectCommentRow[] }),
-    ]);
+        : Promise.resolve({ data: [] as HomeCollectionItemRow[] })
+    );
 
-    const likeCountByProject = new Map<string, number>();
-    const seenProjectCollectionPairs = new Set<string>();
+    const saveCountByProject = new Map<string, number>();
+    const seenProjectUserPairs = new Set<string>();
     for (const row of (savedRows ?? []) as HomeCollectionItemRow[]) {
-      if (!row.design_id || !row.collection_id) continue;
-      const uniquePair = `${row.design_id}::${row.collection_id}`;
-      if (seenProjectCollectionPairs.has(uniquePair)) continue;
-      seenProjectCollectionPairs.add(uniquePair);
-      likeCountByProject.set(
+      if (!row.design_id) continue;
+      const owner = Array.isArray(row.collections)
+        ? row.collections[0]?.user_id
+        : row.collections?.user_id;
+      if (!owner) continue;
+      const uniquePair = `${row.design_id}::${owner}`;
+      if (seenProjectUserPairs.has(uniquePair)) continue;
+      seenProjectUserPairs.add(uniquePair);
+      saveCountByProject.set(
         row.design_id,
-        (likeCountByProject.get(row.design_id) ?? 0) + 1
-      );
-    }
-
-    const commentCountByProject = new Map<string, number>();
-    for (const row of (commentRows ?? []) as HomeProjectCommentRow[]) {
-      if (!row.project_id) continue;
-      commentCountByProject.set(
-        row.project_id,
-        (commentCountByProject.get(row.project_id) ?? 0) + 1
+        (saveCountByProject.get(row.design_id) ?? 0) + 1
       );
     }
 
@@ -202,8 +193,7 @@ async function loadHomeProjects(limit = 3): Promise<Project[]> {
       tag: formatProjectTag(project.project_type, project.tags),
       imageUrl: pickProjectImage(project),
       href: `/tasarimcilar/supa_${project.designer_id}/proje/${project.id}`,
-      likeCount: likeCountByProject.get(project.id) ?? 0,
-      commentCount: commentCountByProject.get(project.id) ?? 0,
+      saveCount: saveCountByProject.get(project.id) ?? 0,
     }));
   } catch {
     return [];
@@ -442,8 +432,7 @@ function SectionTitle({
 function ProjectCard({ p }: { p: Project }) {
   const safeHref = p.href?.trim() || "/kesfet";
   const tagText = p.tag.replace("•", "·");
-  const likesLabel = formatCompactCount(p.likeCount);
-  const commentsLabel = formatCompactCount(p.commentCount);
+  const savesLabel = formatCompactCount(p.saveCount);
 
   const [t1, t2] = p.title.split("—").map((x) => x?.trim());
   const titleMain = t1 || p.title;
@@ -510,25 +499,10 @@ function ProjectCard({ p }: { p: Project }) {
                 strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
               </svg>
-              <span className="font-semibold tabular-nums">{likesLabel}</span>
-            </span>
-
-            <span className="inline-flex items-center gap-1.5">
-              <svg
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
-              </svg>
-              <span className="font-semibold tabular-nums">{commentsLabel}</span>
+              <span className="font-semibold tabular-nums">{savesLabel}</span>
+              <span className="text-slate-500">kayıt</span>
             </span>
           </div>
 

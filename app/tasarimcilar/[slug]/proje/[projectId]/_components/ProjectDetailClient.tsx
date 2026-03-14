@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { toast } from "@/lib/toast";
 import type { Designer, PortfolioItem } from "../../../../_data/designers";
 
 function toValidImageSrc(value: unknown) {
@@ -19,6 +22,33 @@ function sanitizeImageList(values: unknown) {
     if (src) clean.push(src);
   }
   return clean;
+}
+
+async function ensureDefaultCollectionId(userId: string) {
+  const supabase = getSupabaseBrowserClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("collections")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("title", "Kaydedilenler")
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError && existingError.code !== "PGRST116") {
+    throw new Error(existingError.message);
+  }
+  if (existing?.id) return existing.id;
+
+  const { data: created, error: createError } = await supabase
+    .from("collections")
+    .insert({ user_id: userId, title: "Kaydedilenler", is_public: false })
+    .select("id")
+    .single();
+
+  if (createError || !created?.id) {
+    throw new Error(createError?.message || "Kayıt koleksiyonu oluşturulamadı.");
+  }
+  return created.id;
 }
 
 // Diğer Projeler Section
@@ -181,8 +211,10 @@ export default function ProjectDetailClient({
   prevProject: PortfolioItem | null;
   nextProject: PortfolioItem | null;
 }) {
+  const router = useRouter();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
 
   // Proje resimleri - images dizisi yoksa coverUrl kullan
   const galleryImages = sanitizeImageList(project.images);
@@ -191,6 +223,13 @@ export default function ProjectDetailClient({
   const normalizedSelectedIndex =
     images.length > 0 ? ((selectedIndex % images.length) + images.length) % images.length : 0;
   const selectedImageSrc = toValidImageSrc(images[normalizedSelectedIndex]);
+  const goBackOrFallback = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push(`/tasarimcilar/${designer.slug}`);
+  }, [designer.slug, router]);
 
   // Designer avatar - avatarUrl yoksa coverUrl kullan
   const designerAvatar = toValidImageSrc(designer.avatarUrl) ?? toValidImageSrc(designer.coverUrl);
@@ -215,11 +254,105 @@ export default function ProjectDetailClient({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") goToPrev();
       if (e.key === "ArrowRight") goToNext();
-      if (e.key === "Escape") window.history.back();
+      if (e.key === "Escape") goBackOrFallback();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [goToPrev, goToNext]);
+  }, [goBackOrFallback, goToPrev, goToNext]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSavedState() {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) {
+          if (!cancelled) setSaved(false);
+          return;
+        }
+
+        const { data: collections, error: collectionsError } = await supabase
+          .from("collections")
+          .select("id")
+          .eq("user_id", authData.user.id);
+        if (collectionsError || !collections?.length) {
+          if (!cancelled) setSaved(false);
+          return;
+        }
+
+        const collectionIds = collections.map((item) => item.id);
+        const { data: existing, error: existingError } = await supabase
+          .from("collection_items")
+          .select("id")
+          .in("collection_id", collectionIds)
+          .eq("design_id", project.id)
+          .limit(1)
+          .maybeSingle();
+        if (existingError && existingError.code !== "PGRST116") {
+          if (!cancelled) setSaved(false);
+          return;
+        }
+
+        if (!cancelled) setSaved(Boolean(existing?.id));
+      } catch {
+        if (!cancelled) setSaved(false);
+      }
+    }
+
+    void loadSavedState();
+    return () => {
+      cancelled = true;
+    };
+  }, [project.id]);
+
+  async function toggleSave() {
+    if (saveBusy) return;
+    setSaveBusy(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        toast("Kaydetmek için giriş yapmalısın.");
+        return;
+      }
+
+      const collectionId = await ensureDefaultCollectionId(authData.user.id);
+      const { data: existing, error: existingError } = await supabase
+        .from("collection_items")
+        .select("id")
+        .eq("collection_id", collectionId)
+        .eq("design_id", project.id)
+        .limit(1)
+        .maybeSingle();
+      if (existingError && existingError.code !== "PGRST116") {
+        throw new Error(existingError.message);
+      }
+
+      if (existing?.id) {
+        const { error: deleteError } = await supabase
+          .from("collection_items")
+          .delete()
+          .eq("id", existing.id);
+        if (deleteError) throw new Error(deleteError.message);
+        setSaved(false);
+        toast("Kayıttan kaldırıldı.");
+      } else {
+        const { error: insertError } = await supabase
+          .from("collection_items")
+          .insert({ collection_id: collectionId, design_id: project.id });
+        if (insertError) throw new Error(insertError.message);
+        setSaved(true);
+        toast("Kaydedildi.");
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Proje kaydedilirken bir hata oluştu.";
+      toast(message);
+    } finally {
+      setSaveBusy(false);
+    }
+  }
 
   const onShare = async () => {
     const url = typeof window !== "undefined" ? window.location.href : "";
@@ -237,15 +370,16 @@ export default function ProjectDetailClient({
       {/* Header - Glass Effect */}
       <header className="sticky top-0 z-50 border-b border-white/20 bg-white/70 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link
-            href={`/tasarimcilar/${designer.slug}`}
+          <button
+            type="button"
+            onClick={goBackOrFallback}
             className="flex items-center gap-2 rounded-full bg-white/50 px-3 py-1.5 text-gray-600 shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:text-gray-900"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             <span className="text-sm font-medium">Geri</span>
-          </Link>
+          </button>
 
           <div className="flex items-center gap-2">
             <button
@@ -257,21 +391,24 @@ export default function ProjectDetailClient({
               </svg>
             </button>
             <button
-              onClick={() => setSaved(!saved)}
+              type="button"
+              onClick={() => void toggleSave()}
+              disabled={saveBusy}
               className="rounded-full bg-white/50 p-2 shadow-sm ring-1 ring-black/5 transition hover:bg-white"
             >
               <svg className={`h-5 w-5 ${saved ? "fill-rose-500 text-rose-500" : "text-gray-600"}`} fill={saved ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
             </button>
-            <Link
-              href={`/tasarimcilar/${designer.slug}`}
+            <button
+              type="button"
+              onClick={goBackOrFallback}
               className="rounded-full bg-white/50 p-2 shadow-sm ring-1 ring-black/5 transition hover:bg-white"
             >
               <svg className="h-5 w-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </Link>
+            </button>
           </div>
         </div>
       </header>

@@ -200,6 +200,25 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function withTimeout<T>(
+  promise: PromiseLike<T>,
+  timeoutMs = 12000,
+  timeoutMessage = "İşlem zaman aşımına uğradı."
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    Promise.resolve(promise)
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
 export default function DesignerProfileEditPage() {
   const [activeTab, setActiveTab] = useState<TabId>("general");
   const [userId, setUserId] = useState<string | null>(null);
@@ -221,7 +240,11 @@ export default function DesignerProfileEditPage() {
       setMessage(null);
       try {
         const supabase = getSupabaseBrowserClient();
-        const { data, error } = await supabase.auth.getUser();
+        const { data, error } = await withTimeout(
+          supabase.auth.getUser(),
+          12000,
+          "Oturum kontrolü zaman aşımına uğradı."
+        );
         if (error || !data.user) {
           if (!cancelled) setMessage("Profil ayarları için giriş yapmalısın.");
           return;
@@ -233,13 +256,17 @@ export default function DesignerProfileEditPage() {
         setAuthEmail(data.user.email ?? "");
 
         const local = loadLocalDraft(id);
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select(
-            "full_name, avatar_url, business_name, specialty, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url, tags, starting_from, about_details, business_details"
-          )
-          .eq("id", id)
-          .maybeSingle();
+        const { data: profile } = await withTimeout(
+          supabase
+            .from("profiles")
+            .select(
+              "full_name, avatar_url, business_name, specialty, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url, tags, starting_from, about_details, business_details"
+            )
+            .eq("id", id)
+            .maybeSingle(),
+          12000,
+          "Profil verisi alınırken zaman aşımı oldu."
+        );
 
         const aboutDetails = (profile?.about_details ?? {}) as Record<string, unknown>;
         const businessDetails = (profile?.business_details ?? {}) as Record<string, unknown>;
