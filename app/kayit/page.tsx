@@ -46,6 +46,7 @@ function KayitPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [contactConsent, setContactConsent] = useState(false);
+  const [contactConsentTouched, setContactConsentTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [feedback, setFeedback] = useState<string>("");
@@ -64,6 +65,7 @@ function KayitPageContent() {
     authError === "oauth_exchange_failed"
       ? "Google ile kayıt tamamlanamadı. Lütfen tekrar deneyin."
       : "";
+  const showContactConsentError = contactConsentTouched && !contactConsent;
 
   useEffect(() => {
     setRole(selectedRoleFromQuery);
@@ -124,6 +126,7 @@ function KayitPageContent() {
   async function submit() {
     if (googleLoading) return;
     if (!contactConsent) {
+      setContactConsentTouched(true);
       setFeedback("Devam etmek için iletişim linkini onaylamalısın.");
       toast("İletişim onayı zorunlu");
       return;
@@ -185,6 +188,7 @@ function KayitPageContent() {
   async function signUpWithGoogle() {
     if (loading || googleLoading) return;
     if (!contactConsent) {
+      setContactConsentTouched(true);
       setFeedback("Google ile kayıt için iletişim onayı zorunlu.");
       toast("İletişim onayı zorunlu");
       return;
@@ -291,11 +295,18 @@ function KayitPageContent() {
                 {role === "designer" ? "Profesyonel Hesap Oluştur" : "Ev Sahibi Hesap Oluştur"}
               </button>
             </form>
-            <label className="mt-2 flex items-start gap-2 text-sm text-slate-600">
+            <label
+              className={`mt-2 flex items-start gap-2 text-sm ${
+                showContactConsentError ? "text-red-600" : "text-slate-600"
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={contactConsent}
-                onChange={(e) => setContactConsent(e.target.checked)}
+                onChange={(e) => {
+                  setContactConsent(e.target.checked);
+                  setContactConsentTouched(true);
+                }}
                 className="mt-0.5 h-4 w-4 rounded border-slate-300"
               />
               <span>
@@ -305,6 +316,9 @@ function KayitPageContent() {
                 sayfasını okudum ve onaylıyorum.
               </span>
             </label>
+            {showContactConsentError ? (
+              <p className="text-sm font-medium text-red-600">Zorunlu alan: Bu onayı vermelisin.</p>
+            ) : null}
             {feedback || authErrorMessage ? (
               <p className="text-sm text-slate-600">{feedback || authErrorMessage}</p>
             ) : null}
