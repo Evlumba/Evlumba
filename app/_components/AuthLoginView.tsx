@@ -111,6 +111,7 @@ export default function AuthLoginView({
   const [showGoogleConsent, setShowGoogleConsent] = useState(false);
   const [googleConsentChecked, setGoogleConsentChecked] = useState(false);
   const [googleConsentError, setGoogleConsentError] = useState<string | null>(null);
+  const [consentAfterOauth, setConsentAfterOauth] = useState(false);
   const oauthHandledRef = useRef(false);
 
   const nextPath = useMemo(() => {
@@ -124,6 +125,7 @@ export default function AuthLoginView({
     [searchParams]
   );
   const authError = searchParams.get("auth_error");
+  const needsContactConsent = searchParams.get("needs_contact_consent") === "1";
   const authErrorMessage =
     authError === "oauth_exchange_failed"
       ? "Google ile giriş tamamlanamadı. Lütfen tekrar deneyin."
@@ -143,12 +145,14 @@ export default function AuthLoginView({
     router.push(nextPath || "/");
   }, [nextPath, router]);
 
-  useEffect(() => {
-    if (!isOAuthReturn || oauthHandledRef.current) return;
-    oauthHandledRef.current = true;
+  const afterGoogleLogin = useCallback((successMessage: string) => {
+    consumeIntendedAction();
+    toast(successMessage);
+    router.push("/");
+  }, [router]);
 
-    let cancelled = false;
-    const syncSessionWithRetry = async (
+  const syncSessionWithRetry = useCallback(
+    async (
       attempts = 6,
       delayMs = 250
     ): Promise<Awaited<ReturnType<typeof syncSessionFromSupabase>>> => {
@@ -164,23 +168,47 @@ export default function AuthLoginView({
         }
       }
       return lastResult;
-    };
+    },
+    []
+  );
 
+  useEffect(() => {
+    if (!isOAuthReturn || oauthHandledRef.current) return;
+    oauthHandledRef.current = true;
+
+    let cancelled = false;
     const completeOauthLogin = async () => {
+      if (needsContactConsent) {
+        const supabase = getSupabaseBrowserClient();
+        const { data, error } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (error || !data.user) {
+          setFormError(error?.message || "Google oturumu alınamadı.");
+          return;
+        }
+
+        setFormError(null);
+        setGoogleConsentChecked(false);
+        setGoogleConsentError(null);
+        setConsentAfterOauth(true);
+        setShowGoogleConsent(true);
+        return;
+      }
+
       const synced = await syncSessionWithRetry();
       if (cancelled) return;
       if (!synced.ok) {
         setFormError(synced.error || "Google ile giriş tamamlanamadı.");
         return;
       }
-      afterLogin("Google ile giriş başarılı ✅");
+      afterGoogleLogin("Google ile giriş başarılı ✅");
     };
 
     void completeOauthLogin();
     return () => {
       cancelled = true;
     };
-  }, [afterLogin, isOAuthReturn]);
+  }, [afterGoogleLogin, isOAuthReturn, needsContactConsent, syncSessionWithRetry]);
 
   useEffect(() => {
     if (isOAuthReturn) return;
@@ -249,18 +277,30 @@ export default function AuthLoginView({
   }
 
   function handleGoogleLogin() {
-    if (loading || googleLoading) return;
-    setGoogleConsentChecked(false);
-    setGoogleConsentError(null);
-    setShowGoogleConsent(true);
+    void startGoogleLogin();
   }
 
-  function confirmGoogleConsent() {
+  async function confirmGoogleConsent() {
     if (!googleConsentChecked) {
       setGoogleConsentError("Google ile devam etmek için iletişim onayı zorunlu.");
       return;
     }
     setShowGoogleConsent(false);
+
+    if (consentAfterOauth) {
+      setFormError(null);
+      setGoogleLoading(true);
+      const synced = await syncSessionWithRetry();
+      setGoogleLoading(false);
+      if (!synced.ok) {
+        setFormError(synced.error || "Google ile giriş tamamlanamadı.");
+        return;
+      }
+      setConsentAfterOauth(false);
+      afterGoogleLogin("Google ile giriş başarılı ✅");
+      return;
+    }
+
     void startGoogleLogin();
   }
 
@@ -348,7 +388,9 @@ export default function AuthLoginView({
           <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.55)]">
             <h3 className="text-lg font-semibold text-slate-900">Google ile Devam Et</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Devam etmeden önce iletişim metnini onaylamalısın.
+              {consentAfterOauth
+                ? "Bu Google hesabı sistemde yeni görünüyor. Devam etmeden önce iletişim onayı vermelisin."
+                : "Devam etmeden önce iletişim metnini onaylamalısın."}
             </p>
 
             <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">
@@ -376,7 +418,20 @@ export default function AuthLoginView({
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setShowGoogleConsent(false)}
+                onClick={() => {
+                  if (!consentAfterOauth) {
+                    setShowGoogleConsent(false);
+                    return;
+                  }
+
+                  setShowGoogleConsent(false);
+                  setConsentAfterOauth(false);
+                  void (async () => {
+                    const supabase = getSupabaseBrowserClient();
+                    await supabase.auth.signOut();
+                    router.replace("/giris");
+                  })();
+                }}
                 className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
               >
                 Vazgeç

@@ -329,6 +329,51 @@ alter table public.designer_projects
 alter table public.designer_projects
   alter column is_published set default false;
 
+create or replace function public.enforce_profile_contact_email()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  account_email text;
+  resolved_role text;
+begin
+  resolved_role := coalesce(new.role, old.role, 'homeowner');
+
+  select u.email
+    into account_email
+  from auth.users u
+  where u.id = new.id;
+
+  if resolved_role = 'homeowner' then
+    new.contact_email := account_email;
+  elsif new.contact_email is null or btrim(new.contact_email) = '' then
+    new.contact_email := account_email;
+  end if;
+
+  return new;
+end
+$$;
+
+drop trigger if exists profiles_enforce_contact_email on public.profiles;
+
+create trigger profiles_enforce_contact_email
+before insert or update of role, contact_email, id
+on public.profiles
+for each row
+execute function public.enforce_profile_contact_email();
+
+update public.profiles p
+   set contact_email = u.email
+  from auth.users u
+ where p.id = u.id
+   and (
+     p.role = 'homeowner'
+     or p.contact_email is null
+     or btrim(p.contact_email) = ''
+   );
+
 alter table public.profiles enable row level security;
 alter table public.collections enable row level security;
 alter table public.collection_items enable row level security;

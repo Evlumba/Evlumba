@@ -212,6 +212,8 @@ function ProfilePageContent() {
 
           if (!cancelled) {
             const mergedRole = profile?.role || metadataRole;
+            const mergedIsProfessional =
+              mergedRole === "designer" || mergedRole === "designer_pending";
             const mergedDraft: ProfileDraft = {
               ...baseDraft,
               fullName: googleAccount
@@ -220,9 +222,9 @@ function ProfilePageContent() {
               avatarUrl: profile?.avatar_url || baseDraft.avatarUrl,
               city: profile?.city || baseDraft.city,
               phone: profile?.phone || baseDraft.phone,
-              contactEmail: googleAccount
-                ? googleEmail
-                : profile?.contact_email || baseDraft.contactEmail,
+              contactEmail: mergedIsProfessional
+                ? profile?.contact_email || baseDraft.contactEmail
+                : googleEmail || profile?.contact_email || baseDraft.contactEmail,
               address: profile?.address || baseDraft.address,
               website: profile?.website || baseDraft.website,
               instagram: profile?.instagram || baseDraft.instagram,
@@ -234,7 +236,7 @@ function ProfilePageContent() {
             setRole(mergedRole);
             setDraft(mergedDraft);
 
-            if (googleAccount && googleEmail) {
+            if (mergedRole === "homeowner" && googleEmail) {
               const currentProfileName = String(profile?.full_name ?? "").trim();
               const currentProfileEmail = String(profile?.contact_email ?? "")
                 .trim()
@@ -311,10 +313,9 @@ function ProfilePageContent() {
     if (!userId) return;
     const normalizedFullName =
       isGoogleAuthUser && googleLockedName.trim() ? googleLockedName.trim() : draft.fullName.trim();
-    const normalizedContactEmail =
-      isGoogleAuthUser && googleLockedEmail.trim()
-        ? googleLockedEmail.trim()
-        : draft.contactEmail.trim();
+    const normalizedContactEmail = isProfessional
+      ? draft.contactEmail.trim()
+      : authEmail.trim() || googleLockedEmail.trim() || draft.contactEmail.trim();
 
     if (!normalizedFullName) {
       setMessage("Tam ad zorunlu.");
@@ -518,15 +519,15 @@ function ProfilePageContent() {
             <div className="space-y-3">
               <h2 className="text-xl font-semibold">İletişim</h2>
               <input
-                className={`${inputCls}${isGoogleAuthUser ? " bg-slate-100 text-slate-500" : ""}`}
+                className={`${inputCls}${!isProfessional ? " bg-slate-100 text-slate-500" : ""}`}
                 value={draft.contactEmail}
                 onChange={(e) => setDraft((p) => ({ ...p, contactEmail: e.target.value }))}
                 placeholder="İletişim e-posta"
-                readOnly={isGoogleAuthUser}
-                aria-readonly={isGoogleAuthUser}
+                readOnly={!isProfessional}
+                aria-readonly={!isProfessional}
               />
-              {isGoogleAuthUser ? (
-                <p className="text-xs text-slate-500">İletişim e-postası Google hesabından otomatik alınır.</p>
+              {!isProfessional ? (
+                <p className="text-xs text-slate-500">İletişim e-postası kayıt olduğun e-posta ile otomatik doldurulur ve değiştirilemez.</p>
               ) : null}
               <input className={inputCls} value={draft.phone} onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))} placeholder="Telefon" />
               <input className={inputCls} value={draft.address} onChange={(e) => setDraft((p) => ({ ...p, address: e.target.value }))} placeholder="Adres" />

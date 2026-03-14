@@ -9,14 +9,6 @@ function isRole(value: string | null): value is Role {
   return value === "homeowner" || value === "designer";
 }
 
-function sanitizeNextPath(raw: string | null): string {
-  if (!raw) return "/";
-  const value = raw.trim();
-  if (!value.startsWith("/")) return "/";
-  if (value.startsWith("//")) return "/";
-  return value;
-}
-
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
@@ -24,10 +16,7 @@ export async function GET(request: Request) {
   const flow = requestUrl.searchParams.get("flow");
 
   const roleFromQuery: Role | null = isRole(rawRole) ? rawRole : null;
-  const nextPath = sanitizeNextPath(requestUrl.searchParams.get("next"));
-  const fallbackAfterSignup = roleFromQuery === "designer" ? "/designer-panel" : "/";
-  const targetPath =
-    flow === "signup" ? (nextPath === "/" ? fallbackAfterSignup : nextPath) : nextPath;
+  const targetPath = "/";
   const errorPath = flow === "signup" ? "/kayit" : "/giris";
 
   const supabase = await getSupabaseServerClient();
@@ -39,9 +28,6 @@ export async function GET(request: Request) {
       errorUrl.searchParams.set("auth_error", "oauth_exchange_failed");
       if (flow === "signup" && roleFromQuery) {
         errorUrl.searchParams.set("role", roleFromQuery);
-      }
-      if (targetPath !== "/") {
-        errorUrl.searchParams.set("next", targetPath);
       }
       return NextResponse.redirect(errorUrl);
     }
@@ -76,9 +62,10 @@ export async function GET(request: Request) {
     const metadataRole = metadata.role === "designer" ? "designer" : "homeowner";
     const { data: existingProfile } = await supabase
       .from("profiles")
-      .select("full_name, role, contact_email, avatar_url")
+      .select("id, full_name, role, contact_email, avatar_url")
       .eq("id", authData.user.id)
       .maybeSingle();
+    const hasExistingProfile = Boolean(existingProfile?.id);
 
     const existingRole =
       typeof existingProfile?.role === "string" && existingProfile.role.trim()
@@ -99,21 +86,26 @@ export async function GET(request: Request) {
 
     const roleToSave = roleFromQuery || existingRole || metadataRole;
     const nameToSave = isGoogleAccount ? metadataName : existingName || metadataName;
-    const contactEmailToSave = isGoogleAccount
+    const isHomeownerRole = roleToSave === "homeowner";
+    const contactEmailToSave = isHomeownerRole
       ? metadataEmail || existingContactEmail
       : existingContactEmail || metadataEmail;
     const avatarToSave = existingAvatar || metadataAvatar;
 
-    await supabase.from("profiles").upsert(
-      {
-        id: authData.user.id,
-        full_name: nameToSave,
-        role: roleToSave,
-        contact_email: contactEmailToSave,
-        avatar_url: avatarToSave,
-      },
-      { onConflict: "id" }
-    );
+    const skipProfileUpsertUntilConsent = flow === "login" && !hasExistingProfile;
+
+    if (!skipProfileUpsertUntilConsent) {
+      await supabase.from("profiles").upsert(
+        {
+          id: authData.user.id,
+          full_name: nameToSave,
+          role: roleToSave,
+          contact_email: contactEmailToSave,
+          avatar_url: avatarToSave,
+        },
+        { onConflict: "id" }
+      );
+    }
   }
 
   if (flow === "signup") {
@@ -123,9 +115,15 @@ export async function GET(request: Request) {
   const completionPath = "/giris";
   const completeUrl = new URL(completionPath, requestUrl.origin);
   completeUrl.searchParams.set("oauth", "1");
-  if (targetPath !== "/") {
-    completeUrl.searchParams.set("next", targetPath);
+  if (flow === "login") {
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", authData.user?.id ?? "")
+      .maybeSingle();
+    if (!profileRow?.id) {
+      completeUrl.searchParams.set("needs_contact_consent", "1");
+    }
   }
-
   return NextResponse.redirect(completeUrl);
 }
