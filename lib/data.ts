@@ -329,6 +329,7 @@ export type ExploreIdea = {
   description: string;
   popularity: number; // default sıralama
   tags: string[]; // zevk sıralama için
+  detailUrl?: string;
 };
 
 export const exploreRooms: Array<{
@@ -368,8 +369,7 @@ export const exploreRooms: Array<{
   {
     id: "cocuk",
     label: "Bebek & Çocuk",
-    coverUrl:
-      "https://images.unsplash.com/photo-1549648247-7d0d1d8b0b7a?auto=format&fit=crop&w=1200&q=80",
+    coverUrl: "/images/explore-cocuk.svg",
     sub: ["Bebek", "Okul", "Oyun", "Depolama", "Renk"],
   },
   {

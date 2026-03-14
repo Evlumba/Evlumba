@@ -1,6 +1,14 @@
 // app/components/SiteTestimonials.tsx
 
-type Platform = "Instagram" | "X" | "TikTok" | "WhatsApp";
+type Platform = "Instagram" | "X" | "TikTok" | "WhatsApp" | "Evlumba";
+
+export type SiteTestimonialItem = {
+  id: string;
+  author: string;
+  text: string;
+  rating: number;
+  designerName: string;
+};
 
 type Mention = {
   id: string;
@@ -11,9 +19,11 @@ type Mention = {
   size?: "sm" | "md" | "lg";
   tone?: "default" | "muted";
   vibe?: string; // ✅ zaman yok; yerine “kafa rahat”, “zevk netleşti” gibi
+  rating?: number;
+  designerName?: string;
 };
 
-const mentions: Mention[] = [
+const fallbackMentions: Mention[] = [
   {
     id: "m1",
     platform: "Instagram",
@@ -76,6 +86,12 @@ const mentions: Mention[] = [
   },
 ];
 
+function firstNameOnly(fullName: string) {
+  const normalized = fullName.trim().replace(/\s+/g, " ");
+  if (!normalized) return "Kullanıcı";
+  return normalized.split(" ")[0] || "Kullanıcı";
+}
+
 function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -83,6 +99,7 @@ function cx(...classes: Array<string | false | undefined | null>) {
 function PlatformMark({ p }: { p: Platform }) {
   const label =
     p === "Instagram" ? "IG" : p === "TikTok" ? "TT" : p === "WhatsApp" ? "WA" : "X";
+  const normalizedLabel = p === "Evlumba" ? "EVL" : label;
 
   const dot =
     p === "Instagram"
@@ -91,12 +108,14 @@ function PlatformMark({ p }: { p: Platform }) {
       ? "bg-emerald-500"
       : p === "WhatsApp"
       ? "bg-emerald-600"
+      : p === "Evlumba"
+      ? "bg-indigo-500"
       : "bg-slate-900";
 
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-slate-700 backdrop-blur">
       <span className={cx("h-1.5 w-1.5 rounded-full", dot)} aria-hidden="true" />
-      <span className="tracking-tight">{label}</span>
+      <span className="tracking-tight">{normalizedLabel}</span>
     </span>
   );
 }
@@ -136,11 +155,17 @@ function MentionCard({ m }: { m: Mention }) {
         <div className="relative flex items-center justify-between gap-3">
           <PlatformMark p={m.platform} />
 
-          {/* ✅ zaman yerine vibe */}
-          <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-slate-700 backdrop-blur">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-            {m.vibe ?? "memnuniyet"}
-          </span>
+          {typeof m.rating === "number" ? (
+            <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-amber-700 backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+              {m.rating.toFixed(1)} / 5
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-slate-700 backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+              {m.vibe ?? "memnuniyet"}
+            </span>
+          )}
         </div>
 
         {/* quote */}
@@ -165,11 +190,14 @@ function MentionCard({ m }: { m: Mention }) {
             <div className="text-sm font-semibold tracking-tight text-slate-900">
               {m.author}
             </div>
+            {m.designerName ? (
+              <div className="text-xs text-slate-500">Profesyonel: {m.designerName}</div>
+            ) : null}
             {m.handle ? (
               <div className="text-xs text-slate-500">{m.handle}</div>
-            ) : (
+            ) : !m.designerName ? (
               <div className="text-xs text-slate-500">topluluktan</div>
-            )}
+            ) : null}
           </div>
 
           {/* tiny “signal” pill (soft) */}
@@ -182,7 +210,31 @@ function MentionCard({ m }: { m: Mention }) {
   );
 }
 
-export default function SiteTestimonials() {
+function mapLiveMentions(items: SiteTestimonialItem[]): Mention[] {
+  return items.map((item, index) => {
+    const size: Mention["size"] = index % 3 === 1 ? "lg" : index % 5 === 0 ? "sm" : "md";
+    return {
+      id: item.id,
+      platform: "Evlumba",
+      author: firstNameOnly(item.author),
+      text: item.text,
+      rating: item.rating,
+      designerName: item.designerName,
+      size,
+      tone: index % 4 === 0 ? "muted" : "default",
+      vibe: "4+ puanlı yorum",
+    };
+  });
+}
+
+export default function SiteTestimonials({
+  mentions,
+}: {
+  mentions?: SiteTestimonialItem[];
+}) {
+  const feed =
+    mentions && mentions.length > 0 ? mapLiveMentions(mentions) : fallbackMentions;
+
   return (
     <section className="mt-12">
       {/* outer glass wrapper */}
@@ -232,7 +284,7 @@ export default function SiteTestimonials() {
 
             {/* masonry grid */}
             <div className="mt-6 columns-1 gap-4 sm:columns-2 lg:columns-3 [column-fill:balance]">
-              {mentions.map((m) => (
+              {feed.map((m) => (
                 <div key={m.id} className="mb-4">
                   <MentionCard m={m} />
                 </div>

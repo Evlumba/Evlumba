@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "../lib/toast";
 import {
   createCollection,
-  getSavedCollectionsForDesign,
   loadCollections,
   toggleSaveToCollection,
   type Collection,
+  type CollectionsState,
 } from "../lib/collections";
 
 export default function SaveModal({
@@ -21,28 +21,59 @@ export default function SaveModal({
   designId: string;
   designTitle: string;
 }) {
-  const [state, setState] = useState(() => loadCollections());
+  const [state, setState] = useState<CollectionsState>({ collections: [] });
   const [newName, setNewName] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (open) setState(loadCollections());
+    if (!open) return;
+    setBusy(true);
+    void loadCollections()
+      .then((next) => {
+        setState(next);
+        // İlk koleksiyon oluşturulacaksa varsayılan isim ver.
+        // En az bir koleksiyon varsa input boş kalsın.
+        setNewName(next.collections.length === 0 ? "Favorilerim" : "");
+      })
+      .finally(() => setBusy(false));
   }, [open]);
 
-  const savedIn = useMemo(() => getSavedCollectionsForDesign(designId), [designId, state.collections.length]);
+  const savedIn = useMemo(
+    () => state.collections.filter((c) => c.itemIds.includes(designId)).map((c) => c.id),
+    [designId, state.collections]
+  );
 
-  function toggle(colId: string) {
-    const next = toggleSaveToCollection(colId, designId);
-    setState(next);
-    toast("Kaydedildi ✅");
+  async function toggle(colId: string) {
+    setBusy(true);
+    try {
+      const next = await toggleSaveToCollection(colId, designId);
+      setState(next);
+      toast("Kaydedildi ✅");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Kaydetme başarısız");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function createNew() {
-    const name = newName.trim() || `Koleksiyon (${new Date().toLocaleDateString("tr-TR")})`;
-    const c = createCollection(name);
-    const next = toggleSaveToCollection(c.id, designId);
-    setState(next);
-    setNewName("");
-    toast("Yeni koleksiyon oluşturuldu ✅");
+  async function createNew() {
+    const name =
+      newName.trim() ||
+      (state.collections.length === 0
+        ? "Favorilerim"
+        : `Koleksiyon (${new Date().toLocaleDateString("tr-TR")})`);
+    setBusy(true);
+    try {
+      const c = await createCollection(name);
+      const next = await toggleSaveToCollection(c.id, designId);
+      setState(next);
+      setNewName("");
+      toast("Yeni koleksiyon oluşturuldu ✅");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Koleksiyon oluşturulamadı");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!open) return null;
@@ -70,6 +101,7 @@ export default function SaveModal({
                 <button
                   key={c.id}
                   onClick={() => toggle(c.id)}
+                  disabled={busy}
                   className="flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left hover:bg-gray-50"
                 >
                   <div>
@@ -94,7 +126,7 @@ export default function SaveModal({
                 placeholder="Örn: Salon Yenileme"
                 className="w-full rounded-xl border px-3 py-2 text-sm"
               />
-              <button className="rounded-xl bg-black px-4 py-2 text-sm text-white" onClick={createNew}>
+              <button className="rounded-xl bg-black px-4 py-2 text-sm text-white disabled:opacity-60" onClick={createNew} disabled={busy}>
                 Oluştur
               </button>
             </div>

@@ -11,30 +11,28 @@ export default function PublicCollectionPage() {
   const params = useParams<{ shareId: string }>();
   const shareId = params?.shareId;
 
-  const [mounted, setMounted] = useState(false);
   const [col, setCol] = useState<Collection | null>(null);
   const [cloned, setCloned] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const universe = useMemo(() => (mounted ? buildFeedUniverse() : []), [mounted]);
+  const universe = useMemo(() => buildFeedUniverse(), []);
   const byId = useMemo(() => {
-    const m = new Map<string, any>();
-    (universe as any[]).forEach((x) => m.set(x.id, x));
+    const m = new Map<string, { id: string; designerId: string; pid: string; imageUrl: string; title: string; room: string }>();
+    universe.forEach((x) => m.set(x.id, x));
     return m;
   }, [universe]);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
     if (!shareId) return;
-    setCol(getCollectionByShareId(shareId));
-  }, [mounted, shareId]);
+    setLoading(true);
+    void getCollectionByShareId(shareId)
+      .then(setCol)
+      .finally(() => setLoading(false));
+  }, [shareId]);
 
   if (!shareId) return <div className="rounded-2xl border bg-white p-6">Geçersiz link.</div>;
 
-  if (!mounted) {
+  if (loading) {
     return <div className="rounded-2xl border bg-white p-6 text-gray-600">Koleksiyon yükleniyor…</div>;
   }
 
@@ -54,7 +52,14 @@ export default function PublicCollectionPage() {
     );
   }
 
-  const items = col.itemIds.map((id) => byId.get(id)).filter(Boolean);
+  const items = col.itemIds
+    .map((id) => byId.get(id))
+    .filter(
+      (
+        x
+      ): x is { id: string; designerId: string; pid: string; imageUrl: string; title: string; room: string } =>
+        Boolean(x)
+    );
 
   return (
     <div className="space-y-6">
@@ -70,10 +75,14 @@ export default function PublicCollectionPage() {
             <button
               className="rounded-xl bg-black px-4 py-2 text-sm text-white"
               disabled={cloned}
-              onClick={() => {
-                createCollectionWithItems(`Kopya: ${col.name}`, col.itemIds);
-                setCloned(true);
-                toast("Koleksiyon hesabına kopyalandı ✅");
+              onClick={async () => {
+                try {
+                  await createCollectionWithItems(`Kopya: ${col.name}`, col.itemIds);
+                  setCloned(true);
+                  toast("Koleksiyon hesabına kopyalandı ✅");
+                } catch (error) {
+                  toast(error instanceof Error ? error.message : "Kopyalama başarısız");
+                }
               }}
             >
               {cloned ? "Kopyalandı" : "Bu koleksiyonu kaydet"}
@@ -87,7 +96,7 @@ export default function PublicCollectionPage() {
 
       {items.length ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((d: any) => (
+          {items.map((d) => (
             <Link
               key={d.id}
               href={`/designers/${d.designerId}/projects/${d.pid}`}

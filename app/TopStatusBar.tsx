@@ -1,21 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { getSession } from "../lib/storage";
 
 export default function TopStatusBar() {
-  const [status, setStatus] = useState<"pending" | "rejected" | null>(null);
-
-  useEffect(() => {
-    const s = getSession();
-    if (!s) return;
-    if (s.role === "designer" && (s.designerStatus === "pending" || s.designerStatus === "rejected")) {
-      setStatus(s.designerStatus);
-    } else {
-      setStatus(null);
-    }
-  }, []);
+  const s = getSession();
+  const status =
+    s?.role === "designer" && (s.designerStatus === "pending" || s.designerStatus === "rejected")
+      ? s.designerStatus
+      : null;
 
   if (!status) return null;
 

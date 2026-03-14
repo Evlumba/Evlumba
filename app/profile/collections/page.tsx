@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "../../../lib/toast";
 import { buildFeedUniverse } from "../../../lib/reco";
+import { designers as allDesigners } from "../../../lib/data";
+import { loadState } from "../../../lib/storage";
 import {
   deleteCollection,
   loadCollections,
@@ -23,25 +25,36 @@ function absShareUrl(shareId: string) {
 }
 
 export default function CollectionsPage() {
-  // ✅ SSR ile client aynı başlasın diye ilk state boş
-  const [mounted, setMounted] = useState(false);
   const [state, setState] = useState<CollectionsState>({ collections: [] });
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setMounted(true);
-    setState(loadCollections());
+    void refresh();
   }, []);
 
-  const universe = useMemo(() => (mounted ? buildFeedUniverse() : []), [mounted]);
+  const universe = useMemo(() => buildFeedUniverse(), []);
   const byId = useMemo(() => {
-    const m = new Map<string, any>();
-    (universe as any[]).forEach((x) => m.set(x.id, x));
+    const m = new Map<string, { id: string; designerId: string; pid: string; imageUrl: string; title: string }>();
+    universe.forEach((x) => m.set(x.id, x));
     return m;
   }, [universe]);
 
-  function refresh() {
-    setState(loadCollections());
+  const followedDesigners = useMemo(() => {
+    const follows = loadState().follows ?? {};
+    const ids = Object.entries(follows)
+      .filter(([, active]) => Boolean(active))
+      .map(([id]) => id);
+    return allDesigners.filter((d) => ids.includes(d.id));
+  }, [state.collections.length]);
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      setState(await loadCollections());
+    } finally {
+      setLoading(false);
+    }
   }
 
   function copyShare(shareId: string) {
@@ -76,7 +89,23 @@ export default function CollectionsPage() {
         </div>
       </div>
 
-      {!mounted ? (
+      <div className="rounded-2xl border bg-white p-6">
+        <h2 className="text-lg font-semibold">Beğendiğim Mimarlar</h2>
+        {followedDesigners.length === 0 ? (
+          <p className="mt-2 text-sm text-gray-600">Henüz beğendiğin mimar yok.</p>
+        ) : (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {followedDesigners.map((d) => (
+              <Link key={d.id} href={`/designers/${d.id}`} className="rounded-xl border p-3 hover:bg-gray-50">
+                <div className="text-sm font-semibold">{d.name}</div>
+                <div className="text-xs text-gray-500">{d.city}</div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {loading ? (
         <div className="rounded-2xl border bg-white p-6 text-gray-600">Koleksiyonlar yükleniyor…</div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -101,10 +130,10 @@ export default function CollectionsPage() {
 
                     <button
                       className="rounded-xl border px-3 py-2 text-sm"
-                      onClick={() => {
+                      onClick={async () => {
                         const name = prompt("Koleksiyon adını güncelle", c.name);
                         if (!name) return;
-                        renameCollection(c.id, name.trim());
+                        await renameCollection(c.id, name.trim());
                         refresh();
                         toast("Güncellendi ✅");
                       }}
@@ -114,9 +143,9 @@ export default function CollectionsPage() {
 
                     <button
                       className="rounded-xl border px-3 py-2 text-sm"
-                      onClick={() => {
+                      onClick={async () => {
                         if (!confirm("Koleksiyon silinsin mi?")) return;
-                        deleteCollection(c.id);
+                        await deleteCollection(c.id);
                         refresh();
                         toast("Silindi");
                       }}
@@ -134,8 +163,8 @@ export default function CollectionsPage() {
 
                   <button
                     className={`rounded-xl px-4 py-2 text-sm ${c.isShareable ? "bg-black text-white" : "border"}`}
-                    onClick={() => {
-                      setCollectionShareable(c.id, !c.isShareable);
+                    onClick={async () => {
+                      await setCollectionShareable(c.id, !c.isShareable);
                       refresh();
                       toast(c.isShareable ? "Paylaşım kapatıldı" : "Paylaşım açıldı ✅");
                     }}

@@ -1,8 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { Designer, ReviewItem } from "../../_data/designers";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+function firstNameOnly(fullName: string) {
+  const normalized = fullName.trim().replace(/\s+/g, " ");
+  if (!normalized) return "Kullanıcı";
+  return normalized.split(" ")[0] || "Kullanıcı";
+}
 
 function IconStar({ className, filled }: { className?: string; filled?: boolean }) {
   return (
@@ -58,8 +66,9 @@ function PinnedReviewCard({
   const [expanded, setExpanded] = useState(false);
   const charLimit = 250;
   const shouldTruncate = review.text.length > charLimit;
+  const authorName = firstNameOnly(review.author);
 
-  const initials = review.author
+  const initials = authorName
     .split(" ")
     .map((n) => n[0])
     .join("")
@@ -101,7 +110,7 @@ function PinnedReviewCard({
             <span className="text-[13px] font-bold tracking-wide" style={{ color: "#ffffff" }}>{initials}</span>
           </div>
           <div>
-            <p className="font-semibold text-gray-900">{review.author}</p>
+            <p className="font-semibold text-gray-900">{authorName}</p>
             <div className="flex items-center gap-2">
               <StarRating rating={review.rating} size="sm" />
               {review.project && (
@@ -150,6 +159,7 @@ function ReviewCard({
   const [expanded, setExpanded] = useState(false);
   const charLimit = 200;
   const shouldTruncate = review.text.length > charLimit;
+  const authorName = firstNameOnly(review.author);
 
   const formatDate = (dateStr: string) => {
     const [year, month] = dateStr.split("-");
@@ -157,7 +167,7 @@ function ReviewCard({
     return `${months[parseInt(month) - 1]} ${year}`;
   };
 
-  const initials = review.author
+  const initials = authorName
     .split(" ")
     .map((n) => n[0])
     .join("")
@@ -178,7 +188,7 @@ function ReviewCard({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-900">{review.author}</span>
+              <span className="font-semibold text-gray-900">{authorName}</span>
               {review.authorCity && (
                 <span className="text-sm text-gray-400">{review.authorCity}</span>
               )}
@@ -250,8 +260,196 @@ function ReviewCard({
 const REVIEWS_PER_PAGE = 5;
 
 export default function ReviewsSection({ designer }: { designer: Designer }) {
-  const reviews = designer.reviewsList ?? [];
+  const router = useRouter();
+  const [, startRefreshTransition] = useTransition();
+  const [reviews, setReviews] = useState<ReviewItem[]>(designer.reviewsList ?? []);
   const [visibleCount, setVisibleCount] = useState(REVIEWS_PER_PAGE);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formRating, setFormRating] = useState(5);
+  const [formText, setFormText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editRating, setEditRating] = useState(5);
+  const [editText, setEditText] = useState("");
+  const [activeActionReviewId, setActiveActionReviewId] = useState<string | null>(null);
+
+  const designerId = useMemo(() => {
+    if (designer.liveDesignerId) return designer.liveDesignerId;
+    if (!designer.slug.startsWith("supa_")) return null;
+    return designer.slug.slice(5);
+  }, [designer.liveDesignerId, designer.slug]);
+
+  const canSubmitLiveReview = Boolean(designerId);
+
+  function refreshDesignerData() {
+    startRefreshTransition(() => {
+      router.refresh();
+    });
+  }
+
+  useEffect(() => {
+    setReviews(designer.reviewsList ?? []);
+  }, [designer.reviewsList]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = getSupabaseBrowserClient();
+
+    void supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return;
+      setCurrentUserId(data.user?.id ?? null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function submitReview() {
+    if (!designerId) {
+      setSubmitMessage("Bu profil demo verisiyle çalışıyor. Canlı yorum sadece Supabase tasarımcılarında açık.");
+      return;
+    }
+    if (formText.trim().length < 10) {
+      setSubmitMessage("Yorum en az 10 karakter olmalı.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitMessage(null);
+    try {
+      const res = await fetch(`/api/public/designer/${encodeURIComponent(designerId)}/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rating: formRating,
+          reviewText: formText.trim(),
+        }),
+      });
+      const json = (await res.json()) as { ok: boolean; error?: string };
+      if (!json.ok) {
+        setSubmitMessage(json.error || "Yorum kaydedilemedi.");
+        return;
+      }
+      setSubmitMessage("Yorumun kaydedildi.");
+      setFormText("");
+      setFormRating(5);
+      setIsFormOpen(false);
+      refreshDesignerData();
+    } catch (error) {
+      setSubmitMessage(error instanceof Error ? error.message : "Yorum kaydedilemedi.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  function canManageReview(review: ReviewItem) {
+    return Boolean(designerId && currentUserId && review.homeownerId && review.homeownerId === currentUserId);
+  }
+
+  function startEditReview(review: ReviewItem) {
+    setEditingReviewId(review.id);
+    setEditRating(Math.max(1, Math.min(5, Math.round(review.rating || 5))));
+    setEditText(review.text);
+    setSubmitMessage(null);
+  }
+
+  function cancelEditReview() {
+    setEditingReviewId(null);
+    setEditText("");
+    setEditRating(5);
+  }
+
+  async function saveReviewChanges(reviewId: string) {
+    if (!designerId) return;
+    if (editText.trim().length < 10) {
+      setSubmitMessage("Yorum en az 10 karakter olmalı.");
+      return;
+    }
+
+    setActiveActionReviewId(reviewId);
+    setSubmitMessage(null);
+    try {
+      const res = await fetch(
+        `/api/public/designer/${encodeURIComponent(designerId)}/reviews/${encodeURIComponent(reviewId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rating: editRating,
+            reviewText: editText.trim(),
+          }),
+        }
+      );
+      const json = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        review?: {
+          id: string;
+          rating: number;
+          reviewText: string;
+        };
+      };
+      if (!json.ok) {
+        setSubmitMessage(json.error || "Yorum güncellenemedi.");
+        return;
+      }
+
+      setReviews((prev) =>
+        prev.map((review) =>
+          review.id === reviewId
+            ? {
+                ...review,
+                rating: json.review?.rating ?? editRating,
+                text: json.review?.reviewText ?? editText.trim(),
+              }
+            : review
+        )
+      );
+      setSubmitMessage("Yorumun güncellendi.");
+      cancelEditReview();
+      refreshDesignerData();
+    } catch (error) {
+      setSubmitMessage(error instanceof Error ? error.message : "Yorum güncellenemedi.");
+    } finally {
+      setActiveActionReviewId(null);
+    }
+  }
+
+  async function deleteReview(reviewId: string) {
+    if (!designerId) return;
+    if (!window.confirm("Yorumunu silmek istediğine emin misin?")) return;
+
+    setActiveActionReviewId(reviewId);
+    setSubmitMessage(null);
+    try {
+      const res = await fetch(
+        `/api/public/designer/${encodeURIComponent(designerId)}/reviews/${encodeURIComponent(reviewId)}`,
+        { method: "DELETE" }
+      );
+      const json = (await res.json()) as { ok: boolean; error?: string };
+      if (!json.ok) {
+        setSubmitMessage(json.error || "Yorum silinemedi.");
+        return;
+      }
+
+      setReviews((prev) => prev.filter((review) => review.id !== reviewId));
+      if (editingReviewId === reviewId) cancelEditReview();
+      setSubmitMessage("Yorumun silindi.");
+      refreshDesignerData();
+    } catch (error) {
+      setSubmitMessage(error instanceof Error ? error.message : "Yorum silinemedi.");
+    } finally {
+      setActiveActionReviewId(null);
+    }
+  }
+
+  const displayRating = useMemo(() => {
+    if (reviews.length === 0) return 0;
+    return Number((reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length).toFixed(1));
+  }, [reviews]);
 
   // Ortalama puanları hesapla
   const avgRatings = useMemo(() => {
@@ -298,10 +496,48 @@ export default function ReviewsSection({ designer }: { designer: Designer }) {
                 </p>
                 <button
                   type="button"
+                  onClick={() => setIsFormOpen((prev) => !prev)}
                   className="mt-5 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800"
                 >
-                  Yorum Yaz
+                  Yorum yaz
                 </button>
+                {isFormOpen ? (
+                  <div className="mt-4 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-4 text-left">
+                    <div className="text-sm font-semibold text-gray-900">Puanın</div>
+                    <div className="mt-2 flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setFormRating(star)}
+                          className="rounded-md p-1"
+                        >
+                          <IconStar className="h-5 w-5 text-amber-400" filled={star <= formRating} />
+                        </button>
+                      ))}
+                    </div>
+                    <label className="mt-3 block text-sm font-semibold text-gray-900">Yorum</label>
+                    <textarea
+                      value={formText}
+                      onChange={(event) => setFormText(event.target.value)}
+                      rows={4}
+                      className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-violet-400"
+                      placeholder="Deneyimini yaz..."
+                    />
+                    <button
+                      type="button"
+                      onClick={submitReview}
+                      disabled={isSubmitting}
+                      className="mt-3 rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {isSubmitting ? "Gönderiliyor..." : "Yorumu gönder"}
+                    </button>
+                    {!canSubmitLiveReview ? (
+                      <p className="mt-2 text-xs text-gray-500">Demo profillerde yorum gönderimi kapalıdır.</p>
+                    ) : null}
+                  </div>
+                ) : null}
+                {submitMessage ? <p className="mt-3 text-xs text-gray-600">{submitMessage}</p> : null}
               </div>
             </div>
           </div>
@@ -326,6 +562,73 @@ export default function ReviewsSection({ designer }: { designer: Designer }) {
                   designerName={designer.name}
                   designerAvatar={designer.avatarUrl}
                 />
+                {canManageReview(pinnedReview) ? (
+                  <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+                    {editingReviewId === pinnedReview.id ? (
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">Puanın</div>
+                          <div className="mt-1.5 flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() => setEditRating(star)}
+                                className="rounded-md p-1"
+                              >
+                                <IconStar className="h-5 w-5 text-amber-400" filled={star <= editRating} />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold text-gray-900">Yorumun</label>
+                          <textarea
+                            value={editText}
+                            onChange={(event) => setEditText(event.target.value)}
+                            rows={4}
+                            className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-violet-400"
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void saveReviewChanges(pinnedReview.id)}
+                            disabled={activeActionReviewId === pinnedReview.id}
+                            className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                          >
+                            {activeActionReviewId === pinnedReview.id ? "Kaydediliyor..." : "Kaydet"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditReview}
+                            className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                          >
+                            İptal
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditReview(pinnedReview)}
+                          className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+                        >
+                          Yorumu düzenle
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteReview(pinnedReview.id)}
+                          disabled={activeActionReviewId === pinnedReview.id}
+                          className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                        >
+                          {activeActionReviewId === pinnedReview.id ? "Siliniyor..." : "Yorumu sil"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             )}
 
@@ -334,11 +637,18 @@ export default function ReviewsSection({ designer }: { designer: Designer }) {
               {/* Left: Stars + score + count */}
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <StarRating rating={designer.rating} size="lg" />
-                  <span className="text-2xl font-bold text-gray-900">{designer.rating}</span>
+                  <StarRating rating={displayRating} size="lg" />
+                  <span className="text-2xl font-bold text-gray-900">{displayRating.toFixed(1)}</span>
                 </div>
-                <span className="text-sm text-gray-400">{designer.reviews} yorum</span>
+                <span className="text-sm text-gray-400">{reviews.length} yorum</span>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsFormOpen((prev) => !prev)}
+                className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+              >
+                Yorum yaz
+              </button>
 
               {/* Right: Rating breakdown pills */}
               {hasRatings && (
@@ -365,15 +675,116 @@ export default function ReviewsSection({ designer }: { designer: Designer }) {
               )}
             </div>
 
+            {isFormOpen ? (
+              <div className="mb-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <div className="text-sm font-semibold text-gray-900">Puanın</div>
+                <div className="mt-2 flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button key={star} type="button" onClick={() => setFormRating(star)} className="rounded-md p-1">
+                      <IconStar className="h-5 w-5 text-amber-400" filled={star <= formRating} />
+                    </button>
+                  ))}
+                </div>
+                <label className="mt-3 block text-sm font-semibold text-gray-900">Yorum</label>
+                <textarea
+                  value={formText}
+                  onChange={(event) => setFormText(event.target.value)}
+                  rows={4}
+                  className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-violet-400"
+                  placeholder="Deneyimini yaz..."
+                />
+                <button
+                  type="button"
+                  onClick={submitReview}
+                  disabled={isSubmitting}
+                  className="mt-3 rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {isSubmitting ? "Gönderiliyor..." : "Yorumu gönder"}
+                </button>
+                {!canSubmitLiveReview ? (
+                  <p className="mt-2 text-xs text-gray-500">Demo profillerde yorum gönderimi kapalıdır.</p>
+                ) : null}
+                {submitMessage ? <p className="mt-2 text-xs text-gray-600">{submitMessage}</p> : null}
+              </div>
+            ) : null}
+
             {/* Reviews list */}
             <div className="space-y-3">
               {visibleReviews.map((review) => (
-                <ReviewCard
-                  key={review.id}
-                  review={review}
-                  designerName={designer.name}
-                  designerAvatar={designer.avatarUrl}
-                />
+                <div key={review.id}>
+                  <ReviewCard
+                    review={review}
+                    designerName={designer.name}
+                    designerAvatar={designer.avatarUrl}
+                  />
+                  {canManageReview(review) ? (
+                    <div className="mt-2 rounded-xl border border-gray-200 bg-white p-3">
+                      {editingReviewId === review.id ? (
+                        <div className="space-y-3">
+                          <div>
+                            <div className="text-sm font-semibold text-gray-900">Puanın</div>
+                            <div className="mt-1.5 flex items-center gap-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  onClick={() => setEditRating(star)}
+                                  className="rounded-md p-1"
+                                >
+                                  <IconStar className="h-5 w-5 text-amber-400" filled={star <= editRating} />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-900">Yorumun</label>
+                            <textarea
+                              value={editText}
+                              onChange={(event) => setEditText(event.target.value)}
+                              rows={4}
+                              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-violet-400"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void saveReviewChanges(review.id)}
+                              disabled={activeActionReviewId === review.id}
+                              className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                            >
+                              {activeActionReviewId === review.id ? "Kaydediliyor..." : "Kaydet"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditReview}
+                              className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                            >
+                              İptal
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEditReview(review)}
+                            className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+                          >
+                            Yorumu düzenle
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void deleteReview(review.id)}
+                            disabled={activeActionReviewId === review.id}
+                            className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                          >
+                            {activeActionReviewId === review.id ? "Siliniyor..." : "Yorumu sil"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               ))}
             </div>
 

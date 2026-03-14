@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Designer } from "../../_data/designers";
 
@@ -125,21 +126,23 @@ function Star({ filled }: { filled: boolean }) {
 }
 
 function responseLabel(response?: string) {
-  const m = response?.match(/^(\d+)\s*s/i);
-  if (m) return `Genelde ${m[1]} saat içinde döner`;
-  return response ? `Genelde ${response}` : "Genelde 2 saat içinde döner";
+  if (!response) return "Genelde 24 saat içinde dönüş";
+  if (response.startsWith("Genelde ")) return response;
+  return `Genelde ${response}`;
 }
 
 export default function ProfileHero({ designer }: { designer: Designer }) {
   const slug = designer.slug;
+  const initials = (designer.name || "P")
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
-  const coverUrl =
-    designer.coverUrl ||
-    "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=2200&q=80";
+  const coverUrl = designer.coverUrl?.trim() || "";
 
-  const avatarUrl =
-    designer.avatarUrl ||
-    "https://images.unsplash.com/photo-1550525811-e5869dd03032?auto=format&fit=crop&w=512&q=80";
+  const avatarUrl = designer.avatarUrl?.trim() || "";
 
   const rating = Number(designer.rating ?? 0);
   const reviewCount = Number(designer.reviews ?? 0);
@@ -157,16 +160,14 @@ export default function ProfileHero({ designer }: { designer: Designer }) {
 
   const onWriteReview = () => {
     document
-      .getElementById("reviews")
+      .getElementById("yorumlar")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const onShare = async () => {
     const url = typeof window !== "undefined" ? window.location.href : "";
     try {
-      // @ts-ignore
-      if (navigator.share) {
-        // @ts-ignore
+      if (typeof navigator !== "undefined" && "share" in navigator && typeof navigator.share === "function") {
         await navigator.share({ title: designer.name, url });
         return;
       }
@@ -194,13 +195,17 @@ export default function ProfileHero({ designer }: { designer: Designer }) {
       <div className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-[0_18px_60px_-28px_rgba(0,0,0,0.22),0_0_0_1px_rgba(0,0,0,0.03)]">
         {/* Cover */}
         <div className="relative h-56 sm:h-64 md:h-80 w-full overflow-hidden">
-          <Image
-            src={coverUrl}
-            alt={`${designer.name} cover`}
-            fill
-            priority
-            className="object-cover"
-          />
+          {coverUrl ? (
+            <Image
+              src={coverUrl}
+              alt={`${designer.name} cover`}
+              fill
+              priority
+              className="object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-slate-100" />
+          )}
           <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/15 via-transparent to-transparent" />
         </div>
 
@@ -212,12 +217,18 @@ export default function ProfileHero({ designer }: { designer: Designer }) {
               {/* Avatar */}
               <div className="relative shrink-0">
                 <div className="relative h-24 w-24 md:h-28 md:w-28 overflow-hidden rounded-full bg-white ring-4 ring-white shadow-[0_18px_50px_-28px_rgba(0,0,0,0.45)]">
-                  <Image
-                    src={avatarUrl}
-                    alt={`${designer.name} avatar`}
-                    fill
-                    className="object-cover"
-                  />
+                  {avatarUrl ? (
+                    <Image
+                      src={avatarUrl}
+                      alt={`${designer.name} avatar`}
+                      fill
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-sm font-semibold text-slate-500">
+                      {initials}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -278,6 +289,33 @@ export default function ProfileHero({ designer }: { designer: Designer }) {
 
             {/* SAĞ: Butonlar */}
             <div className="flex items-center gap-2 md:self-start md:mt-2">
+              {designer.liveDesignerId ? (
+                <Link
+                  href={`/messages?designer=${encodeURIComponent(designer.liveDesignerId)}`}
+                  className={[
+                    frame,
+                    "inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700",
+                    "hover:bg-gray-50 hover:ring-black/10 transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/10",
+                  ].join(" ")}
+                >
+                  <IconChat className="h-5 w-5 text-gray-600" />
+                  Mesaj
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className={[
+                    frame,
+                    "inline-flex cursor-not-allowed items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-400",
+                  ].join(" ")}
+                >
+                  <IconChat className="h-5 w-5 text-gray-400" />
+                  Mesaj
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onWriteReview}

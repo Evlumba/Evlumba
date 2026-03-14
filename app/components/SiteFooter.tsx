@@ -244,16 +244,18 @@ function ProfessionalsCard() {
         </div>
       </div>
 
-      <Link
-        href="/profesyoneller/katil"
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl
-                   border border-white/65 bg-white/18 px-4 py-3 text-sm font-semibold text-slate-900
-                   backdrop-blur-xl
-                   shadow-[0_22px_65px_-55px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.95)]
-                   hover:bg-white/26 hover:border-white/80 transition"
+      <button
+        type="button"
+        disabled
+        aria-disabled="true"
+        title="Bu buton şu anda pasif."
+        className="mt-5 inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl
+                   border border-white/50 bg-white/10 px-4 py-3 text-sm font-semibold text-slate-500
+                   backdrop-blur-xl opacity-70
+                   shadow-[0_22px_65px_-55px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.8)]"
       >
         Profesyonel olarak katıl <span aria-hidden="true">→</span>
-      </Link>
+      </button>
     </div>
   );
 }
@@ -416,8 +418,17 @@ export default function SiteFooter() {
               <div className="flex flex-col gap-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                 <div>© {new Date().getFullYear()} Evlumba • Tüm hakları saklıdır.</div>
                 <div className="flex items-center gap-4">
+                  <Link className="hover:text-slate-700 transition" href="/sss">
+                    SSS
+                  </Link>
+                  <Link className="hover:text-slate-700 transition" href="/iletisim">
+                    İletişim
+                  </Link>
                   <Link className="hover:text-slate-700 transition" href="/kullanim">
                     Kullanım
+                  </Link>
+                  <Link className="hover:text-slate-700 transition" href="/gizlilik">
+                    Gizlilik
                   </Link>
                   <Link className="hover:text-slate-700 transition" href="/kvkk">
                     KVKK

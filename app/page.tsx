@@ -1,7 +1,11 @@
 // app/page.tsx
 import Link from "next/link";
 import type { ReactNode } from "react";
-import SiteTestimonials from "./components/SiteTestimonials";
+import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
+import SiteTestimonials, { type SiteTestimonialItem } from "./components/SiteTestimonials";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Project = {
   id: string;
@@ -30,126 +34,263 @@ type Designer = {
   lastActiveLabel?: string; // örn: "12 dk önce", "1 saat önce"
 };
 
-const projects: Project[] = [
-  {
-    id: "p1",
-    title: "Sıcak & modern salon — küçük alan",
-    tag: "SALON • MODERN",
-    imageUrl:
-      "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1400&q=70",
-    href: "/kesfet?tag=salon-modern",
-  },
-  {
-    id: "p2",
-    title: "Minimal mutfak — maksimum depolama",
-    tag: "MUTFAK • MINIMAL",
-    imageUrl:
-      "https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1400&q=70",
-    href: "/kesfet?tag=mutfak-minimal",
-  },
-  {
-    id: "p3",
-    title: "Japandi yatak odası — sakin tonlar",
-    tag: "YATAK ODASI • JAPANDI",
-    imageUrl:
-      "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1400&q=70",
-    href: "/kesfet?tag=japandi",
-  },
-  {
-    id: "p4",
-    title: "Küçük banyo — ferah his",
-    tag: "BANYO • SMALL SPACE",
-    imageUrl:
-      "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=1400&q=70",
-    href: "/kesfet?tag=kucuk-banyo",
-  },
-  {
-    id: "p5",
-    title: "Aydınlık antre — minimal karşılama",
-    tag: "ANTRE • MINIMAL",
-    imageUrl:
-      "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1400&q=70",
-    href: "/kesfet?tag=antre-minimal",
-  },
-  {
-    id: "p6",
-    title: "Bohem yatak odası — sıcak dokular",
-    tag: "YATAK ODASI • BOHEM",
-    imageUrl:
-      "https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=1400&q=70",
-    href: "/kesfet?tag=bohem",
-  },
-  {
-    id: "p7",
-    title: "Küçük balkon — şehirde nefes",
-    tag: "BALKON • SMALL SPACE",
-    imageUrl:
-      "https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?auto=format&fit=crop&w=1400&q=70",
-    href: "/kesfet?tag=balkon",
-  },
-  {
-    id: "p8",
-    title: "Modern banyo — temiz çizgiler",
-    tag: "BANYO • MODERN",
-    imageUrl:
-      "https://images.unsplash.com/photo-1505691723518-36a5ac3be353?auto=format&fit=crop&w=1400&q=70",
-    href: "/kesfet?tag=banyo-modern",
-  },
-];
+type HomeProfileRow = {
+  id: string;
+  full_name: string | null;
+  business_name: string | null;
+  specialty: string | null;
+  city: string | null;
+  about: string | null;
+  response_time: string | null;
+  cover_photo_url: string | null;
+  avatar_url: string | null;
+};
 
-const designers: Designer[] = [
-  {
-    id: "d1",
-    name: "Elif A.",
-    city: "İstanbul",
-    specialty: "Modern • Konut",
-    rating: 4.8,
-    projects: 46,
-    coverUrl:
-      "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1400&q=70",
-    avatarUrl:
-      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=256&q=70",
-    href: "/tasarimcilar/elif-a",
-    fastReplyLabel: "Ortalama 2 saatte dönüş",
-    pinnedReview:
-      "Brief’i çok hızlı kavradı; aynı gün 2 alternatif plan + moodboard ile döndü. İletişim çok rahattı.",
-    pinnedReviewBy: "Zeynep • Salon yenileme",
-  },
-  {
-    id: "d2",
-    name: "Mert K.",
-    city: "Ankara",
-    specialty: "Minimal • Ofis",
-    rating: 4.7,
-    projects: 31,
-    coverUrl:
-      "https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=1400&q=70",
-    avatarUrl:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&q=70",
-    href: "/tasarimcilar/mert-k",
-    fastReplyLabel: "Aynı gün dönüş",
-    pinnedReview:
-      "Küçük ofisi ferah hissettirdi. Ölçü–mobilya uyumu ve depolama çözümleri çok yerindeydi.",
-    pinnedReviewBy: "Bora • Ofis düzenleme",
-  },
-  {
-    id: "d3",
-    name: "Derya S.",
-    city: "İzmir",
-    specialty: "Bohem • Konut",
-    rating: 4.9,
-    projects: 52,
-    coverUrl:
-      "https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?auto=format&fit=crop&w=1400&q=70",
-    avatarUrl:
-      "https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?auto=format&fit=crop&w=256&q=70",
-    href: "/tasarimcilar/derya-s",
-    fastReplyLabel: "30 dk içinde dönüş",
-    pinnedReview:
-      "Dokuları ve ışığı çok iyi kullandı. Bohem ama dağınık değil; ‘premium sıcaklık’ gibi oldu.",
-    pinnedReviewBy: "Ece • Yatak odası",
-  },
-];
+type HomeProjectRow = {
+  designer_id: string;
+};
+
+type HomeInspirationProjectRow = {
+  id: string;
+  designer_id: string;
+  title: string | null;
+  project_type: string | null;
+  tags: string[] | null;
+  cover_image_url: string | null;
+  created_at: string;
+  designer_project_images?: Array<{
+    image_url: string | null;
+    sort_order: number | null;
+  }>;
+};
+
+type HomeReviewRow = {
+  designer_id: string;
+  rating: number | null;
+  review_text: string | null;
+};
+
+type HomeTestimonialReviewRow = {
+  id: string;
+  designer_id: string;
+  homeowner_id: string;
+  rating: number | null;
+  review_text: string | null;
+  created_at: string;
+};
+
+type HomeNameRow = {
+  id: string;
+  full_name: string | null;
+  business_name?: string | null;
+};
+
+function normalize(value: string) {
+  return value
+    .toLowerCase()
+    .replaceAll("ğ", "g")
+    .replaceAll("ü", "u")
+    .replaceAll("ş", "s")
+    .replaceAll("ı", "i")
+    .replaceAll("ö", "o")
+    .replaceAll("ç", "c");
+}
+
+function firstNameOnly(fullName: string | null | undefined) {
+  const normalized = (fullName ?? "").trim().replace(/\s+/g, " ");
+  if (!normalized) return "Kullanıcı";
+  return normalized.split(" ")[0] || "Kullanıcı";
+}
+
+function isRoomTag(value: string) {
+  const normalized = normalize(value.trim());
+  return normalized.startsWith("oda:") || normalized.startsWith("room:");
+}
+
+function formatProjectTag(projectType: string | null, tags: string[] | null) {
+  const main = (projectType?.trim() || "Proje").toLocaleUpperCase("tr-TR");
+  const style = (tags ?? []).find((tag) => tag.trim() && !isRoomTag(tag));
+  if (!style) return main;
+  return `${main} • ${style.toLocaleUpperCase("tr-TR")}`;
+}
+
+function pickProjectImage(project: HomeInspirationProjectRow) {
+  const orderedGallery = [...(project.designer_project_images ?? [])]
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((item) => (item.image_url ?? "").trim())
+    .filter(Boolean);
+  return orderedGallery[0] || (project.cover_image_url ?? "").trim() || "";
+}
+
+async function loadHomeProjects(limit = 3): Promise<Project[]> {
+  try {
+    const admin = getSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("designer_projects")
+      .select(
+        "id, designer_id, title, project_type, tags, cover_image_url, created_at, designer_project_images(image_url, sort_order)"
+      )
+      .eq("is_published", true)
+      .order("created_at", { ascending: false })
+      .limit(Math.max(limit, 12));
+
+    if (error || !data) return [];
+
+    return (data as HomeInspirationProjectRow[]).slice(0, limit).map((project) => ({
+      id: project.id,
+      title: project.title?.trim() || "Yeni Proje",
+      tag: formatProjectTag(project.project_type, project.tags),
+      imageUrl: pickProjectImage(project),
+      href: `/tasarimcilar/supa_${project.designer_id}/proje/${project.id}`,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
+  try {
+    const admin = getSupabaseAdminClient();
+
+    const { data: profilesData, error: profilesError } = await admin
+      .from("profiles")
+      .select("id, full_name, business_name, specialty, city, about, response_time, cover_photo_url, avatar_url")
+      .in("role", ["designer", "designer_pending"])
+      .order("created_at", { ascending: false })
+      .limit(40);
+
+    if (profilesError || !profilesData || profilesData.length === 0) return [];
+
+    const profiles = profilesData as HomeProfileRow[];
+    const ids = profiles.map((item) => item.id);
+
+    const [{ data: projectsData }, { data: reviewsData }] = await Promise.all([
+      admin
+        .from("designer_projects")
+        .select("designer_id")
+        .in("designer_id", ids)
+        .eq("is_published", true),
+      admin
+        .from("designer_reviews")
+        .select("designer_id, rating, review_text, created_at")
+        .in("designer_id", ids)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const projectCountByDesigner = new Map<string, number>();
+    for (const row of (projectsData ?? []) as HomeProjectRow[]) {
+      projectCountByDesigner.set(
+        row.designer_id,
+        (projectCountByDesigner.get(row.designer_id) ?? 0) + 1
+      );
+    }
+
+    const reviewByDesigner = new Map<string, { sum: number; count: number; latestText: string }>();
+    for (const row of (reviewsData ?? []) as HomeReviewRow[]) {
+      if (!row.designer_id) continue;
+      const current = reviewByDesigner.get(row.designer_id) ?? { sum: 0, count: 0, latestText: "" };
+      if (typeof row.rating === "number") {
+        current.sum += row.rating;
+        current.count += 1;
+      }
+      if (!current.latestText && row.review_text?.trim()) {
+        current.latestText = row.review_text.trim();
+      }
+      reviewByDesigner.set(row.designer_id, current);
+    }
+
+    return profiles
+      .map((profile) => {
+        const stats = reviewByDesigner.get(profile.id);
+        const avgRating =
+          stats && stats.count > 0 ? Number((stats.sum / stats.count).toFixed(1)) : 0;
+        const projectCount = projectCountByDesigner.get(profile.id) ?? 0;
+        const displayName =
+          profile.full_name?.trim() || profile.business_name?.trim() || "Profesyonel";
+
+        return {
+          id: profile.id,
+          name: displayName,
+          city: profile.city?.trim() || "Türkiye",
+          specialty: profile.specialty?.trim() || "İç Mimar",
+          rating: avgRating,
+          projects: projectCount,
+          coverUrl: (profile.cover_photo_url ?? "").trim(),
+          avatarUrl: (profile.avatar_url ?? "").trim(),
+          href: `/tasarimcilar/supa_${profile.id}`,
+          fastReplyLabel: profile.response_time?.trim() || "24 saat içinde dönüş",
+          pinnedReview:
+            stats?.latestText ||
+            profile.about?.trim() ||
+            "Profili açıp profesyonelin güncel projelerini inceleyebilirsin.",
+          pinnedReviewBy: stats?.latestText ? "Müşteri yorumu" : "Evlumba",
+          isOnline: false,
+          lastActiveLabel: projectCount > 0 ? "Portföy güncel" : "Yeni katıldı",
+        } satisfies Designer;
+      })
+      .sort((a, b) => b.projects - a.projects || b.rating - a.rating)
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+async function loadHomeTestimonials(limit = 9): Promise<SiteTestimonialItem[]> {
+  try {
+    const admin = getSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("designer_reviews")
+      .select("id, designer_id, homeowner_id, rating, review_text, created_at")
+      .gte("rating", 4)
+      .not("review_text", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(Math.max(limit * 3, 24));
+
+    if (error || !data) return [];
+
+    const filtered = (data as HomeTestimonialReviewRow[]).filter((row) => {
+      const text = row.review_text?.trim() ?? "";
+      return typeof row.rating === "number" && row.rating >= 4 && text.length >= 10;
+    });
+
+    if (filtered.length === 0) return [];
+
+    const reviewerIds = Array.from(new Set(filtered.map((row) => row.homeowner_id).filter(Boolean)));
+    const designerIds = Array.from(new Set(filtered.map((row) => row.designer_id).filter(Boolean)));
+
+    const [{ data: reviewerProfiles }, { data: designerProfiles }] = await Promise.all([
+      reviewerIds.length > 0
+        ? admin.from("profiles").select("id, full_name").in("id", reviewerIds)
+        : Promise.resolve({ data: [] as HomeNameRow[] }),
+      designerIds.length > 0
+        ? admin
+            .from("profiles")
+            .select("id, full_name, business_name")
+            .in("id", designerIds)
+        : Promise.resolve({ data: [] as HomeNameRow[] }),
+    ]);
+
+    const reviewerMap = new Map(
+      ((reviewerProfiles ?? []) as HomeNameRow[]).map((row) => [row.id, firstNameOnly(row.full_name)])
+    );
+    const designerMap = new Map(
+      ((designerProfiles ?? []) as HomeNameRow[]).map((row) => [
+        row.id,
+        row.business_name?.trim() || row.full_name?.trim() || "Profesyonel",
+      ])
+    );
+
+    return filtered.slice(0, limit).map((row) => ({
+      id: row.id,
+      author: reviewerMap.get(row.homeowner_id) || "Kullanıcı",
+      text: row.review_text?.trim() || "",
+      rating: Number(row.rating || 0),
+      designerName: designerMap.get(row.designer_id) || "Profesyonel",
+    }));
+  } catch {
+    return [];
+  }
+}
 
 function MiniIcon({
   path,
@@ -237,6 +378,7 @@ function SectionTitle({
 }
 
 function ProjectCard({ p }: { p: Project }) {
+  const safeHref = p.href?.trim() || "/kesfet";
   const tagText = p.tag.replace("•", "·");
 
   const [t1, t2] = p.title.split("—").map((x) => x?.trim());
@@ -244,20 +386,26 @@ function ProjectCard({ p }: { p: Project }) {
   const titleSub = t2 || "";
 
   return (
-    <Link
-      href={p.href}
+    <a
+      href={safeHref}
       className="group block overflow-hidden rounded-3xl border border-black/5 bg-white/55 backdrop-blur
                  shadow-[0_18px_55px_-52px_rgba(0,0,0,0.35)]
                  transition duration-300 hover:bg-white/70 hover:-translate-y-0.5"
     >
       {/* IMAGE */}
       <div className="relative aspect-16/10 overflow-hidden bg-black/5">
-        <img
-          src={p.imageUrl}
-          alt={p.title}
-          className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
-          loading="lazy"
-        />
+        {p.imageUrl ? (
+          <img
+            src={p.imageUrl}
+            alt={p.title}
+            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center bg-slate-100 text-sm font-medium text-slate-500">
+            Görsel yok
+          </div>
+        )}
 
         {/* çok hafif gradient (sadece tag için) */}
         <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/25 via-transparent to-transparent" />
@@ -338,7 +486,7 @@ function ProjectCard({ p }: { p: Project }) {
           </span>
         </div>
       </div>
-    </Link>
+    </a>
   );
 }
 
@@ -387,21 +535,28 @@ function PinIcon() {
 
 /** ✅ TASARIMCI KARTI: CTA yok + pinned yorum pin ikonuyla */
 function DesignerCard({ d }: { d: Designer }) {
+  const safeHref = d.href?.trim() || "/tasarimcilar";
   return (
-    <Link
-      href={d.href}
+    <a
+      href={safeHref}
       className="group block overflow-hidden rounded-3xl border border-black/5 bg-white/60 backdrop-blur
                  shadow-[0_18px_55px_-50px_rgba(0,0,0,0.35)]
                  transition hover:bg-white/70 hover:-translate-y-0.5"
     >
       {/* Cover */}
       <div className="relative aspect-16/10 overflow-hidden bg-black/5">
-        <img
-          src={d.coverUrl}
-          alt={`${d.name} kapak`}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-          loading="lazy"
-        />
+        {d.coverUrl ? (
+          <img
+            src={d.coverUrl}
+            alt={`${d.name} kapak`}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center bg-slate-100 text-sm font-medium text-slate-500">
+            Kapak fotoğrafı yok
+          </div>
+        )}
         <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/45 via-black/0 to-transparent" />
 
         {/* Hızlı dönüş badge */}
@@ -415,12 +570,18 @@ function DesignerCard({ d }: { d: Designer }) {
         {/* Kimlik */}
         <div className="absolute inset-x-0 bottom-0 p-4">
           <div className="flex items-center gap-3">
-            <img
-              src={d.avatarUrl}
-              alt={`${d.name} avatar`}
-              className="h-11 w-11 rounded-2xl object-cover ring-1 ring-white/25 shadow-sm"
-              loading="lazy"
-            />
+            {d.avatarUrl ? (
+              <img
+                src={d.avatarUrl}
+                alt={`${d.name} avatar`}
+                className="h-11 w-11 rounded-2xl object-cover ring-1 ring-white/25 shadow-sm"
+                loading="lazy"
+              />
+            ) : (
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/80 text-sm font-semibold text-slate-700 ring-1 ring-white/25 shadow-sm">
+                {d.name.charAt(0).toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0">
               <div className="truncate text-base font-semibold text-white">
                 {d.name}
@@ -440,7 +601,7 @@ function DesignerCard({ d }: { d: Designer }) {
           <span className="text-amber-500">
             <StarIcon />
           </span>
-          {d.rating.toFixed(1)}
+          {d.rating > 0 ? d.rating.toFixed(1) : "Yeni"}
           <span className="text-slate-400 font-normal">•</span>
           <span className="font-normal text-slate-600">{d.projects} proje</span>
         </div>
@@ -479,11 +640,19 @@ function DesignerCard({ d }: { d: Designer }) {
           </span>
         </div>
       </div>
-    </Link>
+    </a>
   );
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const [homeProjects, designers, testimonials, authResult] = await Promise.all([
+    loadHomeProjects(3),
+    loadHomeDesigners(3),
+    loadHomeTestimonials(9),
+    getSupabaseServerClient().then((supabase) => supabase.auth.getUser()),
+  ]);
+  const isLoggedIn = Boolean(authResult.data.user);
+
   return (
     <div className="relative">
       {/* HERO */}
@@ -850,11 +1019,17 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-5 md:grid-cols-3">
-          {projects.slice(0, 3).map((p) => (
-            <ProjectCard key={p.id} p={p} />
-          ))}
-        </div>
+        {homeProjects.length > 0 ? (
+          <div className="mt-6 grid gap-5 md:grid-cols-3">
+            {homeProjects.map((p) => (
+              <ProjectCard key={p.id} p={p} />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white/70 p-6 text-sm text-slate-600">
+            Henüz yayınlanmış ilham projesi görünmüyor. Projeler yayınlandıkça burada listelenecek.
+          </div>
+        )}
 
         <div className="mt-4 md:hidden">
           <ButtonLink href="/kesfet" variant="secondary" className="w-full py-3">
@@ -879,116 +1054,123 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {designers.map((d) => (
-            <DesignerCard key={d.id} d={d} />
-          ))}
-        </div>
+        {designers.length > 0 ? (
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {designers.map((d) => (
+              <DesignerCard key={d.id} d={d} />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white/70 p-6 text-sm text-slate-600">
+            Henüz aktif profesyonel görünmüyor. Profesyoneller eklendikçe burada listelenecek.
+          </div>
+        )}
       </section>
 
-      {/* FINAL CTA (revize) */}
-      <section className="mt-12">
-        <Card className="relative overflow-hidden p-6 md:p-8">
-          <div
-            className="pointer-events-none absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl"
-            aria-hidden="true"
-          />
-          <div
-            className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-indigo-500/10 blur-3xl"
-            aria-hidden="true"
-          />
+      {!isLoggedIn ? (
+        <section className="mt-12">
+          <Card className="relative overflow-hidden p-6 md:p-8">
+            <div
+              className="pointer-events-none absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl"
+              aria-hidden="true"
+            />
+            <div
+              className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-indigo-500/10 blur-3xl"
+              aria-hidden="true"
+            />
 
-          <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 backdrop-blur">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-                İlham koleksiyonu
-                <span className="h-3 w-px bg-black/10" aria-hidden="true" />
-                profesyoneller • gerçek yorumlar
-              </div>
+            <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 backdrop-blur">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                  İlham koleksiyonu
+                  <span className="h-3 w-px bg-black/10" aria-hidden="true" />
+                  profesyoneller • gerçek yorumlar
+                </div>
 
-              <div className="mt-3 text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-                Evlumba ile evini <span className="text-slate-900">oyun gibi</span> keşfet.
-              </div>
+                <div className="mt-3 text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+                  Evlumba ile evini <span className="text-slate-900">oyun gibi</span> keşfet.
+                </div>
 
-              <p className="mt-2 text-sm md:text-base text-slate-600 leading-relaxed max-w-xl">
-                İlhamı kartlardan topla, beğendiklerini kaydet, tarzın netleşince sana uygun
-                profesyonelleri tek ekranda gör.
-              </p>
+                <p className="mt-2 text-sm md:text-base text-slate-600 leading-relaxed max-w-xl">
+                  İlhamı kartlardan topla, beğendiklerini kaydet, tarzın netleşince sana uygun
+                  profesyonelleri tek ekranda gör.
+                </p>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-800">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-rose-500/10 text-rose-700">
-                    ↔
-                  </span>
-                  Beğen / Geç
-                </span>
-
-                <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-800">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-900/5 text-slate-900">
-                    ⎘
-                  </span>
-                  Kaydet & Koleksiyon
-                </span>
-
-                <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-800">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-amber-500/10 text-amber-700">
-                    ★
-                  </span>
-                  Pinned yorumlar
-                </span>
-
-                <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-800">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500/10 text-emerald-800">
-                    ⚡
-                  </span>
-                  Hızlı dönüş
-                </span>
-              </div>
-            </div>
-
-            <div className="flex flex-col items-stretch md:items-end">
-              <div
-                className="w-full md:w-[320px] rounded-3xl border border-black/10 bg-white/60 backdrop-blur p-3
-                  shadow-[0_18px_55px_-45px_rgba(15,23,42,0.22)]"
-              >
-                <Link
-                  href="/kayit"
-                  className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5
-                 text-sm font-semibold text-white shadow-[0_18px_55px_-35px_rgba(15,23,42,0.55)]
-                 hover:bg-slate-800 transition"
-                >
-                  Ücretsiz Başla
-                  <span className="transition-transform group-hover:translate-x-0.5" aria-hidden="true">
-                    →
-                  </span>
-                </Link>
-
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                  <span
-                    className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5
-                       text-[11px] font-semibold text-slate-700"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                    Kredi kartı gerekmez
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-800">
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-rose-500/10 text-rose-700">
+                      ↔
+                    </span>
+                    Beğen / Geç
                   </span>
 
-                  <span
-                    className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5
-                       text-[11px] font-semibold text-slate-700"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true" />
-                    30 sn’de keşfe başla
+                  <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-800">
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-900/5 text-slate-900">
+                      ⎘
+                    </span>
+                    Kaydet & Koleksiyon
+                  </span>
+
+                  <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-800">
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-amber-500/10 text-amber-700">
+                      ★
+                    </span>
+                    Pinned yorumlar
+                  </span>
+
+                  <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-800">
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500/10 text-emerald-800">
+                      ⚡
+                    </span>
+                    Hızlı dönüş
                   </span>
                 </div>
               </div>
+
+              <div className="flex flex-col items-stretch md:items-end">
+                <div
+                  className="w-full md:w-[320px] rounded-3xl border border-black/10 bg-white/60 backdrop-blur p-3
+                    shadow-[0_18px_55px_-45px_rgba(15,23,42,0.22)]"
+                >
+                  <Link
+                    href="/kayit"
+                    className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5
+                  text-sm font-semibold text-white shadow-[0_18px_55px_-35px_rgba(15,23,42,0.55)]
+                  hover:bg-slate-800 transition"
+                  >
+                    Ücretsiz Başla
+                    <span className="transition-transform group-hover:translate-x-0.5" aria-hidden="true">
+                      →
+                    </span>
+                  </Link>
+
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                    <span
+                      className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5
+                        text-[11px] font-semibold text-slate-700"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                      Kredi kartı gerekmez
+                    </span>
+
+                    <span
+                      className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5
+                        text-[11px] font-semibold text-slate-700"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true" />
+                      30 sn’de keşfe başla
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </Card>
-      </section>
+          </Card>
+        </section>
+      ) : null}
 
       {/* ✅ TESTIMONIALS (Footer'ın hemen üstü) */}
-      <SiteTestimonials />
+      <SiteTestimonials mentions={testimonials} />
     </div>
   );
 }

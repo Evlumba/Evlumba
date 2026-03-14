@@ -124,6 +124,7 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
 
 /* ---------- row ---------- */
 function ListRow({ d }: { d: Designer }) {
+  const href = `/tasarimcilar/${d.slug}`;
   const projects = (d.projectTypes?.slice(0, 2) || []).join(" • ");
   const services = (d.services?.slice(0, 3) || []).join(" • ");
   const pinned = (d.pinnedReview || "").trim();
@@ -140,13 +141,19 @@ function ListRow({ d }: { d: Designer }) {
           }}
         >
           <div className="relative h-48 w-full md:h-42.5">
-            <img
-              src={d.coverUrl}
-              alt={`${d.name} görsel`}
-              className="absolute inset-0 block h-full w-full object-cover"
-              loading="lazy"
-              decoding="async"
-            />
+            {d.coverUrl ? (
+              <img
+                src={d.coverUrl}
+                alt={`${d.name} görsel`}
+                className="absolute inset-0 block h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-100 text-xs font-medium text-slate-500">
+                Kapak fotoğrafı yok
+              </div>
+            )}
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_circle_at_20%_10%,rgba(255,255,255,0.16),transparent_55%)]" />
             <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/10 via-transparent to-transparent" />
 
@@ -204,7 +211,7 @@ function ListRow({ d }: { d: Designer }) {
             </div>
 
             <Link
-              href={`/tasarimcilar/${d.slug}`}
+              href={href}
               className="group shrink-0 inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition
                          hover:-translate-y-px active:translate-y-0 active:scale-[0.99]"
               style={{

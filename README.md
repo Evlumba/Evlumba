@@ -16,6 +16,28 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Supabase Setup
+
+1. Copy `.env.example` to `.env.local`.
+2. Fill the values from your Supabase project:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+3. Run the SQL in `supabase/schema.sql` from Supabase SQL Editor.
+4. Test connection with:
+
+```bash
+curl http://localhost:3000/api/health/supabase
+```
+
+## Contact Form Mail Setup
+
+`/iletisim` sayfasındaki formun `info@evlumba.com` adresine otomatik mail göndermesi için `.env.local` içine şunları ekleyin:
+
+- `RESEND_API_KEY`
+- `CONTACT_TO_EMAIL` (varsayılan: `info@evlumba.com`)
+- `CONTACT_FROM_EMAIL` (örn: `Evlumba <onboarding@resend.dev>`)
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

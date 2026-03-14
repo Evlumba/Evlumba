@@ -41,12 +41,18 @@ function ProjectCard({
       href={`/tasarimcilar/${designerSlug}/proje/${item.id}`}
       className="group relative aspect-4/3 w-full overflow-hidden rounded-2xl bg-gray-100 ring-1 ring-black/5 transition-all hover:ring-black/10 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
     >
-      <Image
-        src={item.coverUrl}
-        alt={item.title}
-        fill
-        className="object-cover transition-transform duration-500 group-hover:scale-105"
-      />
+      {item.coverUrl ? (
+        <Image
+          src={item.coverUrl}
+          alt={item.title}
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-100 text-xs font-medium text-slate-500">
+          Görsel yok
+        </div>
+      )}
 
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-linear-to-t from-black/60 via-black/0 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />

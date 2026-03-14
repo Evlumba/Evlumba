@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { getSession, logout } from "@/lib/storage";
 
 type SessionLike = {
@@ -40,13 +40,9 @@ function Icon({ name }: { name: "bell" | "chat" | "search" | "user" }) {
 }
 
 export default function Header() {
-  const [session, setSession] = useState<SessionLike | null>(null);
+  const [session, setSession] = useState<SessionLike | null>(() => (getSession() as SessionLike | null) ?? null);
   const [q, setQ] = useState("");
   const [menu, setMenu] = useState(false);
-
-  useEffect(() => {
-    setSession((getSession() as any) ?? null);
-  }, []);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();

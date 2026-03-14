@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getSession, logout } from "@/lib/storage";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -133,6 +135,91 @@ function SearchIcon() {
   );
 }
 
+function UserIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 21a8 8 0 0 0-16 0" />
+      <path d="M12 13a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+    </svg>
+  );
+}
+
+function MessageIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+    </svg>
+  );
+}
+
+function MessageIconWithBadge({ count }: { count: number }) {
+  const display = count > 99 ? "99+" : String(count);
+  return (
+    <span className="relative inline-flex">
+      <MessageIcon />
+      {count > 0 ? (
+        <span className="absolute -right-2.5 -top-2 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold leading-5 text-white shadow-[0_0_0_2px_rgba(255,255,255,0.95)]">
+          {display}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function CollectionIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+
+function ProjectsIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M8 13h8" />
+      <path d="M8 16h5" />
+    </svg>
+  );
+}
+
 /* ---------------- Brand ---------------- */
 function Brand() {
   return (
@@ -245,6 +332,122 @@ function GlassRegisterButton({
 
 export default function SiteHeader() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = React.useState(false);
+  const [role, setRole] = React.useState<"designer" | "homeowner" | null>(null);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+
+  React.useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+
+    const cached = getSession();
+    setIsLoggedIn(Boolean(cached));
+    if (cached?.role === "designer" || cached?.role === "homeowner") {
+      setRole(cached.role);
+    }
+
+    void supabase.auth.getSession().then(({ data }) => {
+      setIsLoggedIn(!!data.session);
+      const r = data.session?.user?.user_metadata?.role;
+      if (r === "designer" || r === "homeowner") setRole(r);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setIsLoggedIn(!!session);
+      if (!session?.user) {
+        setRole(null);
+        return;
+      }
+      const metadataRole = session.user.user_metadata?.role;
+      if (metadataRole === "designer" || metadataRole === "homeowner") {
+        setRole(metadataRole);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      if (profile?.role === "designer" || profile?.role === "homeowner") {
+        setRole(profile.role);
+      }
+    });
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== "evlumba_session_v1") return;
+      const next = getSession();
+      setIsLoggedIn(Boolean(next));
+      if (next?.role === "designer" || next?.role === "homeowner") {
+        setRole(next.role);
+      } else {
+        setRole(null);
+      }
+    };
+
+    const handleSessionChanged = () => {
+      const next = getSession();
+      setIsLoggedIn(Boolean(next));
+      if (next?.role === "designer" || next?.role === "homeowner") {
+        setRole(next.role);
+      } else {
+        setRole(null);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("evlumba:session-changed", handleSessionChanged);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("evlumba:session-changed", handleSessionChanged);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!isLoggedIn) {
+      setUnreadCount(0);
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    let cancelled = false;
+
+    const refreshUnread = async () => {
+      const { data, error } = await supabase.rpc("get_unread_message_count");
+      if (cancelled || error) return;
+      setUnreadCount(typeof data === "number" ? data : 0);
+    };
+
+    void refreshUnread();
+
+    const handleMessagesUpdated = () => {
+      void refreshUnread();
+    };
+
+    const intervalId = window.setInterval(() => {
+      void refreshUnread();
+    }, 15000);
+
+    window.addEventListener("focus", handleMessagesUpdated);
+    window.addEventListener("evlumba:messages-updated", handleMessagesUpdated);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleMessagesUpdated);
+      window.removeEventListener("evlumba:messages-updated", handleMessagesUpdated);
+    };
+  }, [isLoggedIn]);
+
+  const profileHref = role === "designer" ? "/designer-panel/profile" : "/profile";
+  const messagesHref = "/messages";
+  const messagesLabel = "Mesajlar";
+  const projectsHref = "/designer-panel/projects";
+  const collectionsHref = "/profile/collections";
+  const showCollectionsShortcut = role === "homeowner";
 
   const nav = [
     {
@@ -292,25 +495,98 @@ export default function SiteHeader() {
               <Brand />
 
               <div className="flex items-center gap-2">
-                <Link
-                  href="/giris"
-                  className={cn(
-                    "inline-flex items-center justify-center rounded-2xl border border-black/10",
-                    "bg-white/55 text-slate-700 hover:bg-white/85 hover:text-slate-900 transition",
-                    "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
-                    "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
-                  )}
-                >
-                  Giriş
-                </Link>
+                {isLoggedIn ? (
+                  <>
+                    {role === "designer" ? (
+                      <Link
+                        href={projectsHref}
+                        className={cn(
+                          "inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10",
+                          "bg-white/65 text-slate-800 hover:bg-white transition",
+                          "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                          "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
+                        )}
+                      >
+                        <ProjectsIcon />
+                        <span className="hidden sm:inline">Projelerim</span>
+                      </Link>
+                    ) : null}
+                    <Link
+                      href={messagesHref}
+                      className={cn(
+                        "inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10",
+                        "bg-white/65 text-slate-800 hover:bg-white transition",
+                        "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                        "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
+                      )}
+                    >
+                      <MessageIconWithBadge count={unreadCount} />
+                      <span className="hidden sm:inline">{messagesLabel}</span>
+                    </Link>
+                    {showCollectionsShortcut ? (
+                      <Link
+                        href={collectionsHref}
+                        className={cn(
+                          "inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10",
+                          "bg-white/65 text-slate-800 hover:bg-white transition",
+                          "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                          "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
+                        )}
+                      >
+                        <CollectionIcon />
+                        <span className="hidden sm:inline">Koleksiyonlarım</span>
+                      </Link>
+                    ) : null}
+                  <Link
+                    href={profileHref}
+                      className={cn(
+                        "inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10",
+                        "bg-white/65 text-slate-800 hover:bg-white transition",
+                        "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                        "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
+                      )}
+                    >
+                      <UserIcon />
+                      Profil
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        logout();
+                        router.push("/");
+                      }}
+                      className={cn(
+                        "inline-flex items-center justify-center rounded-2xl border border-black/10",
+                        "bg-white/65 text-slate-800 hover:bg-white transition",
+                        "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                        "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
+                      )}
+                    >
+                      Çıkış
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/giris"
+                      className={cn(
+                        "inline-flex items-center justify-center rounded-2xl border border-black/10",
+                        "bg-white/55 text-slate-700 hover:bg-white/85 hover:text-slate-900 transition",
+                        "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                        "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
+                      )}
+                    >
+                      Giriş
+                    </Link>
 
-                {/* ✅ Mobil kayıt: glass renkli, alt çizgi yok */}
-                <GlassRegisterButton
-                  href="/kayit"
-                  labelDesktop="Ücretsiz kayıt"
-                  labelCompact="Kayıt"
-                  className="px-3.5 py-2"
-                />
+                    <GlassRegisterButton
+                      href="/kayit"
+                      labelDesktop="Ücretsiz kayıt"
+                      labelCompact="Kayıt"
+                      className="px-3.5 py-2"
+                    />
+                  </>
+                )}
               </div>
             </div>
 
@@ -321,7 +597,7 @@ export default function SiteHeader() {
                   "flex items-center gap-2 overflow-x-auto pb-1",
                   "[-ms-overflow-style:none] [scrollbar-width:none]"
                 )}
-                style={{ WebkitOverflowScrolling: "touch" as any }}
+                style={{ WebkitOverflowScrolling: "touch" }}
               >
                 <style jsx>{`
                   div::-webkit-scrollbar {
@@ -375,40 +651,129 @@ export default function SiteHeader() {
           </div>
 
           {/* DESKTOP */}
-          <div className="hidden lg:flex items-center gap-3 px-4 py-3.5 min-w-0">
-            <div className="shrink-0">
-              <Brand />
+          <div className="hidden lg:block px-4 py-3.5">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="shrink-0">
+                <Brand />
+              </div>
+
+              <nav className="shrink-0 flex items-center gap-2">
+                {nav.map((n) => (
+                  <NavItem
+                    key={n.href}
+                    href={n.href}
+                    label={n.label}
+                    icon={n.icon}
+                    active={pathname === n.href}
+                  />
+                ))}
+              </nav>
+
+              {/* actions */}
+              <div className="ml-auto shrink-0 flex items-center gap-2">
+                {isLoggedIn ? (
+                  <>
+                    {role === "designer" ? (
+                      <Link
+                        href={projectsHref}
+                        className={cn(
+                          "inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10",
+                          "bg-white/65 text-slate-800 hover:bg-white transition",
+                          "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                          "px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
+                        )}
+                      >
+                        <ProjectsIcon />
+                        Projelerim
+                      </Link>
+                    ) : null}
+                    <Link
+                      href={messagesHref}
+                      className={cn(
+                        "inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10",
+                        "bg-white/65 text-slate-800 hover:bg-white transition",
+                        "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                        "px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
+                      )}
+                    >
+                      <MessageIconWithBadge count={unreadCount} />
+                      {messagesLabel}
+                    </Link>
+                    {showCollectionsShortcut ? (
+                      <Link
+                        href={collectionsHref}
+                        className={cn(
+                          "inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10",
+                          "bg-white/65 text-slate-800 hover:bg-white transition",
+                          "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                          "px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
+                        )}
+                      >
+                        <CollectionIcon />
+                        Koleksiyonlarım
+                      </Link>
+                    ) : null}
+                  <Link
+                    href={profileHref}
+                      className={cn(
+                        "inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10",
+                        "bg-white/65 text-slate-800 hover:bg-white transition",
+                        "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                        "px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
+                      )}
+                  >
+                    <UserIcon />
+                    Profil
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logout();
+                      router.push("/");
+                    }}
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-2xl border border-black/10",
+                      "bg-white/65 text-slate-800 hover:bg-white transition",
+                      "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                      "px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
+                    )}
+                  >
+                    Çıkış
+                  </button>
+                </>
+              ) : (
+                  <>
+                    <Link
+                      href="/giris"
+                      className={cn(
+                        "inline-flex items-center justify-center rounded-2xl border border-black/10",
+                        "bg-white/55 text-slate-700 hover:bg-white/85 hover:text-slate-900 transition",
+                        "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
+                        "px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
+                      )}
+                    >
+                      Giriş
+                    </Link>
+
+                    <GlassRegisterButton href="/kayit" />
+                  </>
+                )}
+              </div>
             </div>
 
-            <nav className="shrink-0 flex items-center gap-2">
-              {nav.map((n) => (
-                <NavItem
-                  key={n.href}
-                  href={n.href}
-                  label={n.label}
-                  icon={n.icon}
-                  active={pathname === n.href}
-                />
-              ))}
-            </nav>
-
-            {/* search */}
-            <div className="min-w-0 flex-1 flex items-center justify-center">
-              <form
-                action="/kesfet"
-                method="GET"
-                className="flex items-center gap-2 w-full max-w-155"
-              >
+            {/* search row */}
+            <div className="pt-3">
+              <form action="/kesfet" method="GET" className="flex items-center gap-3 w-full">
                 <div className="relative flex-1 min-w-0">
-                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                     <SearchIcon />
                   </span>
                   <input
                     name="q"
-                    placeholder="tarz, oda, şehir, profesyonel…"
+                    placeholder="Tarz, oda, şehir veya profesyonel ara..."
                     className={cn(
-                      "w-full rounded-2xl border border-black/10 bg-white/70",
-                      "pl-10 pr-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400",
+                      "w-full rounded-2xl border border-black/10 bg-white/80",
+                      "pl-11 pr-4 py-3 text-base text-slate-900 placeholder:text-slate-400",
                       "outline-none focus:ring-2 focus:ring-black/10"
                     )}
                     autoComplete="off"
@@ -418,34 +783,16 @@ export default function SiteHeader() {
                 <button
                   type="submit"
                   className={cn(
-                    "shrink-0 rounded-2xl border border-black/10 bg-white/65 text-slate-700 font-semibold",
-                    "backdrop-blur hover:bg-white/85 hover:text-slate-900 transition",
+                    "shrink-0 rounded-2xl border border-black/10 bg-white text-slate-800 font-semibold",
+                    "backdrop-blur hover:bg-white/95 transition",
                     "shadow-[0_12px_35px_-28px_rgba(0,0,0,0.25)]",
-                    "px-4 py-2.5 text-sm"
+                    "px-6 py-3 text-base"
                   )}
                   title="Ara"
                 >
                   Ara
                 </button>
               </form>
-            </div>
-
-            {/* actions */}
-            <div className="shrink-0 flex items-center gap-2">
-              <Link
-                href="/giris"
-                className={cn(
-                  "inline-flex items-center justify-center rounded-2xl border border-black/10",
-                  "bg-white/55 text-slate-700 hover:bg-white/85 hover:text-slate-900 transition",
-                  "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
-                  "px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
-                )}
-              >
-                Giriş
-              </Link>
-
-              {/* ✅ Desktop kayıt: glass renkli, alt çizgi yok */}
-              <GlassRegisterButton href="/kayit" />
             </div>
           </div>
         </div>

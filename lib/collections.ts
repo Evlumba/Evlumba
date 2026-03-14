@@ -1,10 +1,13 @@
+"use client";
+
+import { getSupabaseBrowserClient } from "./supabase/client";
 import { getSession } from "./storage";
 
 export type Collection = {
   id: string;
   name: string;
-  itemIds: string[]; // design ids
-  shareId?: string; // public share id
+  itemIds: string[];
+  shareId?: string;
   isShareable?: boolean;
   createdAt: number;
 };
@@ -13,167 +16,150 @@ export type CollectionsState = {
   collections: Collection[];
 };
 
-const KEY = "evlumba_collections_v1";
-
-function uid(prefix = "col") {
-  return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
+function toMillis(input: string | null | undefined) {
+  if (!input) return Date.now();
+  const ms = Date.parse(input);
+  return Number.isNaN(ms) ? Date.now() : ms;
 }
 
-function genShareId() {
-  return Math.random().toString(36).slice(2, 10);
+async function getCurrentUserId() {
+  const cached = getSession();
+  if (cached?.id) return cached.id;
+
+  const supabase = getSupabaseBrowserClient();
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
 }
 
-function seedCollections(): CollectionsState {
-  const now = Date.now();
+function mapCollectionRow(row: {
+  id: string;
+  title: string;
+  is_public: boolean;
+  created_at: string;
+  collection_items?: Array<{ design_id: string }>;
+}): Collection {
   return {
-    collections: [
-      {
-        id: uid("col"),
-        name: "Salon İlhamları",
-        itemIds: [],
-        createdAt: now - 86400000 * 3,
-        isShareable: true,
-        shareId: "salon-demo",
-      },
-      {
-        id: uid("col"),
-        name: "Mutfak Fikirleri",
-        itemIds: [],
-        createdAt: now - 86400000 * 2,
-        isShareable: false,
-      },
-      {
-        id: uid("col"),
-        name: "Japandi Mood",
-        itemIds: [],
-        createdAt: now - 86400000,
-        isShareable: true,
-        shareId: "japandi-demo",
-      },
-    ],
+    id: row.id,
+    shareId: row.id,
+    name: row.title,
+    isShareable: row.is_public,
+    createdAt: toMillis(row.created_at),
+    itemIds: Array.isArray(row.collection_items) ? row.collection_items.map((x) => x.design_id) : [],
   };
 }
 
-function normalizeState(input: any): CollectionsState {
-  const arr = Array.isArray(input?.collections) ? input.collections : [];
-  const collections: Collection[] = arr.map((c: any) => ({
-    id: String(c?.id || uid("col")),
-    name: String(c?.name || "Koleksiyon"),
-    itemIds: Array.isArray(c?.itemIds) ? c.itemIds.map(String) : [],
-    shareId: c?.shareId ? String(c.shareId) : undefined,
-    isShareable: typeof c?.isShareable === "boolean" ? c.isShareable : false,
-    createdAt: typeof c?.createdAt === "number" ? c.createdAt : Date.now(),
-  }));
-  return { collections };
-}
+export async function loadCollections(): Promise<CollectionsState> {
+  const userId = await getCurrentUserId();
+  if (!userId) return { collections: [] };
 
-export function loadCollections(): CollectionsState {
-  if (typeof window === "undefined") return { collections: [] };
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return seedCollections();
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("collections")
+    .select("id, title, is_public, created_at, collection_items(design_id)")
+    .order("created_at", { ascending: false });
 
-    const parsed = JSON.parse(raw);
-    const normalized = normalizeState(parsed);
-
-    if (!normalized.collections.length) return seedCollections();
-    return normalized;
-  } catch {
-    return seedCollections();
-  }
-}
-
-export function saveCollections(state: CollectionsState) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(state));
-}
-
-export function ensureAuthOrNull() {
-  const s = getSession?.();
-  return s ? s : null;
-}
-
-export function createCollection(name: string) {
-  const state = loadCollections();
-  const c: Collection = {
-    id: uid("col"),
-    name,
-    itemIds: [],
-    createdAt: Date.now(),
-    isShareable: false,
+  if (error || !data) return { collections: [] };
+  return {
+    collections: data.map(mapCollectionRow),
   };
-  state.collections = [c, ...state.collections];
-  saveCollections(state);
-  return c;
 }
 
-export function createCollectionWithItems(name: string, itemIds: string[]) {
-  const state = loadCollections();
-  const c: Collection = {
-    id: uid("col"),
-    name,
-    itemIds: Array.from(new Set(itemIds)),
-    createdAt: Date.now(),
-    isShareable: false,
-  };
-  state.collections = [c, ...state.collections];
-  saveCollections(state);
-  return c;
+export async function ensureAuthOrNull() {
+  const userId = await getCurrentUserId();
+  return userId ? { id: userId } : null;
 }
 
-export function renameCollection(collectionId: string, name: string) {
-  const state = loadCollections();
-  const c = state.collections.find((x) => x.id === collectionId);
-  if (!c) return state;
-  c.name = name;
-  saveCollections(state);
-  return state;
+export async function createCollection(name: string) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Giriş gerekli");
+
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("collections")
+    .insert({ user_id: userId, title: name, is_public: false })
+    .select("id, title, is_public, created_at")
+    .single();
+
+  if (error || !data) throw new Error(error?.message || "Koleksiyon oluşturulamadı");
+  return mapCollectionRow({ ...data, collection_items: [] });
 }
 
-export function deleteCollection(collectionId: string) {
-  const state = loadCollections();
-  state.collections = state.collections.filter((x) => x.id !== collectionId);
-  saveCollections(state);
-  return state;
+export async function createCollectionWithItems(name: string, itemIds: string[]) {
+  const c = await createCollection(name);
+  const uniqueItems = Array.from(new Set(itemIds));
+  if (!uniqueItems.length) return c;
+
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase
+    .from("collection_items")
+    .insert(uniqueItems.map((designId) => ({ collection_id: c.id, design_id: designId })));
+  if (error) throw new Error(error.message);
+
+  return { ...c, itemIds: uniqueItems };
 }
 
-export function setCollectionShareable(collectionId: string, shareable: boolean) {
-  const state = loadCollections();
-  const c = state.collections.find((x) => x.id === collectionId);
-  if (!c) return state;
+export async function renameCollection(collectionId: string, name: string) {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.from("collections").update({ title: name }).eq("id", collectionId);
+  if (error) throw new Error(error.message);
+  return loadCollections();
+}
 
-  c.isShareable = shareable;
+export async function deleteCollection(collectionId: string) {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.from("collections").delete().eq("id", collectionId);
+  if (error) throw new Error(error.message);
+  return loadCollections();
+}
 
-  if (shareable) {
-    if (!c.shareId) c.shareId = genShareId();
+export async function setCollectionShareable(collectionId: string, shareable: boolean) {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase
+    .from("collections")
+    .update({ is_public: shareable })
+    .eq("id", collectionId);
+  if (error) throw new Error(error.message);
+  return loadCollections();
+}
+
+export async function toggleSaveToCollection(collectionId: string, designId: string) {
+  const supabase = getSupabaseBrowserClient();
+  const { data: existing, error: findError } = await supabase
+    .from("collection_items")
+    .select("id")
+    .eq("collection_id", collectionId)
+    .eq("design_id", designId)
+    .maybeSingle();
+
+  if (findError) throw new Error(findError.message);
+
+  if (existing?.id) {
+    const { error } = await supabase.from("collection_items").delete().eq("id", existing.id);
+    if (error) throw new Error(error.message);
   } else {
-    // kapatınca public link çalışmasın
-    c.shareId = undefined;
+    const { error } = await supabase
+      .from("collection_items")
+      .insert({ collection_id: collectionId, design_id: designId });
+    if (error) throw new Error(error.message);
   }
 
-  saveCollections(state);
-  return state;
+  return loadCollections();
 }
 
-export function toggleSaveToCollection(collectionId: string, designId: string) {
-  const state = loadCollections();
-  const c = state.collections.find((x) => x.id === collectionId);
-  if (!c) return state;
-
-  const exists = c.itemIds.includes(designId);
-  c.itemIds = exists ? c.itemIds.filter((id) => id !== designId) : [designId, ...c.itemIds];
-
-  saveCollections(state);
-  return state;
-}
-
-export function getSavedCollectionsForDesign(designId: string) {
-  const state = loadCollections();
+export async function getSavedCollectionsForDesign(designId: string) {
+  const state = await loadCollections();
   return state.collections.filter((c) => c.itemIds.includes(designId)).map((c) => c.id);
 }
 
-export function getCollectionByShareId(shareId: string): Collection | null {
-  const state = loadCollections();
-  const c = state.collections.find((x) => x.isShareable && x.shareId === shareId);
-  return c || null;
+export async function getCollectionByShareId(shareId: string): Promise<Collection | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("collections")
+    .select("id, title, is_public, created_at, collection_items(design_id)")
+    .eq("id", shareId)
+    .eq("is_public", true)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapCollectionRow(data);
 }

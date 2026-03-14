@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Footer() {
   return (
     <footer className="border-t border-neutral-200/70 bg-white/60 backdrop-blur">
@@ -16,18 +18,18 @@ export default function Footer() {
         <div>
           <div className="text-sm font-semibold text-neutral-900">Ürün</div>
           <ul className="mt-3 space-y-2 text-sm text-neutral-600">
-            <li><a className="hover:text-neutral-900" href="/kesfet">Keşfet</a></li>
-            <li><a className="hover:text-neutral-900" href="/oyun">Keşfetme Oyunu</a></li>
-            <li><a className="hover:text-neutral-900" href="/ai-match">AI Matchmaker</a></li>
+            <li><Link className="hover:text-neutral-900" href="/kesfet">Keşfet</Link></li>
+            <li><Link className="hover:text-neutral-900" href="/oyun">Keşfetme Oyunu</Link></li>
+            <li><Link className="hover:text-neutral-900" href="/ai-match">AI Matchmaker</Link></li>
           </ul>
         </div>
 
         <div>
           <div className="text-sm font-semibold text-neutral-900">Tasarımcı</div>
           <ul className="mt-3 space-y-2 text-sm text-neutral-600">
-            <li><a className="hover:text-neutral-900" href="/tasarimcilar">Liste</a></li>
-            <li><a className="hover:text-neutral-900" href="/kayit">Profil oluştur</a></li>
-            <li><a className="hover:text-neutral-900" href="/giris">Giriş</a></li>
+            <li><Link className="hover:text-neutral-900" href="/tasarimcilar">Liste</Link></li>
+            <li><Link className="hover:text-neutral-900" href="/kayit">Profil oluştur</Link></li>
+            <li><Link className="hover:text-neutral-900" href="/giris">Giriş</Link></li>
           </ul>
         </div>
       </div>

@@ -6,7 +6,6 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 
 import {
-  exploreIdeas,
   exploreRooms,
   exploreFilterOptions,
   type ExploreIdea,
@@ -701,6 +700,7 @@ function AllFiltersModal({
   roomLabel,
   availableSub,
   initialTab,
+  ideas,
 }: {
   open: boolean;
   onClose: () => void;
@@ -709,6 +709,7 @@ function AllFiltersModal({
   roomLabel: string;
   availableSub: string[];
   initialTab?: FilterTabKey;
+  ideas: ExploreIdea[];
 }) {
   const deepClone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
   const [draft, setDraft] = React.useState<Filters>(() => deepClone(filters));
@@ -766,7 +767,7 @@ function AllFiltersModal({
 
   const countFor = (f: Filters) => {
     const q = f.q.trim().toLowerCase();
-    return exploreIdeas.filter((i) => {
+    return ideas.filter((i) => {
       if (f.roomId && i.roomId !== f.roomId) return false;
       if (f.sub && i.subLabel !== f.sub) return false;
       if (f.styles[0] && i.style !== f.styles[0]) return false;
@@ -1216,10 +1217,15 @@ function DesignCard({
   onToggleSave: () => void;
   onRequireSignup: () => void;
 }) {
+  const detailHref = idea.detailUrl || `/tasarim/${idea.id}`;
+  const designerHref = idea.designerSlug
+    ? `/tasarimcilar/${idea.designerSlug}`
+    : `/tasarimcilar/${idea.designerId}`;
+
   return (
     <div className="group overflow-hidden rounded-[28px] border border-black/10 bg-white/65 backdrop-blur shadow-[0_30px_90px_-72px_rgba(15,23,42,0.30)] hover:bg-white/75 transition">
       <div className="relative">
-        <Link href={`/tasarim/${idea.id}`} className="block">
+        <Link href={detailHref} className="block">
           <div className="aspect-16/11">
             <img
               src={idea.imageUrl}
@@ -1261,7 +1267,7 @@ function DesignCard({
 
         <div className="mt-3 flex items-start justify-between gap-3">
           <Link
-            href={`/tasarimcilar/${idea.designerId}`}
+            href={designerHref}
             className="flex items-center gap-3 min-w-0"
           >
             <img
@@ -1299,10 +1305,10 @@ function DesignCard({
   );
 }
 
-function ProCTA() {
+function ProCTA({ ideas }: { ideas: ExploreIdea[] }) {
   const people = React.useMemo(() => {
     const map = new Map<string, { name: string; avatar: string }>();
-    for (const it of exploreIdeas) {
+    for (const it of ideas) {
       if (!map.has(it.designerId)) {
         map.set(it.designerId, {
           name: it.designerName,
@@ -1314,7 +1320,7 @@ function ProCTA() {
       if (map.size >= 4) break;
     }
     return Array.from(map.values()).slice(0, 4);
-  }, []);
+  }, [ideas]);
 
   const totalPros = 40;
 
@@ -1483,6 +1489,7 @@ export default function KesfetPage() {
   const spRaw = useSearchParams();
   const params = useParams() as { room?: string[] };
   const roomSlug = Array.isArray(params.room) ? params.room[0] : undefined;
+  const [liveIdeas, setLiveIdeas] = React.useState<ExploreIdea[]>([]);
 
   const urlKey = `${roomSlug ?? ""}|${spRaw.toString()}`;
 
@@ -1504,6 +1511,38 @@ export default function KesfetPage() {
     setPage(parsed.page);
     setQInput(parsed.filters.q);
   }, [parsed.filters, parsed.page, parsed.tasteOn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function loadLiveIdeas() {
+      try {
+        const response = await fetch("/api/public/explore-ideas", {
+          method: "GET",
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { ok?: boolean; ideas?: ExploreIdea[] };
+        if (!cancelled && payload.ok && Array.isArray(payload.ideas)) {
+          setLiveIdeas(payload.ideas);
+        }
+      } catch {
+        if (!cancelled) {
+          setLiveIdeas([]);
+        }
+      }
+    }
+
+    void loadLiveIdeas();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, []);
+
+  const allIdeas = React.useMemo(() => liveIdeas, [liveIdeas]);
 
   const syncUrl = React.useCallback(
     (
@@ -1559,7 +1598,7 @@ export default function KesfetPage() {
   const filtered = React.useMemo(() => {
     const q = filters.q.trim().toLowerCase();
 
-    let list = exploreIdeas.filter((i) => {
+    let list = allIdeas.filter((i) => {
       if (filters.roomId && i.roomId !== filters.roomId) return false;
       if (filters.sub && i.subLabel !== filters.sub) return false;
 
@@ -1601,7 +1640,7 @@ export default function KesfetPage() {
     return list
       .slice()
       .sort((a, b) => score(b) - score(a) || b.popularity - a.popularity);
-  }, [filters, tasteOn]);
+  }, [filters, tasteOn, allIdeas]);
 
   const [saves, setSaves] = React.useState<string[]>([]);
   React.useEffect(() => setSaves(getSaves()), []);
@@ -1913,7 +1952,7 @@ export default function KesfetPage() {
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {pageItems.map((it, idx) => {
-          if (it.kind === "cta") return <ProCTA key={`cta-${idx}`} />;
+          if (it.kind === "cta") return <ProCTA key={`cta-${idx}`} ideas={allIdeas} />;
           const idea = it.idea;
           const saved = saves.includes(idea.id);
 
@@ -1980,6 +2019,7 @@ export default function KesfetPage() {
         roomLabel={roomLabel}
         availableSub={availableSub}
         initialTab={modalTab}
+        ideas={allIdeas}
       />
     </div>
   );

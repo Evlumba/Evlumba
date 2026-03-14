@@ -22,6 +22,7 @@ export type PortfolioItem = {
 
 export type ReviewItem = {
   id: string;
+  homeownerId?: string;
   author: string;
   authorCity?: string;
   avatarUrl?: string;
@@ -50,6 +51,7 @@ export type ReviewItem = {
 
 export type Designer = {
   slug: string;
+  liveDesignerId?: string;
   name: string;
   title: string;
   city: string;

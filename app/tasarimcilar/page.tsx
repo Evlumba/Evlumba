@@ -4,7 +4,12 @@ import type { CSSProperties, ReactNode } from "react";
 import { PROMATCH } from "../../lib/promatch";
 import { ArrowRight, BadgeCheck, Layers, Timer, Search } from "lucide-react";
 import DesignersResultsClient from "./_components/DesignersResultsClient";
-import { FEATURED_DESIGNERS } from "./_data/designers";
+import { FEATURED_DESIGNERS, type Designer } from "./_data/designers";
+import { buildUniqueDesignerSlugs } from "./_data/slugs";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const shell: CSSProperties = {
   background: "rgba(255,255,255,0.62)",
@@ -139,12 +144,231 @@ const pick = (sp: SP | undefined, key: string) => {
   return Array.isArray(v) ? v[0] : v || "";
 };
 
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+  business_name: string | null;
+  specialty: string | null;
+  city: string | null;
+  contact_email: string | null;
+  tags: string[] | null;
+  starting_from: string | null;
+  about_details: Record<string, unknown> | null;
+  business_details: Record<string, unknown> | null;
+  cover_photo_url: string | null;
+  avatar_url: string | null;
+};
+
+type ProjectRow = {
+  designer_id: string;
+  title: string;
+  project_type: string | null;
+  tags: string[] | null;
+  budget_level: string | null;
+  cover_image_url: string | null;
+  created_at: string;
+};
+
+type ReviewAggRow = {
+  designer_id: string;
+  rating: number;
+};
+
+type ConversationRow = {
+  id: string;
+  homeowner_id: string;
+  designer_id: string;
+};
+
+type MessageRow = {
+  conversation_id: string;
+  sender_id: string;
+  created_at: string;
+};
+
+function budgetLabel(value: string | null) {
+  if (value === "low") return "₺";
+  if (value === "medium") return "₺₺";
+  if (value === "high") return "₺₺₺";
+  if (value === "pro") return "Pro";
+  return "";
+}
+
+function formatResponseFromMinutes(avgMinutes: number | null) {
+  if (!avgMinutes || Number.isNaN(avgMinutes) || avgMinutes <= 0) return "24 saat içinde dönüş";
+  if (avgMinutes < 60) return `${Math.max(1, Math.round(avgMinutes))} dk içinde dönüş`;
+  if (avgMinutes < 60 * 24) return `${Math.max(1, Math.round(avgMinutes / 60))} saat içinde dönüş`;
+  return `${Math.max(1, Math.round(avgMinutes / (60 * 24)))} gün içinde dönüş`;
+}
+
+async function loadSupabaseDesigners(): Promise<Designer[]> {
+  try {
+    const admin = getSupabaseAdminClient();
+    const { data: profiles, error: profilesError } = await admin
+      .from("profiles")
+      .select("id, full_name, business_name, specialty, city, contact_email, tags, starting_from, about_details, business_details, cover_photo_url, avatar_url")
+      .in("role", ["designer", "designer_pending"])
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (profilesError || !profiles) return [];
+    const validProfiles = profiles as ProfileRow[];
+    if (!validProfiles.length) return [];
+    const slugById = buildUniqueDesignerSlugs(validProfiles, FEATURED_DESIGNERS.map((d) => d.slug));
+
+    const ids = validProfiles.map((p) => p.id);
+    const { data: projects, error: projectsError } = await admin
+      .from("designer_projects")
+      .select("designer_id, title, project_type, tags, budget_level, cover_image_url, created_at")
+      .in("designer_id", ids)
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
+
+    const projectRows = !projectsError && projects ? (projects as ProjectRow[]) : [];
+
+    const { data: reviews } = await admin
+      .from("designer_reviews")
+      .select("designer_id, rating")
+      .in("designer_id", ids);
+
+    const reviewStats = new Map<string, { count: number; total: number }>();
+    for (const row of ((reviews ?? []) as ReviewAggRow[])) {
+      const prev = reviewStats.get(row.designer_id) ?? { count: 0, total: 0 };
+      prev.count += 1;
+      prev.total += Number(row.rating || 0);
+      reviewStats.set(row.designer_id, prev);
+    }
+
+    const { data: conversations } = await admin
+      .from("conversations")
+      .select("id, homeowner_id, designer_id")
+      .in("designer_id", ids);
+
+    const avgResponseByDesigner = new Map<string, number>();
+    if (conversations && conversations.length) {
+      const convRows = conversations as ConversationRow[];
+      const conversationIds = convRows.map((c) => c.id);
+      const convById = new Map(convRows.map((c) => [c.id, c]));
+
+      const { data: messages } = await admin
+        .from("messages")
+        .select("conversation_id, sender_id, created_at")
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: true });
+
+      if (messages && messages.length) {
+        const msgByConversation = new Map<string, MessageRow[]>();
+        for (const msg of messages as MessageRow[]) {
+          if (!msgByConversation.has(msg.conversation_id)) msgByConversation.set(msg.conversation_id, []);
+          msgByConversation.get(msg.conversation_id)?.push(msg);
+        }
+
+        const sums = new Map<string, { totalMin: number; count: number }>();
+        for (const [conversationId, rows] of msgByConversation) {
+          const conversation = convById.get(conversationId);
+          if (!conversation) continue;
+
+          let pendingHomeownerAt: number | null = null;
+          for (const row of rows) {
+            const ts = Date.parse(row.created_at);
+            if (Number.isNaN(ts)) continue;
+
+            if (row.sender_id === conversation.homeowner_id) {
+              pendingHomeownerAt = ts;
+              continue;
+            }
+            if (row.sender_id === conversation.designer_id && pendingHomeownerAt) {
+              const diffMin = (ts - pendingHomeownerAt) / (1000 * 60);
+              if (diffMin > 0) {
+                const prev = sums.get(conversation.designer_id) ?? { totalMin: 0, count: 0 };
+                prev.totalMin += diffMin;
+                prev.count += 1;
+                sums.set(conversation.designer_id, prev);
+              }
+              pendingHomeownerAt = null;
+            }
+          }
+        }
+
+        for (const [designerId, { totalMin, count }] of sums.entries()) {
+          avgResponseByDesigner.set(designerId, count > 0 ? totalMin / count : 0);
+        }
+      }
+    }
+
+    const grouped = new Map<string, ProjectRow[]>();
+    for (const row of projectRows) {
+      if (!grouped.has(row.designer_id)) grouped.set(row.designer_id, []);
+      grouped.get(row.designer_id)?.push(row);
+    }
+
+    const dynamicDesigners: Designer[] = [];
+    for (const profile of validProfiles) {
+      const list = grouped.get(profile.id) ?? [];
+      const latest = list[0] ?? null;
+      const aboutDetails = (profile.about_details ?? {}) as Record<string, unknown>;
+      const profileProjectTypes = Array.isArray(aboutDetails.projectTypes)
+        ? (aboutDetails.projectTypes as string[]).map((x) => x.trim()).filter(Boolean)
+        : [];
+      const uniqTypes = Array.from(
+        new Set([...list.map((x) => x.project_type).filter(Boolean), ...profileProjectTypes])
+      ).slice(0, 3) as string[];
+      const profileServices = Array.isArray(aboutDetails.services)
+        ? (aboutDetails.services as string[]).map((x) => x.trim()).filter(Boolean)
+        : [];
+      const projectTags = list.flatMap((x) => x.tags ?? []);
+      const profileTags = profile.tags ?? [];
+      const uniqTags = Array.from(new Set([...profileTags, ...projectTags])).slice(0, 4);
+      const stats = reviewStats.get(profile.id);
+      const rating = stats?.count ? Number((stats.total / stats.count).toFixed(1)) : 0;
+      const reviewCount = stats?.count ?? 0;
+
+      const displayName = profile.full_name?.trim() || profile.business_name?.trim() || "Profesyonel";
+      dynamicDesigners.push({
+        slug: slugById.get(profile.id) || `mimar${dynamicDesigners.length + 1}`,
+        liveDesignerId: profile.id,
+        name: displayName,
+        title: profile.specialty?.trim() || "İç Mimar",
+        city: profile.city?.trim() || "Türkiye",
+        rating,
+        reviews: reviewCount,
+        verified: true,
+        pinnedReview: (aboutDetails.bio as string | undefined) || "Evlumba profesyoneli",
+        pinnedBy: profile.full_name?.trim() || "Evlumba",
+        tags: uniqTags.length ? uniqTags : ["Yeni Profesyonel"],
+        coverUrl: (profile.cover_photo_url ?? "").trim(),
+        response: formatResponseFromMinutes(avgResponseByDesigner.get(profile.id) ?? null),
+        startingFrom: profile.starting_from || budgetLabel(latest?.budget_level ?? null),
+        portfolioCount: list.length,
+        projectTypes: uniqTypes,
+        services: profileServices.length ? profileServices : profile.specialty ? [profile.specialty] : [],
+        avatarUrl: profile.avatar_url || undefined,
+        about: {
+          headline: (aboutDetails.headline as string | undefined) || undefined,
+          bio: (aboutDetails.bio as string | undefined) || undefined,
+          specialties: (aboutDetails.specialties as string[] | undefined) || undefined,
+          serviceAreas: (aboutDetails.serviceAreas as string[] | undefined) || undefined,
+          languages: (aboutDetails.languages as string[] | undefined) || undefined,
+          teamSize: (aboutDetails.teamSize as string | undefined) || undefined,
+          availability: (aboutDetails.availability as string | undefined) || undefined,
+        },
+      });
+    }
+
+    return dynamicDesigners;
+  } catch {
+    return [];
+  }
+}
+
 export default async function DesignersPage({
   searchParams,
 }: {
-  searchParams?: SP | Promise<SP>;
+  searchParams?: Promise<SP>;
 }) {
-  const sp = searchParams ? await Promise.resolve(searchParams) : undefined;
+  const sp = searchParams ? await searchParams : undefined;
+  const supabaseDesigners = await loadSupabaseDesigners();
+  const designers = [...supabaseDesigners, ...FEATURED_DESIGNERS];
 
   return (
     <main className="min-h-screen pt-28 md:pt-32">
@@ -202,7 +426,7 @@ export default async function DesignersPage({
 
       <section id="liste" className="px-4 pb-16">
         <div className="mx-auto w-full max-w-6xl">
-          <DesignersResultsClient designers={FEATURED_DESIGNERS} />
+          <DesignersResultsClient designers={designers} />
         </div>
       </section>
     </main>

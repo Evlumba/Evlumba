@@ -4,17 +4,12 @@ import SaveProjectQuick from "../SaveProjectQuick";
 
 type Params = { id: string; pid: string };
 
-function isPromise<T>(v: any): v is Promise<T> {
-  return v && typeof v === "object" && typeof v.then === "function";
-}
-
 export default async function DesignerProjectPage({
   params,
 }: {
-  params: Params | Promise<Params>;
+  params: Promise<Params>;
 }) {
-  // ✅ Next.js 16: params bazen Promise geliyor
-  const resolved = isPromise<Params>(params) ? await params : params;
+  const resolved = await params;
   const id = resolved.id;
   const pid = resolved.pid;
 

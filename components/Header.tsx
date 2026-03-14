@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { getSession, logout } from "../lib/storage";
 import { toast } from "../lib/toast";
 
@@ -25,12 +25,8 @@ function NavLink({ href, label }: { href: string; label: string }) {
 export default function Header() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState(() => getSession() || null);
   const [q, setQ] = useState("");
-
-  useEffect(() => {
-    setSession(getSession?.() || null);
-  }, []);
 
   const isLoggedIn = !!session;
 

@@ -5,12 +5,12 @@ function s(v: any) {
   return v == null ? "" : String(v);
 }
 
-export default function DesignerProjectsPage({
+export default async function DesignerProjectsPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { id } = params;
+  const { id } = await params;
 
   const anyData: any = data;
   const designers: any[] = Array.isArray(anyData.designers) ? anyData.designers : [];
