@@ -365,20 +365,18 @@ function ProfilePageContent() {
         <aside className="rounded-3xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between gap-2">
             <h1 className="text-base font-bold text-slate-900">Profil Ayarları</h1>
-            <button
-              type="button"
-              onClick={() => {
-                if (isProfessional && userId) {
+            {isProfessional ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!userId) return;
                   router.push(`/tasarimcilar/supa_${userId}`);
-                  return;
-                }
-                setActiveTab("professional");
-                toast("Görüntülemek için önce profesyonel hesaba geç.");
-              }}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Görüntüle
-            </button>
+                }}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Görüntüle
+              </button>
+            ) : null}
           </div>
           <div className="mt-4 space-y-1">
             {visibleTabs.map((tab) => (
