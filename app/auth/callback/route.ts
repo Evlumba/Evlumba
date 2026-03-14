@@ -14,9 +14,9 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get("code");
   const rawRole = requestUrl.searchParams.get("role");
   const flow = requestUrl.searchParams.get("flow");
+  const nextPath = requestUrl.searchParams.get("next");
 
   const roleFromQuery: Role | null = isRole(rawRole) ? rawRole : null;
-  const targetPath = "/";
   const errorPath = flow === "signup" ? "/kayit" : "/giris";
 
   const supabase = await getSupabaseServerClient();
@@ -109,7 +109,15 @@ export async function GET(request: Request) {
   }
 
   if (flow === "signup") {
-    return NextResponse.redirect(new URL(targetPath, requestUrl.origin));
+    const signupCompleteUrl = new URL("/kayit", requestUrl.origin);
+    signupCompleteUrl.searchParams.set("oauth", "1");
+    if (roleFromQuery) {
+      signupCompleteUrl.searchParams.set("role", roleFromQuery);
+    }
+    if (nextPath) {
+      signupCompleteUrl.searchParams.set("next", nextPath);
+    }
+    return NextResponse.redirect(signupCompleteUrl);
   }
 
   const completionPath = "/giris";

@@ -148,8 +148,8 @@ export default function AuthLoginView({
   const afterGoogleLogin = useCallback((successMessage: string) => {
     consumeIntendedAction();
     toast(successMessage);
-    router.push("/");
-  }, [router]);
+    router.push(nextPath || "/");
+  }, [nextPath, router]);
 
   const syncSessionWithRetry = useCallback(
     async (
