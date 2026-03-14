@@ -103,7 +103,7 @@ export default function ProfileHeader({ designer }: { designer: Designer }) {
             </div>
           </div>
 
-          {/* identity card overlaps cover (LinkedIn/Houzz vibe) */}
+          {/* identity card overlaps cover */}
           <div className="relative -mt-14 md:-mt-16 px-4 pb-5 md:pb-6">
             <div className="rounded-[28px] p-5 md:p-6" style={glass}>
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

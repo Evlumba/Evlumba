@@ -38,6 +38,16 @@ type ProjectRow = {
     image_url: string;
     sort_order: number | null;
   }>;
+  designer_project_shop_links?: Array<{
+    id: string;
+    image_url: string;
+    pos_x: number | null;
+    pos_y: number | null;
+    product_url: string;
+    product_title: string | null;
+    product_image_url: string | null;
+    product_price: string | null;
+  }>;
 };
 
 type ReviewRow = {
@@ -67,6 +77,15 @@ function budgetLabel(value: string | null) {
   if (value === "high") return "₺₺₺";
   if (value === "pro") return "Pro";
   return "";
+}
+
+function isMissingShopLinksTableError(message?: string | null) {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("designer_project_shop_links") &&
+    (normalized.includes("schema cache") || normalized.includes("could not find the table"))
+  );
 }
 
 function formatResponseFromMinutes(avgMinutes: number | null) {
@@ -180,14 +199,30 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
 
   if (profileError || !profile) return null;
 
-  const { data: projects } = await admin
+  const projectsWithShopLinks = await admin
     .from("designer_projects")
-    .select("id, title, project_type, location, description, tags, budget_level, cover_image_url, created_at, designer_project_images(image_url, sort_order)")
+    .select(
+      "id, title, project_type, location, description, tags, budget_level, cover_image_url, created_at, designer_project_images(image_url, sort_order), designer_project_shop_links(id, image_url, pos_x, pos_y, product_url, product_title, product_image_url, product_price)"
+    )
     .eq("designer_id", designerId)
     .eq("is_published", true)
     .order("created_at", { ascending: false });
 
-  const projectRows = (projects ?? []) as ProjectRow[];
+  let projectRows = (projectsWithShopLinks.data ?? []) as ProjectRow[];
+  if (projectsWithShopLinks.error && isMissingShopLinksTableError(projectsWithShopLinks.error.message)) {
+    const projectsWithoutShopLinks = await admin
+      .from("designer_projects")
+      .select(
+        "id, title, project_type, location, description, tags, budget_level, cover_image_url, created_at, designer_project_images(image_url, sort_order)"
+      )
+      .eq("designer_id", designerId)
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
+    projectRows = (projectsWithoutShopLinks.data ?? []).map((item) => ({
+      ...(item as ProjectRow),
+      designer_project_shop_links: [],
+    })) as ProjectRow[];
+  }
   const projectById = new Map(projectRows.map((p) => [p.id, p]));
 
   const { data: reviewRows } = await admin
@@ -217,6 +252,18 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
       .map((img) => (img.image_url ?? "").trim())
       .filter(Boolean);
+    const shopLinks = (project.designer_project_shop_links ?? [])
+      .map((item) => ({
+        id: item.id,
+        imageUrl: (item.image_url ?? "").trim(),
+        x: Number(item.pos_x ?? 50),
+        y: Number(item.pos_y ?? 50),
+        productUrl: (item.product_url ?? "").trim(),
+        productTitle: (item.product_title ?? "").trim(),
+        productImageUrl: (item.product_image_url ?? "").trim(),
+        productPrice: (item.product_price ?? "").trim(),
+      }))
+      .filter((item) => item.imageUrl && item.productUrl);
 
     const fallbackCover = (project.cover_image_url ?? "").trim();
     const cover = sortedImages[0] || fallbackCover;
@@ -232,6 +279,7 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
       tags: project.tags ?? undefined,
       budget: budgetLabel(project.budget_level),
       images: sortedImages.length > 0 ? sortedImages : cover ? [cover] : [],
+      shopLinks,
     };
   });
 

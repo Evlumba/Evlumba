@@ -17,7 +17,19 @@ export type DesignerProject = {
   isPublished: boolean;
   coverImageUrl: string;
   imageUrls: string[];
+  shopLinks: ProjectShopLink[];
   createdAt: string;
+};
+
+export type ProjectShopLink = {
+  id: string;
+  imageUrl: string;
+  x: number;
+  y: number;
+  productUrl: string;
+  productTitle: string;
+  productImageUrl: string;
+  productPrice: string;
 };
 
 type ProjectRow = {
@@ -41,10 +53,31 @@ type ProjectImageRow = {
   sort_order: number | null;
 };
 
+type ProjectShopLinkRow = {
+  id: string;
+  project_id: string;
+  image_url: string;
+  pos_x: number | null;
+  pos_y: number | null;
+  product_url: string;
+  product_title: string | null;
+  product_image_url: string | null;
+  product_price: string | null;
+};
+
 function isMissingIsPublishedError(message?: string | null) {
   if (!message) return false;
   const normalized = message.toLowerCase();
   return normalized.includes("is_published") && normalized.includes("schema cache");
+}
+
+function isMissingShopLinksTableError(message?: string | null) {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("designer_project_shop_links") &&
+    (normalized.includes("schema cache") || normalized.includes("could not find the table"))
+  );
 }
 
 export type NewDesignerProjectInput = {
@@ -57,6 +90,17 @@ export type NewDesignerProjectInput = {
   budgetLevel?: "low" | "medium" | "high" | "pro" | "";
   coverImageUrl?: string;
   galleryUrls?: string[];
+  shopLinks?: DesignerProjectShopLinkInput[];
+};
+
+export type DesignerProjectShopLinkInput = {
+  imageUrl: string;
+  x: number;
+  y: number;
+  productUrl: string;
+  productTitle?: string;
+  productImageUrl?: string;
+  productPrice?: string;
 };
 
 export type UpdateDesignerProjectInput = NewDesignerProjectInput & {
@@ -74,16 +118,40 @@ function cleanProjectInput(input: NewDesignerProjectInput) {
   const cleanedPalette = Array.from(
     new Set((input.colorPalette ?? []).map((x) => x.trim()).filter(Boolean))
   );
+  const cleanedShopLinks = Array.from(
+    new Map(
+      (input.shopLinks ?? [])
+        .map((item) => {
+          const imageUrl = item.imageUrl.trim();
+          const productUrl = item.productUrl.trim();
+          if (!imageUrl || !productUrl) return null;
+          const x = Number.isFinite(item.x) ? Math.min(100, Math.max(0, item.x)) : 50;
+          const y = Number.isFinite(item.y) ? Math.min(100, Math.max(0, item.y)) : 50;
+          return {
+            imageUrl,
+            productUrl,
+            x,
+            y,
+            productTitle: (item.productTitle ?? "").trim(),
+            productImageUrl: (item.productImageUrl ?? "").trim(),
+            productPrice: (item.productPrice ?? "").trim(),
+          };
+        })
+        .filter(Boolean)
+        .map((item) => [`${item!.imageUrl}|${item!.x}|${item!.y}|${item!.productUrl}`, item!])
+    ).values()
+  );
 
   return {
     title,
     cleanedGallery,
     cleanedTags,
     cleanedPalette,
+    cleanedShopLinks,
   };
 }
 
-function mapProject(row: ProjectRow, images: string[]): DesignerProject {
+function mapProject(row: ProjectRow, images: string[], shopLinks: ProjectShopLink[]): DesignerProject {
   const normalizedImages = images.map((item) => item.trim()).filter(Boolean);
   const normalizedCover = (row.cover_image_url ?? "").trim();
   const effectiveCover = normalizedImages[0] || normalizedCover;
@@ -108,6 +176,7 @@ function mapProject(row: ProjectRow, images: string[]): DesignerProject {
     isPublished: row.is_published === true,
     coverImageUrl: effectiveCover,
     imageUrls: normalizedImages.length > 0 ? normalizedImages : effectiveCover ? [effectiveCover] : [],
+    shopLinks,
     createdAt: row.created_at,
   };
 }
@@ -156,6 +225,44 @@ async function loadProjectImages(projectIds: string[]) {
   return result;
 }
 
+async function loadProjectShopLinks(projectIds: string[]) {
+  if (projectIds.length === 0) return new Map<string, ProjectShopLink[]>();
+
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("designer_project_shop_links")
+    .select(
+      "id, project_id, image_url, pos_x, pos_y, product_url, product_title, product_image_url, product_price"
+    )
+    .in("project_id", projectIds);
+
+  if (error) {
+    if (isMissingShopLinksTableError(error.message)) {
+      return new Map<string, ProjectShopLink[]>();
+    }
+    throw new Error(`Shopable linkler okunamadı: ${error.message}`);
+  }
+  if (!data) return new Map<string, ProjectShopLink[]>();
+
+  const grouped = new Map<string, ProjectShopLink[]>();
+  for (const row of data as ProjectShopLinkRow[]) {
+    const current = grouped.get(row.project_id) ?? [];
+    current.push({
+      id: row.id,
+      imageUrl: (row.image_url ?? "").trim(),
+      x: Number(row.pos_x ?? 50),
+      y: Number(row.pos_y ?? 50),
+      productUrl: (row.product_url ?? "").trim(),
+      productTitle: (row.product_title ?? "").trim(),
+      productImageUrl: (row.product_image_url ?? "").trim(),
+      productPrice: (row.product_price ?? "").trim(),
+    });
+    grouped.set(row.project_id, current);
+  }
+
+  return grouped;
+}
+
 async function verifyProjectImages(projectId: string, expectedCount: number) {
   if (expectedCount <= 0) return;
 
@@ -190,7 +297,10 @@ export async function listMyDesignerProjects() {
   if (!error && data) {
     const rows = data as ProjectRow[];
     const imagesByProject = await loadProjectImages(rows.map((row) => row.id));
-    return rows.map((row) => mapProject(row, imagesByProject.get(row.id) ?? []));
+    const shopLinksByProject = await loadProjectShopLinks(rows.map((row) => row.id));
+    return rows.map((row) =>
+      mapProject(row, imagesByProject.get(row.id) ?? [], shopLinksByProject.get(row.id) ?? [])
+    );
   }
 
   if (isMissingIsPublishedError(error?.message)) {
@@ -205,7 +315,10 @@ export async function listMyDesignerProjects() {
     if (fallbackError || !fallbackData) return [];
     const rows = (fallbackData as ProjectRow[]).map((row) => ({ ...row, is_published: false }));
     const imagesByProject = await loadProjectImages(rows.map((row) => row.id));
-    return rows.map((row) => mapProject(row, imagesByProject.get(row.id) ?? []));
+    const shopLinksByProject = await loadProjectShopLinks(rows.map((row) => row.id));
+    return rows.map((row) =>
+      mapProject(row, imagesByProject.get(row.id) ?? [], shopLinksByProject.get(row.id) ?? [])
+    );
   }
 
   return [];
@@ -217,7 +330,7 @@ export async function createDesignerProject(input: NewDesignerProjectInput) {
     throw new Error("Proje eklemek için giriş yapmalısın.");
   }
 
-  const { title, cleanedGallery, cleanedTags, cleanedPalette } = cleanProjectInput(input);
+  const { title, cleanedGallery, cleanedTags, cleanedPalette, cleanedShopLinks } = cleanProjectInput(input);
 
   const supabase = getSupabaseBrowserClient();
   let { data: created, error: createError } = await supabase
@@ -277,6 +390,31 @@ export async function createDesignerProject(input: NewDesignerProjectInput) {
     await verifyProjectImages(created.id, cleanedGallery.length);
   }
 
+  if (cleanedShopLinks.length) {
+    const { error: shopLinksError } = await supabase.from("designer_project_shop_links").insert(
+      cleanedShopLinks.map((item) => ({
+        project_id: created.id,
+        image_url: item.imageUrl,
+        pos_x: item.x,
+        pos_y: item.y,
+        product_url: item.productUrl,
+        product_title: item.productTitle || null,
+        product_image_url: item.productImageUrl || null,
+        product_price: item.productPrice || null,
+      }))
+    );
+
+    if (shopLinksError) {
+      if (isMissingShopLinksTableError(shopLinksError.message)) {
+        const projects = await listMyDesignerProjects();
+        const createdProject = projects.find((p) => p.id === created.id);
+        if (!createdProject) throw new Error("Proje eklendi ancak listelenemedi.");
+        return createdProject;
+      }
+      throw new Error(`Shopable linkler kaydedilemedi: ${shopLinksError.message}`);
+    }
+  }
+
   const projects = await listMyDesignerProjects();
   const createdProject = projects.find((p) => p.id === created.id);
   if (!createdProject) throw new Error("Proje eklendi ancak listelenemedi.");
@@ -289,7 +427,7 @@ export async function updateDesignerProject(input: UpdateDesignerProjectInput) {
     throw new Error("Proje düzenlemek için giriş yapmalısın.");
   }
 
-  const { title, cleanedGallery, cleanedTags, cleanedPalette } = cleanProjectInput(input);
+  const { title, cleanedGallery, cleanedTags, cleanedPalette, cleanedShopLinks } = cleanProjectInput(input);
   const supabase = getSupabaseBrowserClient();
 
   let { error: updateError } = await supabase
@@ -337,6 +475,14 @@ export async function updateDesignerProject(input: UpdateDesignerProjectInput) {
     .eq("project_id", input.id);
   if (deleteImagesError) throw new Error(deleteImagesError.message);
 
+  const { error: deleteShopLinksError } = await supabase
+    .from("designer_project_shop_links")
+    .delete()
+    .eq("project_id", input.id);
+  if (deleteShopLinksError && !isMissingShopLinksTableError(deleteShopLinksError.message)) {
+    throw new Error(deleteShopLinksError.message);
+  }
+
   if (cleanedGallery.length) {
     const { error: insertImagesError } = await supabase.from("designer_project_images").insert(
       cleanedGallery.map((url, index) => ({
@@ -349,6 +495,30 @@ export async function updateDesignerProject(input: UpdateDesignerProjectInput) {
       throw new Error(`Galeri görselleri güncellenemedi: ${insertImagesError.message}`);
     }
     await verifyProjectImages(input.id, cleanedGallery.length);
+  }
+
+  if (cleanedShopLinks.length) {
+    const { error: insertShopLinksError } = await supabase.from("designer_project_shop_links").insert(
+      cleanedShopLinks.map((item) => ({
+        project_id: input.id,
+        image_url: item.imageUrl,
+        pos_x: item.x,
+        pos_y: item.y,
+        product_url: item.productUrl,
+        product_title: item.productTitle || null,
+        product_image_url: item.productImageUrl || null,
+        product_price: item.productPrice || null,
+      }))
+    );
+    if (insertShopLinksError) {
+      if (isMissingShopLinksTableError(insertShopLinksError.message)) {
+        const projects = await listMyDesignerProjects();
+        const updatedProject = projects.find((p) => p.id === input.id);
+        if (!updatedProject) throw new Error("Proje güncellendi ancak listelenemedi.");
+        return updatedProject;
+      }
+      throw new Error(`Shopable linkler güncellenemedi: ${insertShopLinksError.message}`);
+    }
   }
 
   const projects = await listMyDesignerProjects();

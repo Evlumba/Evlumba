@@ -91,7 +91,7 @@ export default function DesignerHero() {
   );
 }
 
-/** Houzz vibe: editorial grid, NO overlap, NO broken image */
+/** Editorial grid, NO overlap, NO broken image */
 function CollageGrid() {
   return (
     <div

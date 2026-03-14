@@ -195,14 +195,6 @@ function IconLinkedIn({ className }: { className?: string }) {
   );
 }
 
-function IconHouzz({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M12.504 0v6.984l-5.992 3.408v6.96h5.992v-6.96l6.016-3.432V.024z" />
-    </svg>
-  );
-}
-
 function InfoRow({
   icon,
   label,
@@ -450,17 +442,6 @@ export default function BusinessSection({ designer }: { designer: Designer }) {
                           title="LinkedIn"
                         >
                           <IconLinkedIn className="h-4 w-4" />
-                        </a>
-                      )}
-                      {socials.houzz && (
-                        <a
-                          href={`https://houzz.com/pro/${socials.houzz}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-50 text-gray-500 transition-all hover:bg-emerald-50 hover:text-emerald-600"
-                          title="Houzz"
-                        >
-                          <IconHouzz className="h-4 w-4" />
                         </a>
                       )}
                     </div>

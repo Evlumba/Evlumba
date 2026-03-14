@@ -296,6 +296,22 @@ create table if not exists public.designer_project_images (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.designer_project_shop_links (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.designer_projects(id) on delete cascade,
+  image_url text not null,
+  pos_x numeric(5,2) not null check (pos_x >= 0 and pos_x <= 100),
+  pos_y numeric(5,2) not null check (pos_y >= 0 and pos_y <= 100),
+  product_url text not null,
+  product_title text,
+  product_image_url text,
+  product_price text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists designer_project_shop_links_project_idx
+on public.designer_project_shop_links (project_id);
+
 create table if not exists public.designer_reviews (
   id uuid primary key default gen_random_uuid(),
   designer_id uuid not null references auth.users(id) on delete cascade,
@@ -381,6 +397,7 @@ alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 alter table public.designer_projects enable row level security;
 alter table public.designer_project_images enable row level security;
+alter table public.designer_project_shop_links enable row level security;
 alter table public.designer_reviews enable row level security;
 alter table public.saved_designers enable row level security;
 
@@ -395,6 +412,7 @@ drop policy if exists "messages: participant can read" on public.messages;
 drop policy if exists "messages: participant can insert" on public.messages;
 drop policy if exists "designer_projects: owner full access" on public.designer_projects;
 drop policy if exists "designer_project_images: owner full access" on public.designer_project_images;
+drop policy if exists "designer_project_shop_links: owner full access" on public.designer_project_shop_links;
 drop policy if exists "designer_reviews: homeowners can insert" on public.designer_reviews;
 drop policy if exists "designer_reviews: public read" on public.designer_reviews;
 drop policy if exists "designer_reviews: designer can reply pin" on public.designer_reviews;
@@ -499,6 +517,26 @@ with check (auth.uid() = designer_id);
 
 create policy "designer_project_images: owner full access"
 on public.designer_project_images for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.designer_projects p
+    where p.id = project_id
+      and p.designer_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.designer_projects p
+    where p.id = project_id
+      and p.designer_id = auth.uid()
+  )
+);
+
+create policy "designer_project_shop_links: owner full access"
+on public.designer_project_shop_links for all
 to authenticated
 using (
   exists (

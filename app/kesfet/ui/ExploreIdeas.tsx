@@ -526,7 +526,7 @@ export default function ExploreIdeas() {
         )}
       </div>
 
-      {/* Filter bar (houzz mantığı ama temiz) */}
+      {/* Filter bar (kart tabanlı ama temiz) */}
       <div className="mt-6 sticky top-2 lg:top-26 z-40">
         <div className="rounded-3xl border border-black/5 bg-white/60 backdrop-blur-xl shadow-[0_24px_80px_-70px_rgba(0,0,0,0.45)]">
           <div className="flex flex-col gap-3 p-3.5 md:flex-row md:items-center">

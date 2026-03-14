@@ -90,7 +90,7 @@ export default function ProfileSectionNav() {
   () => [
     { key: "award", label: "Ödüllü Tasarımcı", icon: "trophy" as const },
     { key: "custom", label: "Özel İş Alır", icon: "hammer" as const },
-    { key: "best", label: "15x Houzz Best", icon: "sparkle" as const },
+    { key: "best", label: "15x Editör Seçimi", icon: "sparkle" as const },
   ],
   []
 );
@@ -139,7 +139,7 @@ export default function ProfileSectionNav() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 mt-6">
-      {/* Houzz vari: ince çizgi + aktif sekmede underline */}
+      {/* İnce çizgi + aktif sekmede underline */}
       <div className="rounded-2xl border border-black/5 bg-white/70 px-3 py-2 shadow-sm backdrop-blur">
         <div className="flex items-center gap-2 overflow-x-auto">
           {tabs.map((t) => {

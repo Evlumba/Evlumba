@@ -18,6 +18,16 @@ export type PortfolioItem = {
   colors?: string[];
   beforeAfter?: { before: string; after: string }[];
   tags?: string[];
+  shopLinks?: Array<{
+    id: string;
+    imageUrl: string;
+    x: number;
+    y: number;
+    productUrl: string;
+    productTitle?: string;
+    productImageUrl?: string;
+    productPrice?: string;
+  }>;
 };
 
 export type ReviewItem = {
@@ -30,7 +40,7 @@ export type ReviewItem = {
   date: string; // "2025-11" gibi
   text: string;
   project?: string;
-  // Detaylı puanlama (Houzz tarzı)
+  // Detaylı puanlama
   ratings?: {
     workQuality?: number; // İş Kalitesi
     communication?: number; // İletişim
@@ -114,7 +124,6 @@ export type Designer = {
       linkedin?: string;
       twitter?: string;
       youtube?: string;
-      houzz?: string;
     };
     workingHours?: {
       weekdays?: string;
@@ -474,7 +483,6 @@ export const FEATURED_DESIGNERS: Designer[] = [
         instagram: "studioarc.tr",
         pinterest: "studioarcdesign",
         linkedin: "studio-arc-istanbul",
-        houzz: "studio-arc",
       },
       workingHours: {
         weekdays: "09:00 - 18:00",

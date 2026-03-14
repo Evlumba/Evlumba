@@ -505,7 +505,7 @@ export default function KesfetClient({
             </button>
           </form>
 
-          {/* basic filters (houzz mantığı ama sade) */}
+          {/* basic filters (kart tabanlı, sade) */}
           <div className="mt-4 flex flex-wrap gap-2">
             <PillButton onClick={() => setParam({ room: "all" })} active={room === "all"}>
               Oda: <span className="text-slate-600">{room === "all" ? "Tümü" : room}</span>

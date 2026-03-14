@@ -41,7 +41,7 @@ function hasAnyFilter(f: Filters) {
   );
 }
 
-/** -------------------- URL helpers (Houzz-style) -------------------- **/
+/** -------------------- URL helpers (project-style) -------------------- **/
 function slugifyTR(input: string) {
   const map: Record<string, string> = {
     ğ: "g",

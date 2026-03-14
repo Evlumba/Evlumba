@@ -181,7 +181,7 @@ export default function ProMatchHero() {
                 />
               </div>
 
-              {/* Room chips row (Houzz "project type" hissi ama Evlumba dili) */}
+              {/* Room chips row (project type hissi, Evlumba dili) */}
               <div className="mt-6 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {rooms.map((r) => (
                   <Pill

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "@/lib/toast";
 import type { Designer, PortfolioItem } from "../../../../_data/designers";
@@ -22,6 +22,27 @@ function sanitizeImageList(values: unknown) {
     if (src) clean.push(src);
   }
   return clean;
+}
+
+function normalizeUrlForMatch(value: string | null | undefined) {
+  return (value ?? "").trim();
+}
+
+function hostFromUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function toShopTitle(item: NonNullable<PortfolioItem["shopLinks"]>[number], index: number) {
+  const title = (item.productTitle ?? "").trim();
+  if (title) return title;
+  const host = hostFromUrl(item.productUrl);
+  if (host) return host;
+  return `Ürün ${index + 1}`;
 }
 
 async function ensureDefaultCollectionId(userId: string) {
@@ -223,6 +244,18 @@ export default function ProjectDetailClient({
   const normalizedSelectedIndex =
     images.length > 0 ? ((selectedIndex % images.length) + images.length) % images.length : 0;
   const selectedImageSrc = toValidImageSrc(images[normalizedSelectedIndex]);
+  const projectShopLinks = useMemo(
+    () =>
+      (project.shopLinks ?? []).filter(
+        (item) => normalizeUrlForMatch(item.imageUrl) && normalizeUrlForMatch(item.productUrl)
+      ),
+    [project.shopLinks]
+  );
+  const activeImageShopLinks = useMemo(() => {
+    const selected = normalizeUrlForMatch(selectedImageSrc);
+    if (!selected) return [];
+    return projectShopLinks.filter((item) => normalizeUrlForMatch(item.imageUrl) === selected);
+  }, [projectShopLinks, selectedImageSrc]);
   const goBackOrFallback = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
@@ -422,22 +455,62 @@ export default function ProjectDetailClient({
           <div style={{ flex: "1 1 580px", minWidth: "300px" }}>
             {/* Ana Fotoğraf - Çerçevesiz */}
             <div
-              className="relative overflow-hidden rounded-2xl shadow-2xl shadow-black/15"
+              className="relative rounded-2xl shadow-2xl shadow-black/15"
               style={{ height: "420px" }}
             >
-              {selectedImageSrc ? (
-                <Image
-                  src={selectedImageSrc}
-                  alt={project.title}
-                  fill
-                  className="object-cover"
-                  priority
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-slate-100 text-sm text-slate-400">
-                  Proje görseli yok
-                </div>
-              )}
+              <div className="absolute inset-0 overflow-hidden rounded-2xl bg-slate-100">
+                {selectedImageSrc ? (
+                  <Image
+                    src={selectedImageSrc}
+                    alt={project.title}
+                    fill
+                    className="object-cover"
+                    priority
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-slate-100 text-sm text-slate-400">
+                    Proje görseli yok
+                  </div>
+                )}
+              </div>
+
+              {selectedImageSrc
+                ? activeImageShopLinks.map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="group absolute -translate-x-1/2 -translate-y-1/2"
+                      style={{ left: `${Math.min(100, Math.max(0, Number(item.x ?? 50)))}%`, top: `${Math.min(100, Math.max(0, Number(item.y ?? 50)))}%` }}
+                    >
+                      <a
+                        href={item.productUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-black/75 text-[11px] font-bold text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-105"
+                        title={toShopTitle(item, index)}
+                      >
+                        {index + 1}
+                      </a>
+                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 overflow-hidden rounded-xl border border-black/10 bg-white/95 shadow-xl backdrop-blur group-hover:block group-focus-within:block">
+                        {item.productImageUrl ? (
+                          <div className="h-28 w-full overflow-hidden bg-slate-100">
+                            <img
+                              src={item.productImageUrl}
+                              alt={toShopTitle(item, index)}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : null}
+                        <div className="p-2.5">
+                          <p className="line-clamp-2 text-xs font-semibold text-slate-900">{toShopTitle(item, index)}</p>
+                          <p className="mt-1 text-[11px] font-medium text-emerald-700">
+                            {(item.productPrice ?? "").trim() || "Ürüne git"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                : null}
 
               {/* Navigation buttons */}
               {images.length > 1 && (
@@ -488,6 +561,11 @@ export default function ProjectDetailClient({
                 )})}
               </div>
             )}
+            {activeImageShopLinks.length > 0 ? (
+              <p className="mt-3 text-xs font-medium text-slate-600">
+                Bu görselde {activeImageShopLinks.length} shop ürünü var. Numaralı ikona tıklayıp ürüne gidebilirsin.
+              </p>
+            ) : null}
           </div>
 
           {/* Sağ: Proje Bilgileri */}

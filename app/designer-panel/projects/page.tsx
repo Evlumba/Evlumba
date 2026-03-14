@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   createDesignerProject,
@@ -8,6 +8,7 @@ import {
   listMyDesignerProjects,
   setDesignerProjectPublished,
   updateDesignerProject,
+  type DesignerProjectShopLinkInput,
   type DesignerProject,
 } from "@/lib/designerProjects";
 import { exploreFilterOptions } from "@/lib/data";
@@ -63,6 +64,36 @@ const INITIAL_FORM: FormState = {
   coverImageUrl: "",
   galleryText: "",
 };
+
+type ShopableLinkDraft = {
+  id: string;
+  imageUrl: string;
+  x: number;
+  y: number;
+  productUrl: string;
+  productTitle: string;
+  productImageUrl: string;
+  productPrice: string;
+};
+
+function toLocalId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `shop_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
+}
+
+function normalizeShopLinkInput(input: ShopableLinkDraft): DesignerProjectShopLinkInput {
+  return {
+    imageUrl: input.imageUrl.trim(),
+    x: Number(input.x),
+    y: Number(input.y),
+    productUrl: input.productUrl.trim(),
+    productTitle: input.productTitle.trim(),
+    productImageUrl: input.productImageUrl.trim(),
+    productPrice: input.productPrice.trim(),
+  };
+}
 
 function splitCsv(value: string) {
   return value
@@ -185,6 +216,10 @@ export default function DesignerProjectsPage() {
   const [uploadedGalleryImages, setUploadedGalleryImages] = useState<string[]>([]);
   const [submitMessage, setSubmitMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [shopLinks, setShopLinks] = useState<ShopableLinkDraft[]>([]);
+  const [activeShopImage, setActiveShopImage] = useState("");
+  const [selectedShopLinkId, setSelectedShopLinkId] = useState<string | null>(null);
+  const [shopPreviewLoading, setShopPreviewLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -243,6 +278,43 @@ export default function DesignerProjectsPage() {
     () => projects.filter((project) => project.isPublished),
     [projects]
   );
+  const shopImageOptions = useMemo(() => {
+    const list = [...uploadedGalleryImages];
+    if (form.coverImageUrl.trim()) list.push(form.coverImageUrl.trim());
+    return Array.from(new Set(list.filter(Boolean)));
+  }, [uploadedGalleryImages, form.coverImageUrl]);
+
+  useEffect(() => {
+    if (shopImageOptions.length === 0) {
+      setActiveShopImage("");
+      setSelectedShopLinkId(null);
+      return;
+    }
+    if (!shopImageOptions.includes(activeShopImage)) {
+      setActiveShopImage(shopImageOptions[0]);
+      setSelectedShopLinkId(null);
+    }
+  }, [shopImageOptions, activeShopImage]);
+
+  useEffect(() => {
+    if (shopImageOptions.length === 0) {
+      setShopLinks((prev) => (prev.length > 0 ? [] : prev));
+      setSelectedShopLinkId(null);
+      return;
+    }
+    const allowed = new Set(shopImageOptions);
+    setShopLinks((prev) => {
+      const filtered = prev.filter((item) => allowed.has(item.imageUrl));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [shopImageOptions]);
+
+  useEffect(() => {
+    if (!selectedShopLinkId) return;
+    if (!shopLinks.some((item) => item.id === selectedShopLinkId)) {
+      setSelectedShopLinkId(null);
+    }
+  }, [selectedShopLinkId, shopLinks]);
 
   async function onPickCover(file: File | null) {
     if (!file) return;
@@ -284,6 +356,76 @@ export default function DesignerProjectsPage() {
     }
   }
 
+  const selectedShopLink = useMemo(
+    () => shopLinks.find((item) => item.id === selectedShopLinkId) ?? null,
+    [shopLinks, selectedShopLinkId]
+  );
+
+  function upsertShopLink(id: string, updater: (prev: ShopableLinkDraft) => ShopableLinkDraft) {
+    setShopLinks((prev) =>
+      prev.map((item) => (item.id === id ? updater(item) : item))
+    );
+  }
+
+  function onShopImageClick(event: MouseEvent<HTMLDivElement>) {
+    if (!activeShopImage) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - bounds.left) / bounds.width) * 100;
+    const y = ((event.clientY - bounds.top) / bounds.height) * 100;
+    const next: ShopableLinkDraft = {
+      id: toLocalId(),
+      imageUrl: activeShopImage,
+      x: Math.min(100, Math.max(0, Number(x.toFixed(2)))),
+      y: Math.min(100, Math.max(0, Number(y.toFixed(2)))),
+      productUrl: "",
+      productTitle: "",
+      productImageUrl: "",
+      productPrice: "",
+    };
+    setShopLinks((prev) => [...prev, next]);
+    setSelectedShopLinkId(next.id);
+  }
+
+  async function fetchShopPreview(linkId: string) {
+    const item = shopLinks.find((entry) => entry.id === linkId);
+    if (!item) return;
+    const target = item.productUrl.trim();
+    if (!target) {
+      toast("Önizleme için önce ürün linki gir.");
+      return;
+    }
+
+    setShopPreviewLoading(true);
+    try {
+      const response = await fetch(`/api/shop/preview?url=${encodeURIComponent(target)}`, {
+        cache: "no-store",
+      });
+      const result = (await response.json()) as {
+        ok: boolean;
+        title?: string;
+        image?: string;
+        price?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Ürün önizlemesi çekilemedi.");
+      }
+
+      upsertShopLink(linkId, (prev) => ({
+        ...prev,
+        productTitle: result.title?.trim() || prev.productTitle,
+        productImageUrl: result.image?.trim() || prev.productImageUrl,
+        productPrice: result.price?.trim() || prev.productPrice,
+      }));
+      toast("Ürün bilgisi çekildi.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ürün önizlemesi alınamadı.";
+      toast(message);
+    } finally {
+      setShopPreviewLoading(false);
+    }
+  }
+
   async function saveDraft() {
     setSubmitMessage(null);
     if (!form.title.trim()) {
@@ -321,6 +463,10 @@ export default function DesignerProjectsPage() {
           ...tagsWithoutRoom,
         ])
       );
+      const editingProject = editingProjectId ? projects.find((item) => item.id === editingProjectId) : null;
+      // Defensive: if update flow produces an empty tag list unexpectedly, keep existing tags.
+      const finalTags =
+        editingProjectId && mergedTags.length === 0 ? editingProject?.tags ?? [] : mergedTags;
       const mergedColorPalette = Array.from(
         new Set([
           ...splitCsv(form.colorPaletteText),
@@ -333,11 +479,14 @@ export default function DesignerProjectsPage() {
         projectType: form.projectType.trim() || (form.roomCategory ? ROOM_LABEL_BY_ID[form.roomCategory] : ""),
         location: locationValue,
         description: form.description,
-        tags: mergedTags,
+        tags: finalTags,
         colorPalette: mergedColorPalette,
         budgetLevel: form.budgetLevel,
         coverImageUrl: form.coverImageUrl,
         galleryUrls,
+        shopLinks: shopLinks
+          .filter((item) => item.imageUrl.trim() && item.productUrl.trim())
+          .map(normalizeShopLinkInput),
       };
 
       const savedProject = editingProjectId
@@ -356,6 +505,9 @@ export default function DesignerProjectsPage() {
       setProjects((prev) => [hydratedProject, ...prev.filter((x) => x.id !== hydratedProject.id)]);
       setForm(INITIAL_FORM);
       setUploadedGalleryImages([]);
+      setShopLinks([]);
+      setActiveShopImage("");
+      setSelectedShopLinkId(null);
       setEditingProjectId(null);
       const successText = editingProjectId ? "Taslak güncellendi." : "Taslak kaydedildi.";
       setSubmitMessage({ type: "success", text: successText });
@@ -378,9 +530,7 @@ export default function DesignerProjectsPage() {
     const roomCategory = inferRoomCategory(project.projectType, project.tags);
     const exploreStyle = findMatchingOption(exploreFilterOptions.styles, project.tags);
 
-    const visibleTags = project.tags.filter(
-      (tag) => !isRoomTag(tag) && normalizeText(tag) !== normalizeText(exploreStyle)
-    );
+    const visibleTags = project.tags.filter((tag) => !isRoomTag(tag));
     const visiblePalette = project.colorPalette;
 
     setEditingProjectId(project.id);
@@ -398,6 +548,20 @@ export default function DesignerProjectsPage() {
       galleryText: "",
     });
     setUploadedGalleryImages(project.imageUrls);
+    const nextShopLinks: ShopableLinkDraft[] = (project.shopLinks ?? []).map((item) => ({
+      id: item.id || toLocalId(),
+      imageUrl: item.imageUrl,
+      x: item.x,
+      y: item.y,
+      productUrl: item.productUrl,
+      productTitle: item.productTitle,
+      productImageUrl: item.productImageUrl,
+      productPrice: item.productPrice,
+    }));
+    setShopLinks(nextShopLinks);
+    const projectImagePool = [...project.imageUrls, project.coverImageUrl].filter(Boolean);
+    setActiveShopImage(projectImagePool[0] ?? "");
+    setSelectedShopLinkId(nextShopLinks[0]?.id ?? null);
     setSubmitMessage(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -406,6 +570,9 @@ export default function DesignerProjectsPage() {
     setEditingProjectId(null);
     setForm(INITIAL_FORM);
     setUploadedGalleryImages([]);
+    setShopLinks([]);
+    setActiveShopImage("");
+    setSelectedShopLinkId(null);
     setSubmitMessage(null);
   }
 
@@ -443,7 +610,7 @@ export default function DesignerProjectsPage() {
             <div>
               <h1 className="text-2xl font-bold text-slate-900">Projelerim</h1>
               <p className="mt-1 text-sm text-slate-600">
-                Houzz benzeri vitrin düzeni: projelerini görselleriyle yayınla, portföyünü büyüt.
+                Profesyonel vitrin düzeni: projelerini görselleriyle yayınla, portföyünü büyüt.
               </p>
             </div>
             <div className="rounded-xl bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">{projectCountLabel}</div>
@@ -614,6 +781,152 @@ export default function DesignerProjectsPage() {
               </div>
             </div>
 
+            {editingProjectId ? (
+              <div className="md:col-span-2 grid gap-3 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Shopable Ürün Pinleri</h3>
+                  <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-violet-700">
+                    {shopLinks.length} ürün pini
+                  </span>
+                </div>
+
+                {shopImageOptions.length === 0 ? (
+                  <p className="text-sm text-slate-600">
+                    Ürün pini eklemek için önce kapak veya galeri görseli eklemelisin.
+                  </p>
+                ) : (
+                  <>
+                    <select
+                      value={activeShopImage}
+                      onChange={(event) => {
+                        setActiveShopImage(event.target.value);
+                        setSelectedShopLinkId(null);
+                      }}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      disabled={saving}
+                    >
+                      {shopImageOptions.map((imageUrl, index) => (
+                        <option key={`${imageUrl}-${index}`} value={imageUrl}>
+                          {index + 1}. Görsel
+                        </option>
+                      ))}
+                    </select>
+
+                    <div
+                      className="relative mx-auto w-full max-w-2xl cursor-crosshair overflow-hidden rounded-2xl border border-slate-200 bg-white"
+                      onClick={onShopImageClick}
+                    >
+                      <img
+                        src={activeShopImage}
+                        alt="Shopable düzenleme"
+                        className="h-auto w-full object-cover"
+                      />
+                      {shopLinks
+                        .filter((item) => item.imageUrl === activeShopImage)
+                        .map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedShopLinkId(item.id);
+                            }}
+                            className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 px-2 py-1 text-[11px] font-bold shadow ${
+                              item.id === selectedShopLinkId
+                                ? "border-violet-700 bg-violet-700 text-white"
+                                : "border-white bg-black/75 text-white"
+                            }`}
+                            style={{ left: `${item.x}%`, top: `${item.y}%` }}
+                          >
+                            🛍
+                          </button>
+                        ))}
+                    </div>
+
+                    <p className="text-xs text-slate-500">
+                      Görselin istediğin noktasına tıklayıp ürün pini ekleyebilirsin.
+                    </p>
+
+                    {selectedShopLink ? (
+                      <div className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3">
+                        <input
+                          value={selectedShopLink.productUrl}
+                          onChange={(event) =>
+                            upsertShopLink(selectedShopLink.id, (prev) => ({
+                              ...prev,
+                              productUrl: event.target.value,
+                            }))
+                          }
+                          placeholder="Ürün linki (https://...)"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          disabled={saving}
+                        />
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <input
+                            value={selectedShopLink.productTitle}
+                            onChange={(event) =>
+                              upsertShopLink(selectedShopLink.id, (prev) => ({
+                                ...prev,
+                                productTitle: event.target.value,
+                              }))
+                            }
+                            placeholder="Ürün adı (opsiyonel)"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            disabled={saving}
+                          />
+                          <input
+                            value={selectedShopLink.productPrice}
+                            onChange={(event) =>
+                              upsertShopLink(selectedShopLink.id, (prev) => ({
+                                ...prev,
+                                productPrice: event.target.value,
+                              }))
+                            }
+                            placeholder="Fiyat (opsiyonel)"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            disabled={saving}
+                          />
+                        </div>
+                        <input
+                          value={selectedShopLink.productImageUrl}
+                          onChange={(event) =>
+                            upsertShopLink(selectedShopLink.id, (prev) => ({
+                              ...prev,
+                              productImageUrl: event.target.value,
+                            }))
+                          }
+                          placeholder="Ürün görsel URL (opsiyonel)"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          disabled={saving}
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void fetchShopPreview(selectedShopLink.id)}
+                            disabled={saving || shopPreviewLoading}
+                            className="rounded-lg border border-violet-200 px-3 py-1.5 text-xs font-semibold text-violet-700 disabled:opacity-60"
+                          >
+                            {shopPreviewLoading ? "Çekiliyor..." : "Linkten Bilgi Çek"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShopLinks((prev) => prev.filter((item) => item.id !== selectedShopLink.id));
+                              setSelectedShopLinkId(null);
+                            }}
+                            disabled={saving}
+                            className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 disabled:opacity-60"
+                          >
+                            Pini Sil
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : null}
+
             <div className="md:col-span-2 flex items-center gap-2">
               <button
                 type="button"
@@ -693,7 +1006,10 @@ export default function DesignerProjectsPage() {
                     </div>
                     <p className="line-clamp-3 text-sm text-slate-600">{project.description || "Açıklama eklenmedi."}</p>
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-sky-700">{project.imageUrls.length} galeri görseli</p>
+                      <p className="text-xs font-medium text-sky-700">
+                        {project.imageUrls.length} galeri görseli
+                        {project.shopLinks.length > 0 ? ` • ${project.shopLinks.length} shop pin` : ""}
+                      </p>
                       <p className="text-xs font-semibold text-slate-700">Bütçe: {toBudgetLabel(project.budgetLevel)}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -703,6 +1019,19 @@ export default function DesignerProjectsPage() {
                         className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700"
                       >
                         Düzenle
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          editProject(project);
+                          setSubmitMessage({
+                            type: "success",
+                            text: "Shopable düzenleme modu açıldı. Görselin üstüne tıklayıp ürün pini ekleyebilirsin.",
+                          });
+                        }}
+                        className="rounded-lg border border-violet-200 px-3 py-1.5 text-xs font-semibold text-violet-700"
+                      >
+                        Ürün Ekle
                       </button>
                       <button
                         type="button"
@@ -771,7 +1100,10 @@ export default function DesignerProjectsPage() {
                     </div>
                     <p className="line-clamp-3 text-sm text-slate-600">{project.description || "Açıklama eklenmedi."}</p>
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-sky-700">{project.imageUrls.length} galeri görseli</p>
+                      <p className="text-xs font-medium text-sky-700">
+                        {project.imageUrls.length} galeri görseli
+                        {project.shopLinks.length > 0 ? ` • ${project.shopLinks.length} shop pin` : ""}
+                      </p>
                       <p className="text-xs font-semibold text-slate-700">Bütçe: {toBudgetLabel(project.budgetLevel)}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-1">
