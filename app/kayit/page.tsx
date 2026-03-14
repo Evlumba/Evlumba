@@ -8,6 +8,22 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { loginUser, syncSessionFromSupabase, type Role } from "@/lib/storage";
 import { toast } from "@/lib/toast";
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function sanitizeNextPath(raw: string | null): string {
+  if (!raw) return "/";
+  const value = raw.trim();
+  if (!value.startsWith("/")) return "/";
+  if (value.startsWith("//")) return "/";
+  return value;
+}
+
+function targetPathForRole(role: string | null | undefined): string {
+  return role === "designer" || role === "designer_pending" ? "/designer-panel" : "/";
+}
+
 function RoleCard({
   title,
   desc,
@@ -55,6 +71,10 @@ function KayitPageContent() {
   const selectedRoleFromQuery = useMemo<Role>(() => {
     return searchParams.get("role") === "designer" ? "designer" : "homeowner";
   }, [searchParams]);
+  const nextPathFromQuery = useMemo(
+    () => sanitizeNextPath(searchParams.get("next")),
+    [searchParams]
+  );
 
   const isOAuthReturn = useMemo(
     () => searchParams.get("oauth") === "1" || searchParams.has("code"),
@@ -72,13 +92,52 @@ function KayitPageContent() {
   }, [selectedRoleFromQuery]);
 
   useEffect(() => {
+    if (isOAuthReturn) return;
+
+    let cancelled = false;
+    const redirectIfAlreadyLoggedIn = async () => {
+      const synced = await syncSessionFromSupabase();
+      if (cancelled) return;
+      if (!synced.ok || !synced.session?.id) return;
+
+      const targetPath = targetPathForRole(
+        typeof synced.session.role === "string" ? synced.session.role : null
+      );
+      router.replace(targetPath);
+    };
+
+    void redirectIfAlreadyLoggedIn();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOAuthReturn, router]);
+
+  useEffect(() => {
     if (!isOAuthReturn || oauthHandledRef.current) return;
     oauthHandledRef.current = true;
 
     let cancelled = false;
+    const syncSessionWithRetry = async (
+      attempts = 6,
+      delayMs = 250
+    ): Promise<Awaited<ReturnType<typeof syncSessionFromSupabase>>> => {
+      let lastResult: Awaited<ReturnType<typeof syncSessionFromSupabase>> = {
+        ok: false,
+        error: "Google ile kayıt tamamlanamadı.",
+      };
+      for (let index = 0; index < attempts; index += 1) {
+        lastResult = await syncSessionFromSupabase();
+        if (lastResult.ok && lastResult.session?.id) return lastResult;
+        if (index < attempts - 1) {
+          await sleep(delayMs);
+        }
+      }
+      return lastResult;
+    };
+
     const completeGoogleSignup = async () => {
       setFeedback("");
-      const synced = await syncSessionFromSupabase();
+      const synced = await syncSessionWithRetry();
       if (cancelled) return;
       if (!synced.ok || !synced.session?.id) {
         const msg = synced.error || "Google ile kayıt tamamlanamadı.";
@@ -90,6 +149,8 @@ function KayitPageContent() {
 
       const userId = synced.session.id;
       const desiredRole = selectedRoleFromQuery;
+      const targetPath =
+        nextPathFromQuery !== "/" ? nextPathFromQuery : targetPathForRole(desiredRole);
       const fallbackName = synced.session.name || "Yeni Kullanıcı";
       const supabase = getSupabaseBrowserClient();
 
@@ -107,13 +168,13 @@ function KayitPageContent() {
         return;
       }
 
-      await syncSessionFromSupabase();
+      await syncSessionWithRetry();
       if (cancelled) return;
 
       setFeedback("Google ile kayıt başarılı. Yönlendiriliyorsun...");
       toast("Google ile kayıt başarılı");
       setGoogleLoading(false);
-      router.push(desiredRole === "designer" ? "/designer-panel" : "/");
+      router.replace(targetPath);
     };
 
     void completeGoogleSignup();
@@ -121,7 +182,7 @@ function KayitPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [isOAuthReturn, router, selectedRoleFromQuery]);
+  }, [isOAuthReturn, nextPathFromQuery, router, selectedRoleFromQuery]);
 
   async function submit() {
     if (googleLoading) return;
