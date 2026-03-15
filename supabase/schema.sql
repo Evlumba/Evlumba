@@ -54,9 +54,14 @@ stable
 security definer
 set search_path = public
 as $$
-  select p.role
-  from public.profiles p
-  where p.id = user_id
+  select coalesce(
+    nullif(p.role, ''),
+    nullif(u.raw_user_meta_data->>'role', ''),
+    'homeowner'
+  )
+  from auth.users u
+  left join public.profiles p on p.id = u.id
+  where u.id = user_id
   limit 1;
 $$;
 
@@ -312,6 +317,195 @@ create table if not exists public.designer_project_shop_links (
 create index if not exists designer_project_shop_links_project_idx
 on public.designer_project_shop_links (project_id);
 
+create table if not exists public.forum_members (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  lumba_name text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists forum_members_lumba_name_unique_idx
+on public.forum_members (lower(lumba_name));
+
+create table if not exists public.forum_topics (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique,
+  title text not null,
+  created_by uuid references public.forum_members(user_id) on delete set null,
+  starter_body text,
+  is_pinned boolean not null default false,
+  created_at timestamptz not null default now(),
+  last_post_at timestamptz not null default now()
+);
+
+alter table public.forum_topics
+  add column if not exists is_pinned boolean not null default false,
+  add column if not exists starter_body text;
+
+create index if not exists forum_topics_last_post_idx
+on public.forum_topics (last_post_at desc);
+
+create index if not exists forum_topics_pin_last_post_idx
+on public.forum_topics (is_pinned desc, last_post_at desc);
+
+create table if not exists public.forum_posts (
+  id uuid primary key default gen_random_uuid(),
+  topic_id uuid not null references public.forum_topics(id) on delete cascade,
+  author_id uuid not null references public.forum_members(user_id) on delete cascade,
+  parent_post_id uuid references public.forum_posts(id) on delete set null,
+  body text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.forum_posts
+  add column if not exists updated_at timestamptz not null default now();
+
+create index if not exists forum_posts_topic_created_idx
+on public.forum_posts (topic_id, created_at);
+
+create index if not exists forum_posts_parent_idx
+on public.forum_posts (parent_post_id);
+
+create or replace function public.touch_forum_members_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end
+$$;
+
+drop trigger if exists forum_members_touch_updated_at on public.forum_members;
+
+create trigger forum_members_touch_updated_at
+before update on public.forum_members
+for each row
+execute function public.touch_forum_members_updated_at();
+
+create or replace function public.touch_forum_topic_last_post_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  update public.forum_topics
+     set last_post_at = new.created_at
+   where id = new.topic_id;
+
+  return new;
+end
+$$;
+
+create or replace function public.touch_forum_post_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end
+$$;
+
+create or replace function public.forum_parent_post_matches_topic(parent_id uuid, topic_uuid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when parent_id is null then true
+    else exists (
+      select 1
+      from public.forum_posts p
+      where p.id = parent_id
+        and p.topic_id = topic_uuid
+    )
+  end;
+$$;
+
+grant execute on function public.forum_parent_post_matches_topic(uuid, uuid) to authenticated;
+
+drop trigger if exists forum_posts_touch_topic_last_post on public.forum_posts;
+drop trigger if exists forum_posts_touch_updated_at on public.forum_posts;
+
+create trigger forum_posts_touch_topic_last_post
+after insert on public.forum_posts
+for each row
+execute function public.touch_forum_topic_last_post_at();
+
+create trigger forum_posts_touch_updated_at
+before update on public.forum_posts
+for each row
+execute function public.touch_forum_post_updated_at();
+
+insert into public.forum_topics (slug, title, is_pinned, starter_body)
+values
+  (
+    'evlumbada-nasil-para-kazanabilirim',
+    'Evlumba''da nasıl para kazanabilirim',
+    true,
+    $$**Evlumba''da para kazanmanın iki güçlü yolu var:** görünürlükten müşteri kazanmak ve shopable linklerle satış ortaklığı geliri elde etmek.
+
+1. **Projelerini sergileyerek ücretsiz şekilde müşteri kazanabilirsin.**
+**Nasıl yapılır:** Profesyonel hesaba geç, profilini tamamla, Projelerim > Yeni Proje Ekle adımından başlık, açıklama, görseller, etiketler ve bütçe bilgilerini gir. Sonrasında projeyi yayınla ve görünürlüğünü artır.
+
+2. **Projelerine ürün linki ekleyerek satış başına gelir elde edebilirsin.**
+**Nasıl yapılır:** Projeni taslak veya düzenleme modunda aç, Ürün Ekle ile görsel üzerinde shopable etiket bırak, ürün linkini ekle ve kaydet. Affiliate/ticari ortaklık linki kullanıyorsan satış oldukça komisyon alırsın.
+**Not:** Ürün fiyatı veya ürün bilgisi değişirse projeyi tekrar **Taslağa Al** ve shopable etikette **Bilgi Çek** yaparak fiyat/görsel bilgisini güncelle.$$
+  ),
+  (
+    'nasil-proje-olusturabilirim',
+    'Nasıl proje oluşturabilirim',
+    true,
+    $$1. **Profesyonel hesaba geç ve profilini tamamla.**
+Önce hesap rolün profesyonel olmalı. Profilinde uzmanlık, şehir, açıklama ve iletişim bilgilerini doldurman güven oluşturur.
+
+2. **Projelerim sayfasına girip "Yeni Proje Ekle" ile başla.**
+Proje başlığı, proje türü, konum, bütçe seviyesi, etiketler ve proje hikayesi alanlarını net şekilde doldur.
+
+3. **Kapak ve galeri görsellerini yükle.**
+Önce güçlü bir kapak görseli seç, sonra projeyi anlatan farklı açılardan galeri görselleri ekle.
+
+4. **Önce taslak kaydet, sonra kontrol edip yayınla.**
+Yazım, etiket, görsel sırası ve açıklamayı kontrol et. Hazır olduğunda yayınla, daha sonra tekrar düzenleyebilirsin.
+
+5. **İstersen shopable ürün linkleri ekle.**
+Taslak/düzenleme modunda görsel üstüne ürün etiketi bırakıp link ekleyebilirsin. Ürün bilgisi değişirse projeyi tekrar **Taslağa Al** ve **Bilgi Çek** ile güncelle.
+
+**İpucu:** Başlık + kısa hikaye + net görseller + doğru etiket kombinasyonu, projeni keşfette daha görünür yapar.$$
+  ),
+  (
+    'evlumba-ucretli-mi',
+    'Evlumba ücretli mi',
+    true,
+    $$**Kısa cevap: Evlumba şu an ücretsiz.**
+
+1. **Ev sahipleri için:** Keşfetme, kaydetme ve tasarımcılarla iletişim kurma ücretsiz.
+2. **Profesyoneller için:** Profil oluşturma, proje yayınlama ve görünürlük kazanma ücretsiz.
+3. **Shopable özellik:** Projelere ürün linki eklemek ücretsizdir; gelir modeli bağlı olduğun satış/affiliate programının komisyon kurallarına göre çalışır.
+
+**Not:** İleride ücretli bir özellik olursa önceden açık şekilde duyurulur.$$
+  )
+on conflict (slug) do update
+set
+  title = excluded.title,
+  is_pinned = true,
+  starter_body = coalesce(excluded.starter_body, public.forum_topics.starter_body);
+
+update public.forum_topics
+   set is_pinned = false
+ where is_pinned = true
+   and slug not in (
+     'evlumbada-nasil-para-kazanabilirim',
+     'nasil-proje-olusturabilirim',
+     'evlumba-ucretli-mi'
+   );
+
 create table if not exists public.designer_reviews (
   id uuid primary key default gen_random_uuid(),
   designer_id uuid not null references auth.users(id) on delete cascade,
@@ -398,6 +592,9 @@ alter table public.messages enable row level security;
 alter table public.designer_projects enable row level security;
 alter table public.designer_project_images enable row level security;
 alter table public.designer_project_shop_links enable row level security;
+alter table public.forum_members enable row level security;
+alter table public.forum_topics enable row level security;
+alter table public.forum_posts enable row level security;
 alter table public.designer_reviews enable row level security;
 alter table public.saved_designers enable row level security;
 
@@ -413,6 +610,15 @@ drop policy if exists "messages: participant can insert" on public.messages;
 drop policy if exists "designer_projects: owner full access" on public.designer_projects;
 drop policy if exists "designer_project_images: owner full access" on public.designer_project_images;
 drop policy if exists "designer_project_shop_links: owner full access" on public.designer_project_shop_links;
+drop policy if exists "forum_members: public read" on public.forum_members;
+drop policy if exists "forum_members: professional can join" on public.forum_members;
+drop policy if exists "forum_members: owner can update" on public.forum_members;
+drop policy if exists "forum_members: owner can delete" on public.forum_members;
+drop policy if exists "forum_topics: public read" on public.forum_topics;
+drop policy if exists "forum_topics: members can insert" on public.forum_topics;
+drop policy if exists "forum_posts: public read" on public.forum_posts;
+drop policy if exists "forum_posts: members can insert" on public.forum_posts;
+drop policy if exists "forum_posts: owner can edit within 5 min" on public.forum_posts;
 drop policy if exists "designer_reviews: homeowners can insert" on public.designer_reviews;
 drop policy if exists "designer_reviews: public read" on public.designer_reviews;
 drop policy if exists "designer_reviews: designer can reply pin" on public.designer_reviews;
@@ -554,6 +760,96 @@ with check (
       and p.designer_id = auth.uid()
   )
 );
+
+create policy "forum_members: public read"
+on public.forum_members for select
+to public
+using (true);
+
+create policy "forum_members: professional can join"
+on public.forum_members for insert
+to authenticated
+with check (
+  auth.uid() = user_id
+  and public.get_profile_role(auth.uid()) in ('designer', 'designer_pending')
+  and char_length(btrim(lumba_name)) between 3 and 32
+);
+
+create policy "forum_members: owner can update"
+on public.forum_members for update
+to authenticated
+using (auth.uid() = user_id)
+with check (
+  auth.uid() = user_id
+  and public.get_profile_role(auth.uid()) in ('designer', 'designer_pending')
+  and char_length(btrim(lumba_name)) between 3 and 32
+);
+
+create policy "forum_members: owner can delete"
+on public.forum_members for delete
+to authenticated
+using (auth.uid() = user_id);
+
+create policy "forum_topics: public read"
+on public.forum_topics for select
+to public
+using (true);
+
+create policy "forum_topics: members can insert"
+on public.forum_topics for insert
+to authenticated
+with check (
+  auth.uid() = created_by
+  and exists (
+    select 1
+    from public.forum_members m
+    where m.user_id = auth.uid()
+  )
+  and char_length(btrim(title)) between 3 and 160
+  and char_length(btrim(slug)) between 3 and 180
+);
+
+create policy "forum_posts: public read"
+on public.forum_posts for select
+to public
+using (true);
+
+create policy "forum_posts: members can insert"
+on public.forum_posts for insert
+to authenticated
+with check (
+  auth.uid() = author_id
+  and exists (
+    select 1
+    from public.forum_members m
+    where m.user_id = author_id
+  )
+  and exists (
+    select 1
+    from public.forum_topics t
+    where t.id = topic_id
+  )
+  and public.forum_parent_post_matches_topic(parent_post_id, topic_id)
+  and char_length(btrim(body)) > 0
+);
+
+create policy "forum_posts: owner can edit within 5 min"
+on public.forum_posts for update
+to authenticated
+using (
+  auth.uid() = author_id
+  and now() <= created_at + interval '5 minutes'
+)
+with check (
+  auth.uid() = author_id
+  and now() <= created_at + interval '5 minutes'
+  and char_length(btrim(body)) > 0
+);
+
+grant select on table public.forum_members, public.forum_topics, public.forum_posts to anon, authenticated;
+grant insert, update, delete on table public.forum_members to authenticated;
+grant insert on table public.forum_topics, public.forum_posts to authenticated;
+grant update on table public.forum_posts to authenticated;
 
 create policy "designer_reviews: homeowners can insert"
 on public.designer_reviews for insert

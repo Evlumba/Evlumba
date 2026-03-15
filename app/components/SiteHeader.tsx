@@ -117,7 +117,7 @@ function SwipeCardsIcon() {
   );
 }
 
-function BlogIcon() {
+function ForumIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -474,6 +474,21 @@ function ProfileMenu({
           <UserIcon />
           Profil Ayarları
         </Link>
+        <div className="relative">
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            role="menuitem"
+            className="peer flex w-full cursor-not-allowed items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-500"
+          >
+            <ForumIcon />
+            Blog
+          </button>
+          <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-1 hidden -translate-x-1/2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 shadow-sm peer-hover:block">
+            Çok yakında
+          </span>
+        </div>
         <button
           type="button"
           onClick={onLogout}
@@ -671,13 +686,12 @@ export default function SiteHeader() {
       ),
     },
     {
-      id: "blog",
-      href: "#",
-      label: "Blog",
-      disabled: true,
+      id: "forum",
+      href: "/forum",
+      label: "Forum",
       icon: (
         <GlassOrb tone="indigo">
-          <BlogIcon />
+          <ForumIcon />
         </GlassOrb>
       ),
     },
