@@ -214,6 +214,24 @@ function MessageIcon() {
   );
 }
 
+function ListingsIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M8 13h8" />
+    </svg>
+  );
+}
+
 function MessageIconWithBadge({ count }: { count: number }) {
   const display = count > 99 ? "99+" : String(count);
   return (
@@ -473,6 +491,14 @@ function ProfileMenu({
         >
           <UserIcon />
           Profil Ayarları
+        </Link>
+        <Link
+          href="/ilanlar"
+          role="menuitem"
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100"
+        >
+          <ListingsIcon />
+          İlanlar
         </Link>
         <div className="relative">
           <button

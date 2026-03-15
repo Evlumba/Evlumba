@@ -67,6 +67,30 @@ $$;
 
 grant execute on function public.get_profile_role(uuid) to authenticated;
 
+drop function if exists public.can_message_pair(uuid, uuid);
+
+create or replace function public.can_message_pair(homeowner_uuid uuid, designer_uuid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select (
+    (
+      public.get_profile_role(homeowner_uuid) = 'homeowner'
+      and public.get_profile_role(designer_uuid) in ('designer', 'designer_pending')
+    )
+    or
+    (
+      public.get_profile_role(homeowner_uuid) in ('designer', 'designer_pending')
+      and public.get_profile_role(designer_uuid) in ('designer', 'designer_pending')
+    )
+  );
+$$;
+
+grant execute on function public.can_message_pair(uuid, uuid) to authenticated;
+
 drop function if exists public.get_profile_briefs(uuid[]);
 
 create or replace function public.get_profile_briefs(user_ids uuid[])
@@ -506,6 +530,125 @@ update public.forum_topics
      'evlumba-ucretli-mi'
    );
 
+create table if not exists public.listings (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  owner_role text not null default 'homeowner',
+  listing_type text not null check (listing_type in ('need_service', 'offer_service')),
+  title text not null,
+  description text not null,
+  city text not null,
+  district text,
+  budget_min numeric(12,2),
+  budget_max numeric(12,2),
+  needed_professions text[] not null default '{}',
+  tags text[] not null default '{}',
+  needed_within text not null default 'hemen' check (needed_within in ('hemen', '1_ay', '3_ay', 'arastiriyorum')),
+  status text not null default 'published' check (status in ('draft', 'published', 'closed')),
+  is_urgent boolean not null default false,
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.listings
+  add column if not exists needed_within text not null default 'hemen';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'listings_needed_within_check'
+      and conrelid = 'public.listings'::regclass
+  ) then
+    alter table public.listings
+      add constraint listings_needed_within_check
+      check (needed_within in ('hemen', '1_ay', '3_ay', 'arastiriyorum'));
+  end if;
+end
+$$;
+
+create table if not exists public.listing_applications (
+  id uuid primary key default gen_random_uuid(),
+  listing_id uuid not null references public.listings(id) on delete cascade,
+  applicant_id uuid not null references auth.users(id) on delete cascade,
+  message text not null,
+  price_quote text,
+  timeline text,
+  status text not null default 'pending' check (status in ('pending', 'shortlisted', 'rejected', 'accepted')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (listing_id, applicant_id)
+);
+
+create table if not exists public.listing_bookmarks (
+  id uuid primary key default gen_random_uuid(),
+  listing_id uuid not null references public.listings(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (listing_id, user_id)
+);
+
+create index if not exists listings_status_created_idx
+on public.listings (status, created_at desc);
+
+create index if not exists listings_owner_created_idx
+on public.listings (owner_id, created_at desc);
+
+create index if not exists listings_city_idx
+on public.listings (lower(city));
+
+create index if not exists listings_needed_professions_gin_idx
+on public.listings using gin (needed_professions);
+
+create index if not exists listings_tags_gin_idx
+on public.listings using gin (tags);
+
+create index if not exists listing_applications_listing_idx
+on public.listing_applications (listing_id, created_at desc);
+
+create index if not exists listing_applications_applicant_idx
+on public.listing_applications (applicant_id, created_at desc);
+
+create index if not exists listing_bookmarks_user_idx
+on public.listing_bookmarks (user_id, created_at desc);
+
+create or replace function public.touch_listings_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end
+$$;
+
+create or replace function public.touch_listing_applications_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end
+$$;
+
+drop trigger if exists listings_touch_updated_at on public.listings;
+drop trigger if exists listing_applications_touch_updated_at on public.listing_applications;
+
+create trigger listings_touch_updated_at
+before update on public.listings
+for each row
+execute function public.touch_listings_updated_at();
+
+create trigger listing_applications_touch_updated_at
+before update on public.listing_applications
+for each row
+execute function public.touch_listing_applications_updated_at();
+
 create table if not exists public.designer_reviews (
   id uuid primary key default gen_random_uuid(),
   designer_id uuid not null references auth.users(id) on delete cascade,
@@ -529,6 +672,33 @@ create table if not exists public.saved_designers (
   created_at timestamptz not null default now(),
   unique (homeowner_id, designer_id)
 );
+
+drop function if exists public.get_designer_rating_stats(uuid[]);
+
+create or replace function public.get_designer_rating_stats(designer_ids uuid[])
+returns table (
+  designer_id uuid,
+  average_rating numeric(3,2),
+  review_count integer
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with requested as (
+    select distinct unnest(coalesce(designer_ids, '{}'::uuid[]))::uuid as designer_id
+  )
+  select
+    req.designer_id,
+    coalesce(round(avg(r.rating)::numeric, 2), 0::numeric(3,2)) as average_rating,
+    count(r.id)::integer as review_count
+  from requested req
+  left join public.designer_reviews r on r.designer_id = req.designer_id
+  group by req.designer_id;
+$$;
+
+grant execute on function public.get_designer_rating_stats(uuid[]) to anon, authenticated;
 
 alter table public.designer_projects
   add column if not exists tags text[] not null default '{}',
@@ -595,6 +765,9 @@ alter table public.designer_project_shop_links enable row level security;
 alter table public.forum_members enable row level security;
 alter table public.forum_topics enable row level security;
 alter table public.forum_posts enable row level security;
+alter table public.listings enable row level security;
+alter table public.listing_applications enable row level security;
+alter table public.listing_bookmarks enable row level security;
 alter table public.designer_reviews enable row level security;
 alter table public.saved_designers enable row level security;
 
@@ -619,6 +792,16 @@ drop policy if exists "forum_topics: members can insert" on public.forum_topics;
 drop policy if exists "forum_posts: public read" on public.forum_posts;
 drop policy if exists "forum_posts: members can insert" on public.forum_posts;
 drop policy if exists "forum_posts: owner can edit within 5 min" on public.forum_posts;
+drop policy if exists "listings: public read published or own" on public.listings;
+drop policy if exists "listings: authenticated can insert" on public.listings;
+drop policy if exists "listings: owner can update own" on public.listings;
+drop policy if exists "listings: owner can delete own" on public.listings;
+drop policy if exists "listing_applications: visible to participant" on public.listing_applications;
+drop policy if exists "listing_applications: applicant can insert" on public.listing_applications;
+drop policy if exists "listing_applications: applicant can update own" on public.listing_applications;
+drop policy if exists "listing_applications: listing owner can update" on public.listing_applications;
+drop policy if exists "listing_applications: applicant can delete own" on public.listing_applications;
+drop policy if exists "listing_bookmarks: user full access" on public.listing_bookmarks;
 drop policy if exists "designer_reviews: homeowners can insert" on public.designer_reviews;
 drop policy if exists "designer_reviews: public read" on public.designer_reviews;
 drop policy if exists "designer_reviews: designer can reply pin" on public.designer_reviews;
@@ -672,8 +855,7 @@ on public.conversations for select
 to authenticated
 using (
   (auth.uid() = homeowner_id or auth.uid() = designer_id)
-  and public.get_profile_role(homeowner_id) = 'homeowner'
-  and public.get_profile_role(designer_id) in ('designer', 'designer_pending')
+  and public.can_message_pair(homeowner_id, designer_id)
 );
 
 create policy "conversations: participant can insert"
@@ -682,8 +864,7 @@ to authenticated
 with check (
   auth.uid() = homeowner_id
   and homeowner_id <> designer_id
-  and public.get_profile_role(homeowner_id) = 'homeowner'
-  and public.get_profile_role(designer_id) in ('designer', 'designer_pending')
+  and public.can_message_pair(homeowner_id, designer_id)
 );
 
 create policy "messages: participant can read"
@@ -694,8 +875,7 @@ using (
     select 1
     from public.conversations c
     where c.id = conversation_id
-      and public.get_profile_role(c.homeowner_id) = 'homeowner'
-      and public.get_profile_role(c.designer_id) in ('designer', 'designer_pending')
+      and public.can_message_pair(c.homeowner_id, c.designer_id)
       and (c.homeowner_id = auth.uid() or c.designer_id = auth.uid())
   )
 );
@@ -709,8 +889,7 @@ with check (
     select 1
     from public.conversations c
     where c.id = conversation_id
-      and public.get_profile_role(c.homeowner_id) = 'homeowner'
-      and public.get_profile_role(c.designer_id) in ('designer', 'designer_pending')
+      and public.can_message_pair(c.homeowner_id, c.designer_id)
       and (c.homeowner_id = auth.uid() or c.designer_id = auth.uid())
   )
 );
@@ -850,6 +1029,130 @@ grant select on table public.forum_members, public.forum_topics, public.forum_po
 grant insert, update, delete on table public.forum_members to authenticated;
 grant insert on table public.forum_topics, public.forum_posts to authenticated;
 grant update on table public.forum_posts to authenticated;
+
+create policy "listings: public read published or own"
+on public.listings for select
+to public
+using (
+  status = 'published'
+  or auth.uid() = owner_id
+);
+
+create policy "listings: authenticated can insert"
+on public.listings for insert
+to authenticated
+with check (
+  auth.uid() = owner_id
+  and public.get_profile_role(auth.uid()) in ('homeowner', 'designer', 'designer_pending')
+  and listing_type in ('need_service', 'offer_service')
+  and needed_within in ('hemen', '1_ay', '3_ay', 'arastiriyorum')
+  and status in ('draft', 'published', 'closed')
+  and char_length(btrim(title)) between 5 and 160
+  and char_length(btrim(description)) between 10 and 5000
+  and char_length(btrim(city)) between 2 and 120
+);
+
+create policy "listings: owner can update own"
+on public.listings for update
+to authenticated
+using (auth.uid() = owner_id)
+with check (
+  auth.uid() = owner_id
+  and listing_type in ('need_service', 'offer_service')
+  and needed_within in ('hemen', '1_ay', '3_ay', 'arastiriyorum')
+  and status in ('draft', 'published', 'closed')
+  and char_length(btrim(title)) between 5 and 160
+  and char_length(btrim(description)) between 10 and 5000
+  and char_length(btrim(city)) between 2 and 120
+);
+
+create policy "listings: owner can delete own"
+on public.listings for delete
+to authenticated
+using (auth.uid() = owner_id);
+
+create policy "listing_applications: visible to participant"
+on public.listing_applications for select
+to authenticated
+using (
+  auth.uid() = applicant_id
+  or exists (
+    select 1
+    from public.listings l
+    where l.id = listing_id
+      and l.owner_id = auth.uid()
+  )
+);
+
+create policy "listing_applications: applicant can insert"
+on public.listing_applications for insert
+to authenticated
+with check (
+  auth.uid() = applicant_id
+  and public.get_profile_role(auth.uid()) in ('designer', 'designer_pending')
+  and char_length(btrim(message)) between 5 and 4000
+  and exists (
+    select 1
+    from public.listings l
+    where l.id = listing_id
+      and l.owner_id <> auth.uid()
+      and l.listing_type = 'need_service'
+      and l.status = 'published'
+      and (l.expires_at is null or l.expires_at > now())
+  )
+);
+
+create policy "listing_applications: applicant can update own"
+on public.listing_applications for update
+to authenticated
+using (
+  auth.uid() = applicant_id
+  and status = 'pending'
+)
+with check (
+  auth.uid() = applicant_id
+  and status = 'pending'
+  and char_length(btrim(message)) between 5 and 4000
+);
+
+create policy "listing_applications: listing owner can update"
+on public.listing_applications for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.listings l
+    where l.id = listing_id
+      and l.owner_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.listings l
+    where l.id = listing_id
+      and l.owner_id = auth.uid()
+  )
+  and status in ('pending', 'shortlisted', 'rejected', 'accepted')
+  and char_length(btrim(message)) between 5 and 4000
+);
+
+create policy "listing_applications: applicant can delete own"
+on public.listing_applications for delete
+to authenticated
+using (auth.uid() = applicant_id);
+
+create policy "listing_bookmarks: user full access"
+on public.listing_bookmarks for all
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+grant select on table public.listings to anon, authenticated;
+grant insert, update, delete on table public.listings to authenticated;
+grant select on table public.listing_applications to authenticated;
+grant insert, update, delete on table public.listing_applications to authenticated;
+grant select, insert, update, delete on table public.listing_bookmarks to authenticated;
 
 create policy "designer_reviews: homeowners can insert"
 on public.designer_reviews for insert

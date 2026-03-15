@@ -76,6 +76,61 @@ function initials(name: string) {
   return chars.join("") || "K";
 }
 
+function parseStructuredMessage(raw: string) {
+  const lines = raw.split(/\r?\n/);
+  let index = 0;
+  let subject: string | null = null;
+  let listingLink: string | null = null;
+  let listingNo: string | null = null;
+
+  if (lines[index]?.toLowerCase().startsWith("konu:")) {
+    subject = lines[index].slice(lines[index].indexOf(":") + 1).trim() || null;
+    index += 1;
+  }
+
+  while (index < lines.length) {
+    const current = lines[index]?.toLowerCase() ?? "";
+    if (
+      current.startsWith("ilan bağlantısı:") ||
+      current.startsWith("ilan baglantisi:") ||
+      current.startsWith("ilan linki:")
+    ) {
+      listingLink = lines[index].slice(lines[index].indexOf(":") + 1).trim() || null;
+      index += 1;
+      continue;
+    }
+    if (current.startsWith("ilan no:") || current.startsWith("ilan numarası:")) {
+      listingNo = lines[index].slice(lines[index].indexOf(":") + 1).trim() || null;
+      index += 1;
+      continue;
+    }
+    break;
+  }
+
+  while (index < lines.length && !lines[index].trim()) index += 1;
+  const body = lines.slice(index).join("\n").trim();
+  return { subject, listingLink, listingNo, body: body || raw };
+}
+
+function normalizeListingHref(raw: string | null) {
+  if (!raw) return null;
+  const value = raw.trim();
+  if (!value) return null;
+  if (value.startsWith("/")) return value;
+  try {
+    const parsed = new URL(value);
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeListingNo(raw: string | null) {
+  if (!raw) return null;
+  const normalized = raw.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  return normalized || null;
+}
+
 function MessagesPageContent() {
   const searchParams = useSearchParams();
   const requestedDesignerId = useMemo(
@@ -448,7 +503,39 @@ function MessagesPageContent() {
                       isOwn ? "bg-slate-900 text-white" : "bg-white"
                     }`}
                   >
-                    {message.body}
+                    {(() => {
+                      const parsed = parseStructuredMessage(message.body);
+                      const listingHref = normalizeListingHref(parsed.listingLink);
+                      const listingNo = normalizeListingNo(parsed.listingNo);
+                      const listingHrefFromNo = listingNo
+                        ? `/ilanlar?ilanNo=${encodeURIComponent(listingNo)}`
+                        : null;
+                      const resolvedListingHref = listingHref ?? listingHrefFromNo;
+                      const linkClass = isOwn
+                        ? "text-white/90 underline decoration-white/60 hover:decoration-white"
+                        : "text-slate-700 underline decoration-slate-400 hover:text-slate-900";
+
+                      return (
+                        <div className="space-y-1">
+                          {parsed.subject ? (
+                            <p className={`text-xs font-semibold ${isOwn ? "text-white/90" : "text-slate-600"}`}>
+                              Konu: {parsed.subject}
+                            </p>
+                          ) : null}
+                          {listingNo ? (
+                            <p className={`text-xs font-semibold ${isOwn ? "text-white/90" : "text-slate-600"}`}>
+                              İlan No: {listingNo}
+                            </p>
+                          ) : null}
+                          {resolvedListingHref ? (
+                            <Link href={resolvedListingHref} className={linkClass}>
+                              İlanı Gör
+                            </Link>
+                          ) : null}
+                          <p className="whitespace-pre-wrap">{parsed.body}</p>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {isOwn ? (

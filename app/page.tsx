@@ -1209,6 +1209,7 @@ export default async function HomePage() {
 
       {/* ✅ TESTIMONIALS (Footer'ın hemen üstü) */}
       <SiteTestimonials mentions={testimonials} />
+
     </div>
   );
 }
