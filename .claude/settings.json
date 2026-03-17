@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/gokhanozfirat/flutter/bin/dart analyze:*)",
+      "Bash(/Users/gokhanozfirat/flutter/bin/dart pub:*)",
+      "Bash(/Users/gokhanozfirat/flutter/bin/dart run:*)",
+      "Read(//Users/gokhanozfirat/**)",
+      "Read(//Users/gokhanozfirat/.pub-cache/**)",
+      "Bash(find /Users/gokhanozfirat/ders/evlumba-mobile -name *.dart -path *storage*)",
+      "Bash(python3 -c \":*)",
+      "Bash(ssh-keyscan github.com)",
+      "Bash(/Users/gokhanozfirat/ders/evlumba-mobile/.env:*)",
+      "Bash(flutter devices:*)",
+      "Bash(flutter run:*)",
+      "Bash(grep -v \"^$\")",
+      "Bash(curl -sI \"https://images.unsplash.com/photo-1556912167-f556f1f39faa?auto=format&fit=crop&w=400&q=80\")",
+      "Bash(keytool -genkey -v -keystore evlumba-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias evlumba -dname \"CN=Evlumba App, OU=Evlumba, O=Evlumba, L=Istanbul, S=Istanbul, C=TR\" -storepass evlumba2025 -keypass evlumba2025)",
+      "Bash(\"/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/keytool\" -genkey -v -keystore evlumba-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias evlumba -dname \"CN=Evlumba App, OU=Evlumba, O=Evlumba, L=Istanbul, S=Istanbul, C=TR\" -storepass evlumba2025 -keypass evlumba2025)",
+      "Bash(/Users/gokhanozfirat/ders/evlumba-mobile/android/key.properties:*)",
+      "Bash(flutter build:*)",
+      "Bash(git pull:*)",
+      "Bash(git fetch:*)",
+      "Bash(git reset:*)",
+      "Bash(npm run:*)",
+      "Bash(source ~/.zshrc)"
+    ],
+    "additionalDirectories": [
+      "/Users/gokhanozfirat/Downloads",
+      "/Users/gokhanozfirat/Desktop"
+    ]
+  }
+}

@@ -307,25 +307,10 @@ function Brand() {
   return (
     <Link
       href="/"
-      className="group inline-flex items-center gap-3 rounded-2xl px-2 py-1.5 hover:bg-white/45 transition"
+      className="group inline-flex items-center gap-2 rounded-2xl px-2 py-1.5 hover:bg-white/45 transition"
     >
-      <div className="relative grid h-11 w-11 place-items-center overflow-hidden rounded-2xl ring-1 ring-black/8 shadow-[0_14px_35px_-28px_rgba(0,0,0,0.35)]">
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(139,92,246,1) 0%, rgba(99,102,241,1) 35%, rgba(16,185,129,1) 100%)",
-          }}
-        />
-        <div className="absolute -left-6 -top-6 h-16 w-16 rounded-full bg-white/18 blur-xl" />
-        <span className="relative text-white font-extrabold tracking-tight">E</span>
-      </div>
-
-      <div className="leading-tight">
-        <div className="text-[15px] font-extrabold tracking-tight text-slate-900">
-          Evlumba
-        </div>
-      </div>
+      <img src="/web_icon2.png" alt="Evlumba" className="h-10 w-auto object-contain" />
+      <span className="text-lg font-semibold tracking-wide -ml-2.5" style={{ color: "#00704A" }}>evlumba</span>
     </Link>
   );
 }
@@ -528,6 +513,26 @@ function ProfileMenu({
           <BlogIcon />
           Blog
         </Link>
+        <div className="my-1 border-t border-black/8" />
+        <div className="group/tools relative flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-400 cursor-not-allowed select-none">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
+          Evlumba Tools
+          <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 hidden rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 shadow-sm group-hover/tools:block whitespace-nowrap">
+            Çok yakında
+          </span>
+        </div>
+        <div className="group/tasi relative flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-400 cursor-not-allowed select-none">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+          </svg>
+          Taşınıyorum
+          <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 hidden rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 shadow-sm group-hover/tasi:block whitespace-nowrap">
+            Çok yakında
+          </span>
+        </div>
+        <div className="my-1 border-t border-black/8" />
         <button
           type="button"
           onClick={onLogout}
@@ -754,7 +759,7 @@ export default function SiteHeader() {
         <div className="rounded-[28px] border border-black/5 bg-white/60 backdrop-blur-xl shadow-[0_30px_80px_-65px_rgba(0,0,0,0.55)]">
           {/* MOBILE/TABLET */}
           <div className="lg:hidden">
-            <div className="flex items-center justify-between gap-3 px-3.5 pt-3.5">
+            <div className="flex items-center justify-between gap-3 pl-1.5 pr-3.5 pt-3.5">
               <Brand />
 
               <div className="flex items-center gap-2">
@@ -866,40 +871,73 @@ export default function SiteHeader() {
 
             {/* search */}
             <div className="px-3.5 pt-3 pb-3.5">
-              <form action="/kesfet" method="GET" className="flex items-center gap-2">
-                <div className="relative flex-1 min-w-0">
-                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                    <SearchIcon />
-                  </span>
-                  <input
-                    name="q"
-                    placeholder="tarz, oda, şehir, profesyonel…"
+              <div className="flex items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {!isLoggedIn && (
+                  <>
+                    <Link
+                      href="/ilanlar"
+                      className="shrink-0 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white/95 transition backdrop-blur shadow-[0_8px_25px_-20px_rgba(0,0,0,0.2)]"
+                    >
+                      İlanlar
+                    </Link>
+                    <Link
+                      href="/blog"
+                      className="shrink-0 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white/95 transition backdrop-blur shadow-[0_8px_25px_-20px_rgba(0,0,0,0.2)]"
+                    >
+                      Blog
+                    </Link>
+                    <div className="group/tools relative shrink-0">
+                      <span className="block rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-400 cursor-not-allowed backdrop-blur shadow-[0_8px_25px_-20px_rgba(0,0,0,0.2)]">
+                        Tools
+                      </span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 hidden rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 shadow-sm group-hover/tools:block whitespace-nowrap">
+                        Çok yakında
+                      </span>
+                    </div>
+                    <div className="group/tasi relative shrink-0">
+                      <span className="block rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-400 cursor-not-allowed backdrop-blur shadow-[0_8px_25px_-20px_rgba(0,0,0,0.2)]">
+                        Taşınıyorum
+                      </span>
+                      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 hidden rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 shadow-sm group-hover/tasi:block whitespace-nowrap">
+                        Çok yakında
+                      </span>
+                    </div>
+                  </>
+                )}
+                <form action="/kesfet" method="GET" className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="relative flex-1 min-w-0">
+                    <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                      <SearchIcon />
+                    </span>
+                    <input
+                      name="q"
+                      placeholder="tarz, oda, şehir…"
+                      className={cn(
+                        "w-full rounded-2xl border border-black/10 bg-white/75",
+                        "pl-10 pr-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400",
+                        "outline-none focus:ring-2 focus:ring-black/10"
+                      )}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <button
+                    type="submit"
                     className={cn(
-                      "w-full rounded-2xl border border-black/10 bg-white/75",
-                      "pl-10 pr-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400",
-                      "outline-none focus:ring-2 focus:ring-black/10"
+                      "shrink-0 rounded-2xl border border-black/10 bg-white/70 text-slate-800 font-semibold",
+                      "backdrop-blur hover:bg-white/95 transition",
+                      "shadow-[0_12px_35px_-28px_rgba(0,0,0,0.25)]",
+                      "px-4 py-2.5 text-sm"
                     )}
-                    autoComplete="off"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className={cn(
-                    "shrink-0 rounded-2xl border border-black/10 bg-white/70 text-slate-800 font-semibold",
-                    "backdrop-blur hover:bg-white/95 transition",
-                    "shadow-[0_12px_35px_-28px_rgba(0,0,0,0.25)]",
-                    "px-4 py-2.5 text-sm"
-                  )}
-                >
-                  Ara
-                </button>
-              </form>
+                  >
+                    Ara
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
 
           {/* DESKTOP */}
-          <div className="hidden lg:block px-4 py-3.5">
+          <div className="hidden lg:block pl-1.5 pr-4 py-3.5">
             <div className="flex items-center gap-3 min-w-0">
               <div className="shrink-0">
                 <Brand />

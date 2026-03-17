@@ -339,6 +339,56 @@ export default function SiteFooter() {
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 md:grid-cols-1">
                   <QuickPill
+                    href="/forum"
+                    title="Forum"
+                    desc="Sorular, tartışmalar"
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-sky-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+                      </svg>
+                    }
+                  />
+                  <QuickPill
+                    href="/blog"
+                    title="Blog"
+                    desc="İlham & içerik"
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-rose-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                      </svg>
+                    }
+                  />
+                  <QuickPill
+                    href="/ilanlar"
+                    title="İlanlar"
+                    desc="Yayınlanmış projeler"
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-amber-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                      </svg>
+                    }
+                  />
+                  <QuickPill
+                    href="/evlumba-tools"
+                    title="Evlumba Tools"
+                    desc="Çok yakında"
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-indigo-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                      </svg>
+                    }
+                  />
+                  <QuickPill
+                    href="/tasiniyorum"
+                    title="Taşınıyorum"
+                    desc="Çok yakında"
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-teal-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+                      </svg>
+                    }
+                  />
+                  <QuickPill
                     href="/kesfet"
                     title="Keşfet"
                     desc="Stil, oda, trend akışı"
@@ -370,37 +420,6 @@ export default function SiteFooter() {
                         <path d="M7 7h10v10H7z" />
                         <path d="M9 3h6" />
                         <path d="M12 3v4" />
-                      </svg>
-                    }
-                  />
-                  <QuickPill
-                    href="/sss"
-                    title="SSS"
-                    desc="Nasıl çalışır, süreç, ücret"
-                    icon={
-                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-800" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
-                      </svg>
-                    }
-                  />
-                  <QuickPill
-                    href="/iletisim"
-                    title="İletişim"
-                    desc="Destek & iş birlikleri"
-                    icon={
-                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-emerald-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 4h16v16H4z" />
-                        <path d="M4 7l8 6 8-6" />
-                      </svg>
-                    }
-                  />
-                  <QuickPill
-                    href="/gizlilik"
-                    title="Gizlilik"
-                    desc="KVKK & veri politikası"
-                    icon={
-                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-violet-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2l7 4v6c0 5-3 9-7 10C8 21 5 17 5 12V6l7-4z" />
                       </svg>
                     }
                   />
