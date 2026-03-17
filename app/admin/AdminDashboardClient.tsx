@@ -512,7 +512,12 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       setBanners(prev => prev.map(b => b.slot === slot ? { ...b, image_url: imageUrl } : b));
       setSuccessMessage(`Banner ${slot} başarıyla yüklendi.`);
     } catch (err) {
-      setBannerError(err instanceof Error ? err.message : "Yükleme başarısız.");
+      const msg =
+        err instanceof Error
+          ? err.message
+          : (err as Record<string, unknown>)?.message as string | undefined ??
+            JSON.stringify(err);
+      setBannerError(msg || "Yükleme başarısız.");
     } finally {
       setBannerUploading(null);
     }
