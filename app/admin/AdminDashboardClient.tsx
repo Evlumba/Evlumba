@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { logout } from "@/lib/storage";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AdminRole = "super_admin" | "admin";
 
@@ -137,12 +138,13 @@ type ManagedAdminUser = {
   userName: string;
 };
 
-type TabId = "overview" | "users" | "content" | "admins";
+type TabId = "overview" | "users" | "content" | "admins" | "banners";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Genel Durum" },
   { id: "users", label: "Kullanıcı Moderasyonu" },
   { id: "content", label: "İçerik Moderasyonu" },
+  { id: "banners", label: "Bannerlar" },
   { id: "admins", label: "Admin Yetkileri" },
 ];
 
@@ -217,6 +219,13 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   const [adminUsers, setAdminUsers] = useState<ManagedAdminUser[]>([]);
   const [newAdminUserId, setNewAdminUserId] = useState("");
   const [newAdminRole, setNewAdminRole] = useState<AdminRole>("admin");
+
+  const [banners, setBanners] = useState<{ slot: number; image_url: string | null }[]>([
+    { slot: 1, image_url: null },
+    { slot: 2, image_url: null },
+  ]);
+  const [bannerUploading, setBannerUploading] = useState<number | null>(null);
+  const [bannerError, setBannerError] = useState<string | null>(null);
 
   const canManageAdmins = currentRole === "super_admin";
   const visibleTabs = canManageAdmins ? TABS : TABS.filter((tab) => tab.id !== "admins");
@@ -313,6 +322,18 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       mounted = false;
     };
   }, [canManageAdmins]);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    void supabase.from("app_banners").select("slot, image_url").then(({ data }) => {
+      if (data && data.length > 0) {
+        setBanners(prev => prev.map(b => {
+          const found = data.find((d: { slot: number; image_url: string | null }) => d.slot === b.slot);
+          return found ? { ...b, image_url: found.image_url } : b;
+        }));
+      }
+    });
+  }, []);
 
   async function runUserAction(
     user: ModerationUser,
@@ -464,6 +485,36 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Çıkış yapılamadı.");
       setLogoutLoading(false);
+    }
+  }
+
+  async function uploadBanner(slot: number, file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      setBannerError("Dosya boyutu 5 MB'dan büyük olamaz.");
+      return;
+    }
+    setBannerUploading(slot);
+    setBannerError(null);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `slot-${slot}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("app-banners")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("app-banners").getPublicUrl(path);
+      const imageUrl = urlData.publicUrl;
+      const { error: dbError } = await supabase
+        .from("app_banners")
+        .upsert({ slot, image_url: imageUrl, updated_at: new Date().toISOString() }, { onConflict: "slot" });
+      if (dbError) throw dbError;
+      setBanners(prev => prev.map(b => b.slot === slot ? { ...b, image_url: imageUrl } : b));
+      setSuccessMessage(`Banner ${slot} başarıyla yüklendi.`);
+    } catch (err) {
+      setBannerError(err instanceof Error ? err.message : "Yükleme başarısız.");
+    } finally {
+      setBannerUploading(null);
     }
   }
 
@@ -1073,6 +1124,60 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
               </table>
             </div>
           </div>
+        </section>
+      ) : null}
+
+      {activeTab === "banners" ? (
+        <section className="mt-4 space-y-6">
+          {bannerError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{bannerError}</div>
+          ) : null}
+          {([1, 2] as const).map((slot) => {
+            const banner = banners.find((b) => b.slot === slot);
+            const slotLabel = slot === 1
+              ? "Banner 1 — Kategorilerden Sonra"
+              : "Banner 2 — Profesyonellerden Sonra";
+            const dimInfo = "Önerilen boyut: 1080 × 400px (yatay, 2.7:1 oran). Maks. 5 MB.";
+            return (
+              <div key={slot} className="rounded-2xl border border-black/10 bg-white p-4">
+                <h2 className="text-base font-semibold text-slate-900">{slotLabel}</h2>
+                <p className="mt-1 text-xs text-slate-500">{dimInfo}</p>
+                {banner?.image_url ? (
+                  <div className="mt-3">
+                    <img
+                      src={banner.image_url}
+                      alt={`Banner ${slot}`}
+                      className="w-full rounded-xl object-cover"
+                      style={{ aspectRatio: "2.7 / 1" }}
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-3 flex h-24 items-center justify-center rounded-xl border-2 border-dashed border-black/10 bg-slate-50 text-sm text-slate-400">
+                    Henüz banner yüklenmedi
+                  </div>
+                )}
+                <div className="mt-3">
+                  <label className="block">
+                    <span className="sr-only">Banner seç</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={bannerUploading !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void uploadBanner(slot, file);
+                        e.target.value = "";
+                      }}
+                      className="block w-full text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-xl file:border file:border-black/10 file:bg-white file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 disabled:opacity-60"
+                    />
+                  </label>
+                  {bannerUploading === slot ? (
+                    <p className="mt-2 text-xs text-slate-500">Yükleniyor...</p>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
         </section>
       ) : null}
     </main>
