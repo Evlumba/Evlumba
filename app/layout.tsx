@@ -8,9 +8,9 @@ export const metadata: Metadata = {
   title: "Evlumba",
   description: "Keşfet • Kaydet • Eşleş",
   icons: {
-    icon: "/evlumba-icon.svg",
-    shortcut: "/evlumba-icon.svg",
-    apple: "/evlumba-icon.svg",
+    icon: "/web_icon2.png",
+    shortcut: "/web_icon2.png",
+    apple: "/web_icon2.png",
   },
 };
 
