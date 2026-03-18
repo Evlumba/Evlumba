@@ -52,8 +52,18 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get("code");
   const rawRole = requestUrl.searchParams.get("role");
   const flow = requestUrl.searchParams.get("flow");
+  const type = requestUrl.searchParams.get("type");
   const nextPath = requestUrl.searchParams.get("next");
   const safeNextPath = nextPath && nextPath.startsWith("/") ? nextPath : "/";
+
+  // Password reset flow — exchange code then redirect to password update page
+  if (type === "recovery") {
+    if (code) {
+      const supabase = await getSupabaseServerClient();
+      await supabase.auth.exchangeCodeForSession(code);
+    }
+    return NextResponse.redirect(new URL(safeNextPath !== "/" ? safeNextPath : "/sifre-yenile", requestUrl.origin));
+  }
 
   const roleFromQuery: Role | null = isRole(rawRole) ? rawRole : null;
   const errorPath = flow === "signup" ? "/kayit" : "/giris";
