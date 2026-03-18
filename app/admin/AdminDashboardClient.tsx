@@ -313,24 +313,54 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     try {
       const json = await requestJson<{ projects: ProjectWithImages[] }>("/api/admin/project-images");
       setProjectsWithImages(json.projects ?? []);
+      // Key edits by imageId, prefill with parent project_type
       const edits: Record<string, string> = {};
-      for (const p of json.projects ?? []) edits[p.id] = p.project_type ?? "";
+      for (const p of json.projects ?? []) {
+        for (const img of p.designer_project_images) {
+          edits[img.id] = p.project_type ?? "";
+        }
+      }
       setProjectTypeEdits(edits);
     } finally {
       setProjectImagesLoading(false);
     }
   }
 
-  async function saveProjectType(projectId: string) {
-    setSavingProjectId(projectId);
+  async function saveProjectType(imageId: string, projectId: string) {
+    setSavingProjectId(imageId);
     try {
-      await requestJson("/api/admin/project-images", {
+      const { newProjectId } = await requestJson<{ newProjectId: string }>("/api/admin/project-images", {
         method: "PATCH",
-        body: JSON.stringify({ projectId, projectType: projectTypeEdits[projectId] ?? "" }),
+        body: JSON.stringify({ imageId, projectType: projectTypeEdits[imageId] ?? "" }),
       });
-      setProjectsWithImages((prev) =>
-        prev.map((p) => p.id === projectId ? { ...p, project_type: projectTypeEdits[projectId] || null } : p)
-      );
+      // If image was split into a new project, update local state
+      setProjectsWithImages((prev) => {
+        const updated = prev.map((p) => {
+          if (p.id !== projectId) return p;
+          const remaining = p.designer_project_images.filter((img) => img.id !== imageId);
+          const moved = p.designer_project_images.find((img) => img.id === imageId)!;
+          if (newProjectId === projectId) {
+            // Same project, just type updated
+            return { ...p, project_type: projectTypeEdits[imageId] || null };
+          }
+          // New project created — add it, remove image from original
+          return { ...p, designer_project_images: remaining };
+        }).filter((p) => p.designer_project_images.length > 0);
+
+        // Add new project entry if it was split
+        const original = prev.find((p) => p.id === projectId);
+        if (original && newProjectId !== projectId) {
+          const movedImg = original.designer_project_images.find((img) => img.id === imageId)!;
+          const newEntry: ProjectWithImages = {
+            ...original,
+            id: newProjectId,
+            project_type: projectTypeEdits[imageId] || null,
+            designer_project_images: [movedImg],
+          };
+          return [...updated, newEntry];
+        }
+        return updated;
+      });
       setSuccessMessage("Proje tipi güncellendi.");
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Güncelleme başarısız.");
@@ -1236,19 +1266,19 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                             <div className="flex items-center gap-2">
                               <input
                                 type="text"
-                                value={projectTypeEdits[project.id] ?? ""}
+                                value={projectTypeEdits[imgId] ?? ""}
                                 onChange={(e) =>
-                                  setProjectTypeEdits((prev) => ({ ...prev, [project.id]: e.target.value }))
+                                  setProjectTypeEdits((prev) => ({ ...prev, [imgId]: e.target.value }))
                                 }
                                 placeholder="Proje tipi…"
                                 className="flex-1 min-w-0 rounded-lg border border-black/10 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 outline-none focus:border-black/30"
                               />
                               <button
-                                disabled={savingProjectId === project.id}
-                                onClick={() => void saveProjectType(project.id)}
+                                disabled={savingProjectId === imgId}
+                                onClick={() => void saveProjectType(imgId, project.id)}
                                 className="shrink-0 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
                               >
-                                {savingProjectId === project.id ? "…" : "Kaydet"}
+                                {savingProjectId === imgId ? "…" : "Kaydet"}
                               </button>
                               <button
                                 disabled={deletingImageId === imgId}
