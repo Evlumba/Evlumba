@@ -234,6 +234,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   const [projectsWithImages, setProjectsWithImages] = useState<ProjectWithImages[]>([]);
   const [projectTypeEdits, setProjectTypeEdits] = useState<Record<string, string>>({});
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+  const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
 
   const [banners, setBanners] = useState<{ slot: number; image_url: string | null }[]>([
     { slot: 1, image_url: null },
@@ -335,6 +336,29 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       setErrorMessage(err instanceof Error ? err.message : "Güncelleme başarısız.");
     } finally {
       setSavingProjectId(null);
+    }
+  }
+
+  async function deleteImage(imageId: string, projectId: string) {
+    setDeletingImageId(imageId);
+    try {
+      await requestJson("/api/admin/project-images", {
+        method: "DELETE",
+        body: JSON.stringify({ imageId }),
+      });
+      setProjectsWithImages((prev) =>
+        prev
+          .map((p) =>
+            p.id === projectId
+              ? { ...p, designer_project_images: p.designer_project_images.filter((img) => img.id !== imageId) }
+              : p
+          )
+          .filter((p) => p.designer_project_images.length > 0)
+      );
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Silme başarısız.");
+    } finally {
+      setDeletingImageId(null);
     }
   }
 
@@ -1185,55 +1209,62 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
             <p className="text-sm text-slate-500">Yükleniyor…</p>
           ) : (
             <>
-              <p className="text-xs text-slate-500">{projectsWithImages.length} proje listeleniyor. Proje tipini düzenleyip Kaydet'e bas.</p>
-              <div className="space-y-6">
-                {projectsWithImages.map((project) => {
-                  const designerName =
-                    project.profiles?.full_name ||
-                    project.profiles?.business_name ||
-                    project.designer_id.slice(0, 8);
-                  return (
-                    <div key={project.id} className="rounded-2xl border border-black/10 bg-white p-4">
-                      <div className="flex flex-wrap items-center gap-3 mb-3">
-                        <span className="text-sm font-semibold text-slate-800">{designerName}</span>
-                        <span className="text-xs text-slate-400">·</span>
-                        <span className="text-xs text-slate-500">{project.title}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {project.designer_project_images
-                          .sort((a, b) => a.sort_order - b.sort_order)
-                          .map((img) => (
+              {(() => {
+                const allImages = projectsWithImages.flatMap((p) =>
+                  p.designer_project_images
+                    .sort((a, b) => a.sort_order - b.sort_order)
+                    .map((img) => ({ ...img, project: p }))
+                );
+                return (
+                  <>
+                    <p className="text-xs text-slate-500">{allImages.length} görsel listeleniyor.</p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {allImages.map(({ id: imgId, image_url, project }) => {
+                        const designerName =
+                          project.profiles?.full_name ||
+                          project.profiles?.business_name ||
+                          project.designer_id.slice(0, 8);
+                        return (
+                          <div key={imgId} className="rounded-2xl border border-black/10 bg-white p-3 flex flex-col gap-3">
                             <img
-                              key={img.id}
-                              src={img.image_url}
+                              src={image_url}
                               alt=""
-                              className="h-28 w-28 rounded-xl object-cover border border-black/10"
+                              className="w-full rounded-xl object-cover"
+                              style={{ aspectRatio: "4/3" }}
                             />
-                          ))}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs font-medium text-slate-600 shrink-0">Proje Tipi</label>
-                        <input
-                          type="text"
-                          value={projectTypeEdits[project.id] ?? ""}
-                          onChange={(e) =>
-                            setProjectTypeEdits((prev) => ({ ...prev, [project.id]: e.target.value }))
-                          }
-                          placeholder="ör. Mutfak, Oturma Odası…"
-                          className="flex-1 rounded-lg border border-black/10 bg-slate-50 px-3 py-1.5 text-sm text-slate-800 outline-none focus:border-black/30"
-                        />
-                        <button
-                          disabled={savingProjectId === project.id}
-                          onClick={() => void saveProjectType(project.id)}
-                          className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
-                        >
-                          {savingProjectId === project.id ? "…" : "Kaydet"}
-                        </button>
-                      </div>
+                            <p className="text-xs font-semibold text-slate-700 truncate">{designerName}</p>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={projectTypeEdits[project.id] ?? ""}
+                                onChange={(e) =>
+                                  setProjectTypeEdits((prev) => ({ ...prev, [project.id]: e.target.value }))
+                                }
+                                placeholder="Proje tipi…"
+                                className="flex-1 min-w-0 rounded-lg border border-black/10 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 outline-none focus:border-black/30"
+                              />
+                              <button
+                                disabled={savingProjectId === project.id}
+                                onClick={() => void saveProjectType(project.id)}
+                                className="shrink-0 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+                              >
+                                {savingProjectId === project.id ? "…" : "Kaydet"}
+                              </button>
+                              <button
+                                disabled={deletingImageId === imgId}
+                                onClick={() => void deleteImage(imgId, project.id)}
+                                className="shrink-0 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                              >
+                                {deletingImageId === imgId ? "…" : "Sil"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
+                  </>
+                );
+              })()}
             </>
           )}
         </section>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "../_lib";
+import { requireAdmin, UUID_REGEX } from "../_lib";
 
 export async function GET() {
   const auth = await requireAdmin();
@@ -47,6 +47,28 @@ export async function PATCH(req: NextRequest) {
     .from("designer_projects")
     .update({ project_type: projectType || null })
     .eq("id", projectId);
+
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(req: NextRequest) {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth.response;
+  const { admin } = auth.context;
+
+  const body = await req.json().catch(() => null);
+  const { imageId } = body ?? {};
+
+  if (!imageId || !UUID_REGEX.test(imageId)) {
+    return NextResponse.json({ ok: false, error: "Geçerli imageId gerekli." }, { status: 400 });
+  }
+
+  const { error } = await admin
+    .from("designer_project_images")
+    .delete()
+    .eq("id", imageId);
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
