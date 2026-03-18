@@ -1237,15 +1237,19 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                             />
                             <p className="text-xs font-semibold text-slate-700 truncate">{designerName}</p>
                             <div className="flex items-center gap-2">
-                              <input
-                                type="text"
+                              <select
                                 value={projectTypeEdits[imgId] ?? ""}
                                 onChange={(e) =>
                                   setProjectTypeEdits((prev) => ({ ...prev, [imgId]: e.target.value }))
                                 }
-                                placeholder="Proje tipi…"
                                 className="flex-1 min-w-0 rounded-lg border border-black/10 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 outline-none focus:border-black/30"
-                              />
+                              >
+                                <option value="">— Seç —</option>
+                                {["Antre", "Banyo", "Mutfak", "Oturma Odası", "Yatak Odası"].map((t) => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
+                              </select>
+
                               <button
                                 disabled={savingProjectId === imgId}
                                 onClick={() => void saveProjectType(imgId, project.id)}
