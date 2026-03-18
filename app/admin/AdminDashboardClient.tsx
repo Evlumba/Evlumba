@@ -329,39 +329,12 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   async function saveProjectType(imageId: string, projectId: string) {
     setSavingProjectId(imageId);
     try {
-      const { newProjectId } = await requestJson<{ newProjectId: string }>("/api/admin/project-images", {
+      await requestJson("/api/admin/project-images", {
         method: "PATCH",
         body: JSON.stringify({ imageId, projectType: projectTypeEdits[imageId] ?? "" }),
       });
-      // If image was split into a new project, update local state
-      setProjectsWithImages((prev) => {
-        const updated = prev.map((p) => {
-          if (p.id !== projectId) return p;
-          const remaining = p.designer_project_images.filter((img) => img.id !== imageId);
-          const moved = p.designer_project_images.find((img) => img.id === imageId)!;
-          if (newProjectId === projectId) {
-            // Same project, just type updated
-            return { ...p, project_type: projectTypeEdits[imageId] || null };
-          }
-          // New project created — add it, remove image from original
-          return { ...p, designer_project_images: remaining };
-        }).filter((p) => p.designer_project_images.length > 0);
-
-        // Add new project entry if it was split
-        const original = prev.find((p) => p.id === projectId);
-        if (original && newProjectId !== projectId) {
-          const movedImg = original.designer_project_images.find((img) => img.id === imageId)!;
-          const newEntry: ProjectWithImages = {
-            ...original,
-            id: newProjectId,
-            project_type: projectTypeEdits[imageId] || null,
-            designer_project_images: [movedImg],
-          };
-          return [...updated, newEntry];
-        }
-        return updated;
-      });
-      setSuccessMessage("Proje tipi güncellendi.");
+      // Just mark the image's label as saved in UI — don't reorganize the list
+      setSuccessMessage("Kaydedildi.");
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Güncelleme başarısız.");
     } finally {
