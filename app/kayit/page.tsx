@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { loginUser, syncSessionFromSupabase, type Role } from "@/lib/storage";
+import { syncSessionFromSupabase, type Role } from "@/lib/storage";
 import { toast } from "@/lib/toast";
 
 function sleep(ms: number) {
@@ -106,6 +106,7 @@ function KayitPageContent() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [feedback, setFeedback] = useState<string>("");
+  const [emailSent, setEmailSent] = useState(false);
   const oauthHandledRef = useRef(false);
 
   const selectedRoleFromQuery = useMemo<Role>(() => {
@@ -249,77 +250,44 @@ function KayitPageContent() {
       toast("Email ve şifre zorunlu");
       return;
     }
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    if (password.trim().length < 6) {
+      setFeedback("Şifre en az 6 karakter olmalı.");
+      toast("Şifre en az 6 karakter olmalı");
+      return;
+    }
     try {
       setLoading(true);
       setFeedback("");
-      const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 15000);
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          name: name.trim() || "Yeni Kullanıcı",
-          email: email.trim(),
-          password: password.trim(),
-          role,
-        }),
+      const supabase = getSupabaseBrowserClient();
+      const redirectTo = new URL("/auth/callback", window.location.origin);
+      redirectTo.searchParams.set("flow", "signup");
+      redirectTo.searchParams.set("role", role);
+      redirectTo.searchParams.set("next", role === "designer" ? "/designer-panel" : "/");
+
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password.trim(),
+        options: {
+          emailRedirectTo: redirectTo.toString(),
+          data: { full_name: name.trim() || "Yeni Kullanıcı", role },
+        },
       });
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
 
-      const result = (await res.json().catch(() => null)) as
-        | {
-            ok: boolean;
-            error?: string;
-            role?: Role;
-          }
-        | null;
-
-      if (!result) {
-        setFeedback("Kayıt servisi beklenmeyen bir cevap döndürdü.");
-        toast("Kayıt servisi beklenmeyen bir cevap döndürdü.");
+      if (error) {
+        const msg = error.message.toLowerCase().includes("already")
+          ? "Bu e-posta zaten kayıtlı."
+          : error.message;
+        setFeedback(msg);
+        toast(msg);
         return;
       }
 
-      const normalizedResult = result as {
-        ok: boolean;
-        error?: string;
-        role?: Role;
-      };
-
-      if (!res.ok || !normalizedResult.ok) {
-        const errorMessage = normalizedResult.error || "Kayıt başarısız.";
-        setFeedback(errorMessage);
-        toast(errorMessage);
-        return;
-      }
-
-      const loginRes = await loginUser({ email: email.trim(), password: password.trim() });
-      if (!loginRes.ok) {
-        setFeedback(loginRes.error || "Kayıt oldu, giriş sırasında hata oluştu.");
-        toast(loginRes.error || "Kayıt oldu, giriş sırasında hata oluştu.");
-        router.push("/giris");
-        return;
-      }
-
-      setFeedback("Kayıt başarılı. Yönlendiriliyorsun...");
-      toast("Kayıt başarılı");
-      router.push((normalizedResult.role || role) === "designer" ? "/designer-panel" : "/");
+      setEmailSent(true);
     } catch (error) {
-      const msg =
-        error instanceof DOMException && error.name === "AbortError"
-          ? "Kayıt isteği zaman aşımına uğradı. Lütfen tekrar dene."
-          : error instanceof Error
-          ? error.message
-          : "Beklenmeyen bir hata oluştu.";
+      const msg = error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.";
       setFeedback(msg);
       toast(msg);
     } finally {
-      if (timeoutId) clearTimeout(timeoutId);
       setLoading(false);
     }
   }
@@ -358,6 +326,25 @@ function KayitPageContent() {
       setFeedback(error.message);
       toast(error.message);
     }
+  }
+
+  if (emailSent) {
+    return (
+      <main className="min-h-screen bg-slate-100 px-4 py-10">
+        <div className="mx-auto max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-3xl">
+            ✉️
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900">E-postanı doğrula</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            <strong>{email}</strong> adresine doğrulama linki gönderdik. Linke tıklayarak hesabını aktif et ve giriş yap.
+          </p>
+          <p className="mt-4 text-xs text-slate-400">
+            E-posta gelmezse spam klasörünü kontrol et.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   return (
