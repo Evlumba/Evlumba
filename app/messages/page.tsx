@@ -58,13 +58,13 @@ function emitMessagesUpdated() {
   window.dispatchEvent(new Event("evlumba:messages-updated"));
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(message)), ms);
   });
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    return (await Promise.race([Promise.resolve(promise), timeoutPromise])) as T;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
