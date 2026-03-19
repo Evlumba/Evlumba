@@ -78,7 +78,7 @@ function SifreYenileContent() {
         return;
       }
 
-      router.push("/giris?reset=success");
+      router.replace("/");
     } catch (submitError) {
       if (submitError instanceof DOMException && submitError.name === "AbortError") {
         setError("İstek zaman aşımına uğradı. Lütfen tekrar deneyin.");
