@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function SifreYenileContent() {
   const router = useRouter();
@@ -44,19 +43,54 @@ function SifreYenileContent() {
       return;
     }
     setLoading(true);
-    const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (error) {
-      const normalized = error.message.toLowerCase();
-      if (normalized.includes("auth session missing") || normalized.includes("invalid jwt")) {
-        setInvalidLink(true);
-        setError("Bağlantı geçersiz veya süresi dolmuş. Şifremi unuttum sayfasından tekrar deneyin.");
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const response = await fetch("/api/auth/update-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        cache: "no-store",
+        body: JSON.stringify({ password }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      const result = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
+
+      if (!response.ok || !result?.ok) {
+        const message = result?.error || "Şifre güncellenemedi.";
+        const normalized = message.toLowerCase();
+        if (
+          response.status === 401 ||
+          normalized.includes("geçersiz") ||
+          normalized.includes("süresi dolmuş")
+        ) {
+          setInvalidLink(true);
+          setError("Bağlantı geçersiz veya süresi dolmuş. Şifremi unuttum sayfasından tekrar deneyin.");
+          return;
+        }
+        setError(message);
         return;
       }
-      setError("Şifre güncellenemedi: " + error.message);
-    } else {
+
       router.push("/giris?reset=success");
+    } catch (submitError) {
+      if (submitError instanceof DOMException && submitError.name === "AbortError") {
+        setError("İstek zaman aşımına uğradı. Lütfen tekrar deneyin.");
+        return;
+      }
+      const message =
+        submitError instanceof Error
+          ? submitError.message
+          : "Şifre güncellenirken bir hata oluştu.";
+      setError(message);
+    } finally {
+      setLoading(false);
     }
   }
 
