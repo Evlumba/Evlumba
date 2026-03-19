@@ -13,24 +13,27 @@ export default function SifreYenile() {
   const [sessionReady, setSessionReady] = useState(false);
 
   useEffect(() => {
-    // Handle both PKCE flow (session already set via cookie by /auth/callback)
-    // and implicit flow (tokens in URL fragment)
     const supabase = getSupabaseBrowserClient();
 
     async function initSession() {
-      // First check if session already exists (set by /auth/callback PKCE flow)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setSessionReady(true);
-        return;
+      // PKCE flow: ?code= in query params
+      const searchParams = new URLSearchParams(window.location.search);
+      const code = searchParams.get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error) {
+          window.history.replaceState(null, "", window.location.pathname);
+          setSessionReady(true);
+          return;
+        }
       }
 
-      // Fallback: try to extract tokens from URL fragment (implicit flow)
+      // Implicit flow: #access_token= in URL fragment
       const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-      const type = params.get("type");
+      const hashParams = new URLSearchParams(hash);
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+      const type = hashParams.get("type");
 
       if (accessToken && refreshToken && type === "recovery") {
         const { error } = await supabase.auth.setSession({
@@ -38,14 +41,19 @@ export default function SifreYenile() {
           refresh_token: refreshToken,
         });
         if (!error) {
-          // Clean up the fragment from URL
           window.history.replaceState(null, "", window.location.pathname);
           setSessionReady(true);
           return;
         }
       }
 
-      // No valid session found
+      // Fallback: session already set (e.g. from /auth/callback cookie)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setSessionReady(true);
+        return;
+      }
+
       setError("Geçersiz veya süresi dolmuş bağlantı. Şifremi unuttum sayfasından tekrar deneyin.");
     }
 
@@ -68,7 +76,7 @@ export default function SifreYenile() {
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
-      setError("Şifre güncellenemedi. Bağlantı süresi dolmuş olabilir, tekrar dene.");
+      setError("Şifre güncellenemedi: " + error.message);
     } else {
       router.push("/giris?reset=success");
     }
@@ -79,13 +87,15 @@ export default function SifreYenile() {
       <h1 className="text-2xl font-semibold">Yeni Şifre Belirle</h1>
       <p className="mt-2 text-sm text-gray-600">Hesabın için yeni bir şifre oluştur.</p>
 
-      {error && !sessionReady ? (
+      {!sessionReady && error ? (
         <div className="mt-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
           {error}
           <div className="mt-2">
             <a href="/sifremi-unuttum" className="underline">Tekrar dene</a>
           </div>
         </div>
+      ) : !sessionReady ? (
+        <p className="mt-4 text-sm text-gray-500">Yükleniyor…</p>
       ) : (
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
@@ -114,7 +124,7 @@ export default function SifreYenile() {
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
             type="submit"
-            disabled={loading || !sessionReady}
+            disabled={loading}
             className="w-full rounded-xl bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             {loading ? "Kaydediliyor…" : "Şifremi Güncelle"}
