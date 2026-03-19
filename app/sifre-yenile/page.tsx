@@ -1,86 +1,39 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-import { getSupabasePublicEnv } from "@/lib/supabase/env";
+import { useRouter, useSearchParams } from "next/navigation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function SifreYenile() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionReady, setSessionReady] = useState(false);
+  const [invalidLink, setInvalidLink] = useState(false);
+
+  const code = searchParams.get("code");
+  const tokenHash = searchParams.get("token_hash");
+  const isRecoveryType = searchParams.get("type") === "recovery";
+  const hasResetError = searchParams.get("reset_error") === "1";
+  const needsRecoveryRedirect = Boolean(code || tokenHash || isRecoveryType);
+  const linkIsInvalid = hasResetError || invalidLink;
 
   useEffect(() => {
-    // Use a fresh client with no session auto-detection so initialize()
-    // doesn't block exchangeCodeForSession with a stale token refresh.
-    const { url, anonKey } = getSupabasePublicEnv();
-    const supabase = createBrowserClient(url, anonKey, {
-      auth: { detectSessionInUrl: false, persistSession: false },
-    });
-    let done = false;
-
-    const failTimer = setTimeout(() => {
-      if (!done) {
-        done = true;
-        setError("Bağlantı zaman aşımına uğradı. Şifremi unuttum sayfasından tekrar deneyin.");
-      }
-    }, 8000);
-
-    async function initSession() {
-      try {
-        // PKCE flow: ?code= in query params
-        const searchParams = new URLSearchParams(window.location.search);
-        const code = searchParams.get("code");
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (!error) {
-            window.history.replaceState(null, "", window.location.pathname);
-            if (!done) { done = true; setSessionReady(true); }
-            return;
-          }
-        }
-
-        // Implicit flow: #access_token= in URL fragment
-        const hash = window.location.hash.substring(1);
-        const hashParams = new URLSearchParams(hash);
-        const accessToken = hashParams.get("access_token");
-        const refreshToken = hashParams.get("refresh_token");
-        const type = hashParams.get("type");
-
-        if (accessToken && refreshToken && type === "recovery") {
-          const { error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (!error) {
-            window.history.replaceState(null, "", window.location.pathname);
-            if (!done) { done = true; setSessionReady(true); }
-            return;
-          }
-        }
-
-        // Fallback: session already set
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          if (!done) { done = true; setSessionReady(true); }
-          return;
-        }
-
-        if (!done) { done = true; setError("Geçersiz veya süresi dolmuş bağlantı. Şifremi unuttum sayfasından tekrar deneyin."); }
-      } catch {
-        if (!done) { done = true; setError("Bir hata oluştu. Lütfen şifremi unuttum sayfasından tekrar deneyin."); }
-      }
+    if (needsRecoveryRedirect) {
+      const callbackUrl = new URL("/auth/callback", window.location.origin);
+      if (code) callbackUrl.searchParams.set("code", code);
+      if (tokenHash) callbackUrl.searchParams.set("token_hash", tokenHash);
+      callbackUrl.searchParams.set("type", "recovery");
+      callbackUrl.searchParams.set("next", "/sifre-yenile");
+      window.location.replace(callbackUrl.toString());
     }
-
-    initSession();
-    return () => clearTimeout(failTimer);
-  }, []);
+  }, [needsRecoveryRedirect, code, tokenHash]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (linkIsInvalid) return;
     setError(null);
     if (password.length < 6) {
       setError("Şifre en az 6 karakter olmalı.");
@@ -91,13 +44,16 @@ export default function SifreYenile() {
       return;
     }
     setLoading(true);
-    const { url, anonKey } = getSupabasePublicEnv();
-    const supabase = createBrowserClient(url, anonKey, {
-      auth: { detectSessionInUrl: false, persistSession: false },
-    });
+    const supabase = getSupabaseBrowserClient();
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
+      const normalized = error.message.toLowerCase();
+      if (normalized.includes("auth session missing") || normalized.includes("invalid jwt")) {
+        setInvalidLink(true);
+        setError("Bağlantı geçersiz veya süresi dolmuş. Şifremi unuttum sayfasından tekrar deneyin.");
+        return;
+      }
       setError("Şifre güncellenemedi: " + error.message);
     } else {
       router.push("/giris?reset=success");
@@ -109,15 +65,15 @@ export default function SifreYenile() {
       <h1 className="text-2xl font-semibold">Yeni Şifre Belirle</h1>
       <p className="mt-2 text-sm text-gray-600">Hesabın için yeni bir şifre oluştur.</p>
 
-      {!sessionReady && error ? (
+      {needsRecoveryRedirect ? (
+        <p className="mt-4 text-sm text-gray-500">Bağlantı doğrulanıyor…</p>
+      ) : linkIsInvalid ? (
         <div className="mt-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-          {error}
+          {error ?? "Bağlantı geçersiz veya süresi dolmuş. Şifremi unuttum sayfasından tekrar deneyin."}
           <div className="mt-2">
             <a href="/sifremi-unuttum" className="underline">Tekrar dene</a>
           </div>
         </div>
-      ) : !sessionReady ? (
-        <p className="mt-4 text-sm text-gray-500">Yükleniyor…</p>
       ) : (
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>

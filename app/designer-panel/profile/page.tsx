@@ -672,7 +672,10 @@ async function onPickCover(file: File | null) {
     try {
       const supabase = getSupabaseBrowserClient();
       const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
-        redirectTo: typeof window !== "undefined" ? `${window.location.origin}/sifremi-unuttum` : undefined,
+        redirectTo:
+          typeof window !== "undefined"
+            ? `${window.location.origin}/auth/callback?type=recovery&next=/sifre-yenile`
+            : undefined,
       });
       if (error) {
         toast(error.message);

@@ -50,6 +50,7 @@ function pickAuthEmail(user: {
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const tokenHash = requestUrl.searchParams.get("token_hash");
   const rawRole = requestUrl.searchParams.get("role");
   const flow = requestUrl.searchParams.get("flow");
   const type = requestUrl.searchParams.get("type");
@@ -58,11 +59,27 @@ export async function GET(request: Request) {
 
   // Password reset flow — exchange code then redirect to password update page
   if (type === "recovery") {
+    const supabase = await getSupabaseServerClient();
+    let recoveryError: string | null = null;
+
     if (code) {
-      const supabase = await getSupabaseServerClient();
-      await supabase.auth.exchangeCodeForSession(code);
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      recoveryError = error?.message ?? null;
+    } else if (tokenHash) {
+      const { error } = await supabase.auth.verifyOtp({
+        type: "recovery",
+        token_hash: tokenHash,
+      });
+      recoveryError = error?.message ?? null;
+    } else {
+      recoveryError = "missing_recovery_token";
     }
-    return NextResponse.redirect(new URL(safeNextPath !== "/" ? safeNextPath : "/sifre-yenile", requestUrl.origin));
+
+    const resetUrl = new URL(safeNextPath !== "/" ? safeNextPath : "/sifre-yenile", requestUrl.origin);
+    if (recoveryError) {
+      resetUrl.searchParams.set("reset_error", "1");
+    }
+    return NextResponse.redirect(resetUrl);
   }
 
   const roleFromQuery: Role | null = isRole(rawRole) ? rawRole : null;
