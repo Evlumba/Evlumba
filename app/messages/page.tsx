@@ -171,15 +171,29 @@ function MessagesPageContent() {
       setError(null);
       setMessages([]);
       try {
-        const { data: sessionData, error: sessionError } = await withTimeout(
-          supabase.auth.getSession(),
-          8000,
-          "Oturum doğrulama zaman aşımına uğradı."
+        const sessionUser = await new Promise<import("@supabase/supabase-js").User | null>(
+          (resolve) => {
+            let resolved = false;
+            const timer = setTimeout(() => {
+              if (!resolved) { resolved = true; resolve(null); }
+            }, 10000);
+            const { data: { subscription } } = supabase.auth.onAuthStateChange(
+              (event, session) => {
+                if (event === "INITIAL_SESSION") {
+                  if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timer);
+                    subscription.unsubscribe();
+                    resolve(session?.user ?? null);
+                  }
+                }
+              }
+            );
+          }
         );
         if (cancelled) return;
 
-        const sessionUser = sessionData.session?.user;
-        if (sessionError || !sessionUser) {
+        if (!sessionUser) {
           setError("Mesajlar için önce giriş yapman gerekiyor.");
           return;
         }
