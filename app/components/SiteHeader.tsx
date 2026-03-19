@@ -943,7 +943,7 @@ export default function SiteHeader() {
                 <Brand />
               </div>
 
-              <nav className="shrink-0 flex items-center gap-2">
+              <nav className="flex items-center gap-2 overflow-x-auto flex-1 min-w-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {nav.map((n) => (
                   <NavItem
                     key={n.id}
@@ -959,7 +959,7 @@ export default function SiteHeader() {
               </nav>
 
               {/* actions */}
-              <div className="ml-auto shrink-0 flex items-center gap-2">
+              <div className="shrink-0 flex items-center gap-2">
                 {isLoggedIn ? (
                   <>
                     {role === "designer" ? (
