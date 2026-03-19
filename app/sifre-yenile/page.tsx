@@ -14,52 +14,63 @@ export default function SifreYenile() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
+    let done = false;
+
+    const failTimer = setTimeout(() => {
+      if (!done) {
+        done = true;
+        setError("Bağlantı zaman aşımına uğradı. Şifremi unuttum sayfasından tekrar deneyin.");
+      }
+    }, 8000);
 
     async function initSession() {
-      // PKCE flow: ?code= in query params
-      const searchParams = new URLSearchParams(window.location.search);
-      const code = searchParams.get("code");
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error) {
-          window.history.replaceState(null, "", window.location.pathname);
-          setSessionReady(true);
+      try {
+        // PKCE flow: ?code= in query params
+        const searchParams = new URLSearchParams(window.location.search);
+        const code = searchParams.get("code");
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error) {
+            window.history.replaceState(null, "", window.location.pathname);
+            if (!done) { done = true; setSessionReady(true); }
+            return;
+          }
+        }
+
+        // Implicit flow: #access_token= in URL fragment
+        const hash = window.location.hash.substring(1);
+        const hashParams = new URLSearchParams(hash);
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
+        const type = hashParams.get("type");
+
+        if (accessToken && refreshToken && type === "recovery") {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (!error) {
+            window.history.replaceState(null, "", window.location.pathname);
+            if (!done) { done = true; setSessionReady(true); }
+            return;
+          }
+        }
+
+        // Fallback: session already set
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          if (!done) { done = true; setSessionReady(true); }
           return;
         }
+
+        if (!done) { done = true; setError("Geçersiz veya süresi dolmuş bağlantı. Şifremi unuttum sayfasından tekrar deneyin."); }
+      } catch {
+        if (!done) { done = true; setError("Bir hata oluştu. Lütfen şifremi unuttum sayfasından tekrar deneyin."); }
       }
-
-      // Implicit flow: #access_token= in URL fragment
-      const hash = window.location.hash.substring(1);
-      const hashParams = new URLSearchParams(hash);
-      const accessToken = hashParams.get("access_token");
-      const refreshToken = hashParams.get("refresh_token");
-      const type = hashParams.get("type");
-
-      if (accessToken && refreshToken && type === "recovery") {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (!error) {
-          window.history.replaceState(null, "", window.location.pathname);
-          setSessionReady(true);
-          return;
-        }
-      }
-
-      // Fallback: session already set (e.g. from /auth/callback cookie)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setSessionReady(true);
-        return;
-      }
-
-      setError("Geçersiz veya süresi dolmuş bağlantı. Şifremi unuttum sayfasından tekrar deneyin.");
     }
 
-    initSession().catch(() => {
-      setError("Bir hata oluştu. Lütfen şifremi unuttum sayfasından tekrar deneyin.");
-    });
+    initSession();
+    return () => clearTimeout(failTimer);
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
