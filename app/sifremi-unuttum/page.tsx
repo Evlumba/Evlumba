@@ -17,7 +17,7 @@ export default function SifremiUnuttum() {
     setError(null);
     const supabase = getSupabaseBrowserClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/auth/callback?type=recovery&next=/sifre-yenile`,
+      redirectTo: `${window.location.origin}/sifre-yenile`,
     });
     setLoading(false);
     if (error) {
