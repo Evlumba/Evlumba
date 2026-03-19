@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-export default function SifreYenile() {
+function SifreYenileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [password, setPassword] = useState("");
@@ -110,5 +110,13 @@ export default function SifreYenile() {
         </form>
       )}
     </div>
+  );
+}
+
+export default function SifreYenile() {
+  return (
+    <Suspense fallback={<p className="mt-4 text-sm text-gray-500">Yükleniyor…</p>}>
+      <SifreYenileContent />
+    </Suspense>
   );
 }
