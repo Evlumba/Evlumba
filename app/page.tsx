@@ -20,7 +20,7 @@ type Designer = {
   id: string;
   name: string;
   city: string;
-  specialty: string;
+  specialty: string | null;
   rating: number;
   projects: number;
   coverUrl: string;
@@ -49,6 +49,7 @@ type HomeProfileRow = {
 
 type HomeProjectRow = {
   designer_id: string;
+  cover_image_url: string | null;
 };
 
 type HomeCollectionItemRow = {
@@ -154,11 +155,12 @@ async function loadHomeProjects(limit = 3): Promise<Project[]> {
       )
       .eq("is_published", true)
       .order("created_at", { ascending: false })
-      .limit(Math.max(limit, 12));
+      .limit(Math.max(limit, 30));
 
     if (error || !data) return [];
 
-    const selectedProjects = (data as HomeInspirationProjectRow[]).slice(0, limit);
+    const shuffled = [...(data as HomeInspirationProjectRow[])].sort(() => Math.random() - 0.5);
+    const selectedProjects = shuffled.slice(0, limit);
     const projectIds = selectedProjects.map((project) => project.id);
 
     const { data: savedRows } = await (
@@ -208,8 +210,12 @@ async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
       .from("profiles")
       .select("id, full_name, business_name, specialty, city, about, response_time, cover_photo_url, avatar_url")
       .in("role", ["designer", "designer_pending"])
+      .not("avatar_url", "is", null)
+      .neq("avatar_url", "")
+      .not("about", "is", null)
+      .neq("about", "")
       .order("created_at", { ascending: false })
-      .limit(40);
+      .limit(300);
 
     if (profilesError || !profilesData || profilesData.length === 0) return [];
 
@@ -219,9 +225,10 @@ async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
     const [{ data: projectsData }, { data: reviewsData }] = await Promise.all([
       admin
         .from("designer_projects")
-        .select("designer_id")
+        .select("designer_id, cover_image_url")
         .in("designer_id", ids)
-        .eq("is_published", true),
+        .eq("is_published", true)
+        .order("created_at", { ascending: false }),
       admin
         .from("designer_reviews")
         .select("designer_id, rating, review_text, created_at")
@@ -230,11 +237,15 @@ async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
     ]);
 
     const projectCountByDesigner = new Map<string, number>();
+    const firstProjectCoverByDesigner = new Map<string, string>();
     for (const row of (projectsData ?? []) as HomeProjectRow[]) {
       projectCountByDesigner.set(
         row.designer_id,
         (projectCountByDesigner.get(row.designer_id) ?? 0) + 1
       );
+      if (!firstProjectCoverByDesigner.has(row.designer_id) && row.cover_image_url?.trim()) {
+        firstProjectCoverByDesigner.set(row.designer_id, row.cover_image_url.trim());
+      }
     }
 
     const reviewByDesigner = new Map<string, { sum: number; count: number; latestText: string }>();
@@ -252,6 +263,7 @@ async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
     }
 
     return profiles
+      .filter((profile) => profile.avatar_url?.trim() && profile.about?.trim())
       .map((profile) => {
         const stats = reviewByDesigner.get(profile.id);
         const avgRating =
@@ -264,10 +276,10 @@ async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
           id: profile.id,
           name: displayName,
           city: profile.city?.trim() || "Türkiye",
-          specialty: profile.specialty?.trim() || "İç Mimar",
+          specialty: profile.specialty?.trim() || null,
           rating: avgRating,
           projects: projectCount,
-          coverUrl: (profile.cover_photo_url ?? "").trim(),
+          coverUrl: (profile.cover_photo_url ?? "").trim() || firstProjectCoverByDesigner.get(profile.id) || "",
           avatarUrl: (profile.avatar_url ?? "").trim(),
           href: `/tasarimcilar/supa_${profile.id}`,
           fastReplyLabel: profile.response_time?.trim() || "24 saat içinde dönüş",
@@ -280,7 +292,8 @@ async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
           lastActiveLabel: projectCount > 0 ? "Portföy güncel" : "Yeni katıldı",
         } satisfies Designer;
       })
-      .sort((a, b) => b.projects - a.projects || b.rating - a.rating)
+      .filter((d) => d.projects >= 1)
+      .sort(() => Math.random() - 0.5)
       .slice(0, limit);
   } catch {
     return [];
@@ -637,7 +650,7 @@ function DesignerCard({ d }: { d: Designer }) {
                 {d.name}
               </div>
               <div className="truncate text-xs text-white/80">
-                {d.city} • {d.specialty}
+                {[d.city, d.specialty].filter(Boolean).join(" • ")}
               </div>
             </div>
           </div>

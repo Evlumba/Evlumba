@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "plus.unsplash.com" },
+      { protocol: "https", hostname: "static.wixstatic.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
     // COST-FIX: Cache optimized images longer
     minimumCacheTTL: 86400, // 24 hours
