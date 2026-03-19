@@ -16,6 +16,8 @@ const tabs = [
 
 const COVER_WIDTH = 1920;
 const COVER_HEIGHT = 640;
+const COVER_MAX_MB = 5;
+const COVER_MAX_BYTES = COVER_MAX_MB * 1024 * 1024;
 
 type TabId = (typeof tabs)[number]["id"];
 
@@ -488,6 +490,10 @@ async function onPickAvatar(file: File | null) {
 
 async function onPickCover(file: File | null) {
   if (!file) return;
+  if (file.size > COVER_MAX_BYTES) {
+    toast(`Dosya çok büyük. Maksimum ${COVER_MAX_MB} MB yükleyebilirsin (seçilen: ${(file.size / 1024 / 1024).toFixed(1)} MB).`);
+    return;
+  }
   try {
       const url = await normalizeImageToSize(file, COVER_WIDTH, COVER_HEIGHT);
       setDraft((prev) => ({ ...prev, coverPhotoUrl: url }));
@@ -854,7 +860,7 @@ async function onPickCover(file: File | null) {
                 </div>
                 <input type="file" accept="image/*" className="mt-3 w-full text-xs" onChange={(e) => void onPickCover(e.target.files?.[0] ?? null)} />
                 <p className="mt-2 text-xs text-slate-500">
-                  Kapak görseli yalnızca dosya yükleme ile eklenir ve otomatik optimize edilir.
+                  Maksimum {COVER_MAX_MB} MB · Otomatik {COVER_WIDTH}x{COVER_HEIGHT} boyutuna optimize edilir.
                 </p>
               </div>
             </div>
