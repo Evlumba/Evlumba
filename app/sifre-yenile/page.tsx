@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createBrowserClient } from "@supabase/ssr";
+import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
 export default function SifreYenile() {
   const router = useRouter();
@@ -13,7 +14,12 @@ export default function SifreYenile() {
   const [sessionReady, setSessionReady] = useState(false);
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
+    // Use a fresh client with no session auto-detection so initialize()
+    // doesn't block exchangeCodeForSession with a stale token refresh.
+    const { url, anonKey } = getSupabasePublicEnv();
+    const supabase = createBrowserClient(url, anonKey, {
+      auth: { detectSessionInUrl: false, persistSession: false },
+    });
     let done = false;
 
     const failTimer = setTimeout(() => {
@@ -85,7 +91,10 @@ export default function SifreYenile() {
       return;
     }
     setLoading(true);
-    const supabase = getSupabaseBrowserClient();
+    const { url, anonKey } = getSupabasePublicEnv();
+    const supabase = createBrowserClient(url, anonKey, {
+      auth: { detectSessionInUrl: false, persistSession: false },
+    });
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
