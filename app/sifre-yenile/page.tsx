@@ -57,7 +57,9 @@ export default function SifreYenile() {
       setError("Geçersiz veya süresi dolmuş bağlantı. Şifremi unuttum sayfasından tekrar deneyin.");
     }
 
-    initSession();
+    initSession().catch(() => {
+      setError("Bir hata oluştu. Lütfen şifremi unuttum sayfasından tekrar deneyin.");
+    });
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {

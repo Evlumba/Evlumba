@@ -300,7 +300,12 @@ function MessagesPageContent() {
       }
     };
 
-    void load();
+    load().catch(() => {
+      if (!cancelled) {
+        setError("Bir hata oluştu, lütfen sayfayı yenileyin.");
+        setLoading(false);
+      }
+    });
 
     return () => {
       cancelled = true;
