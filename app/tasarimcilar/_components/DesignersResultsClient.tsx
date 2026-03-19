@@ -30,6 +30,7 @@ type Designer = {
   pinnedBy?: string;
   tags: string[];
   coverUrl: string;
+  avatarUrl?: string;
   response?: string;
   startingFrom?: string;
   portfolioCount?: number;
@@ -165,6 +166,19 @@ function ListRow({ d }: { d: Designer }) {
             </div>
             <div className="absolute right-3 top-3">
               {d.response ? <OverlayBadge icon={<Timer className="h-3.5 w-3.5" />} label={d.response} /> : null}
+            </div>
+
+            {/* Avatar */}
+            <div className="absolute bottom-3 left-3">
+              <div className="h-12 w-12 overflow-hidden rounded-full ring-2 ring-white shadow-md bg-slate-100">
+                {d.avatarUrl ? (
+                  <img src={d.avatarUrl} alt={d.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-slate-500">
+                    {(d.name || "P").charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
