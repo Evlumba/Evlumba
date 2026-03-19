@@ -58,6 +58,18 @@ function emitMessagesUpdated() {
   window.dispatchEvent(new Event("evlumba:messages-updated"));
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 function displayName(
   profile: ProfileLite | null | undefined,
   fallback = "Kullanıcı"
@@ -158,145 +170,191 @@ function MessagesPageContent() {
       setLoading(true);
       setError(null);
       setMessages([]);
+      try {
+        const { data: sessionData, error: sessionError } = await withTimeout(
+          supabase.auth.getSession(),
+          8000,
+          "Oturum doğrulama zaman aşımına uğradı."
+        );
+        if (cancelled) return;
 
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (cancelled) return;
+        const sessionUser = sessionData.session?.user;
+        if (sessionError || !sessionUser) {
+          setError("Mesajlar için önce giriş yapman gerekiyor.");
+          return;
+        }
 
-      if (authError || !authData.user) {
-        setError("Mesajlar için önce giriş yapman gerekiyor.");
-        setLoading(false);
-        return;
-      }
+        const currentUserId = sessionUser.id;
+        setUserId(currentUserId);
 
-      const currentUserId = authData.user.id;
-      setUserId(currentUserId);
-
-      const { data: meProfile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", currentUserId)
-        .maybeSingle();
-
-      const currentUserRole = normalizeRole(meProfile?.role ?? authData.user.user_metadata?.role);
-      if (cancelled) return;
-      setUserRole(currentUserRole);
-
-      let firstConversationId: string | null = null;
-      let setupError: string | null = null;
-
-      if (requestedDesignerId) {
-        if (currentUserRole !== "homeowner") {
-          setupError = "Yeni konuşma sadece kullanıcı hesabından başlatılabilir.";
-        } else {
-          const { data: targetRole, error: targetRoleError } = await supabase.rpc(
-            "get_profile_role",
-            { user_id: requestedDesignerId }
+        let currentUserRole = normalizeRole(sessionUser.user_metadata?.role);
+        try {
+          const { data: meProfile } = await withTimeout(
+            supabase.from("profiles").select("role").eq("id", currentUserId).maybeSingle(),
+            7000,
+            "Profil bilgileri alınamadı."
           );
+          currentUserRole = normalizeRole(meProfile?.role ?? sessionUser.user_metadata?.role);
+        } catch {
+          // fallback to role from session metadata
+        }
 
-          if (targetRoleError) {
-            setupError = targetRoleError.message;
-          } else if (targetRole !== "designer" && targetRole !== "designer_pending") {
-            setupError = "Sadece profesyonellere mesaj atılabilir.";
+        if (cancelled) return;
+        setUserRole(currentUserRole);
+
+        let firstConversationId: string | null = null;
+        let setupError: string | null = null;
+
+        if (requestedDesignerId) {
+          if (currentUserRole !== "homeowner") {
+            setupError = "Yeni konuşma sadece kullanıcı hesabından başlatılabilir.";
           } else {
-            const { data: existingConversation, error: existingError } = await supabase
-              .from("conversations")
-              .select("id")
-              .eq("homeowner_id", currentUserId)
-              .eq("designer_id", requestedDesignerId)
-              .maybeSingle();
+            try {
+              const { data: targetRole, error: targetRoleError } = await withTimeout(
+                supabase.rpc("get_profile_role", { user_id: requestedDesignerId }),
+                7000,
+                "Profil rolü doğrulanamadı."
+              );
 
-            if (existingError) {
-              setupError = existingError.message;
-            } else if (existingConversation?.id) {
-              firstConversationId = existingConversation.id;
-            } else {
-              const { data: insertedConversation, error: insertError } = await supabase
-                .from("conversations")
-                .insert({
-                  homeowner_id: currentUserId,
-                  designer_id: requestedDesignerId,
-                })
-                .select("id")
-                .single();
-
-              if (insertError) {
-                setupError = insertError.message;
+              if (targetRoleError) {
+                setupError = targetRoleError.message;
+              } else if (targetRole !== "designer" && targetRole !== "designer_pending") {
+                setupError = "Sadece profesyonellere mesaj atılabilir.";
               } else {
-                firstConversationId = insertedConversation.id;
+                const { data: existingConversation, error: existingError } = await withTimeout(
+                  supabase
+                    .from("conversations")
+                    .select("id")
+                    .eq("homeowner_id", currentUserId)
+                    .eq("designer_id", requestedDesignerId)
+                    .maybeSingle(),
+                  7000,
+                  "Konuşma kontrolü zaman aşımına uğradı."
+                );
+
+                if (existingError) {
+                  setupError = existingError.message;
+                } else if (existingConversation?.id) {
+                  firstConversationId = existingConversation.id;
+                } else {
+                  const { data: insertedConversation, error: insertError } = await withTimeout(
+                    supabase
+                      .from("conversations")
+                      .insert({
+                        homeowner_id: currentUserId,
+                        designer_id: requestedDesignerId,
+                      })
+                      .select("id")
+                      .single(),
+                    7000,
+                    "Yeni konuşma oluşturulamadı."
+                  );
+
+                  if (insertError) {
+                    setupError = insertError.message;
+                  } else {
+                    firstConversationId = insertedConversation.id;
+                  }
+                }
               }
+            } catch (requestError) {
+              setupError =
+                requestError instanceof Error
+                  ? requestError.message
+                  : "Konuşma başlatılırken bir hata oluştu.";
             }
           }
         }
-      }
 
-      const { data: convs, error: convError } = await supabase
-        .from("conversations")
-        .select("id, homeowner_id, designer_id, created_at")
-        .or(`homeowner_id.eq.${currentUserId},designer_id.eq.${currentUserId}`)
-        .order("created_at", { ascending: false });
-
-      if (cancelled) return;
-      if (convError) {
-        setError(setupError ?? convError.message);
-        setLoading(false);
-        return;
-      }
-
-      const list = convs ?? [];
-      setConversations(list);
-
-      const nextActive =
-        firstConversationId && list.some((c) => c.id === firstConversationId)
-          ? firstConversationId
-          : list[0]?.id ?? null;
-      setActiveConversationId(nextActive);
-
-      const profileIds = Array.from(new Set(list.flatMap((c) => [c.homeowner_id, c.designer_id])));
-      if (profileIds.length > 0) {
-        let peopleRows: ProfileLite[] = [];
-        const { data: peopleFromRpc, error: peopleRpcError } = await supabase.rpc(
-          "get_profile_briefs",
-          { user_ids: profileIds }
+        const { data: convs, error: convError } = await withTimeout(
+          supabase
+            .from("conversations")
+            .select("id, homeowner_id, designer_id, created_at")
+            .or(`homeowner_id.eq.${currentUserId},designer_id.eq.${currentUserId}`)
+            .order("created_at", { ascending: false }),
+          9000,
+          "Konuşmalar yüklenirken zaman aşımı oluştu."
         );
 
-        if (!peopleRpcError && Array.isArray(peopleFromRpc)) {
-          peopleRows = peopleFromRpc as ProfileLite[];
+        if (cancelled) return;
+        if (convError) {
+          setError(setupError ?? convError.message);
+          return;
         }
 
-        // Some environments may return partial/empty data due RPC cache mismatch.
-        // Fetch missing participants one-by-one via a simpler RPC signature.
-        const loadedIds = new Set(peopleRows.map((row) => row.id));
-        const missingIds = profileIds.filter((id) => !loadedIds.has(id));
-        if (missingIds.length > 0) {
-          const missingProfiles = await Promise.all(
-            missingIds.map(async (id) => {
-              const { data, error } = await supabase
-                .rpc("get_profile_brief", { user_id: id })
-                .single();
-              if (error || !data) return null;
-              return data as ProfileLite;
-            })
-          );
-          peopleRows = [
-            ...peopleRows,
-            ...(missingProfiles.filter((row): row is ProfileLite => Boolean(row))),
-          ];
+        const list = convs ?? [];
+        setConversations(list);
+
+        const nextActive =
+          firstConversationId && list.some((c) => c.id === firstConversationId)
+            ? firstConversationId
+            : list[0]?.id ?? null;
+        setActiveConversationId(nextActive);
+
+        const profileIds = Array.from(new Set(list.flatMap((c) => [c.homeowner_id, c.designer_id])));
+        if (profileIds.length > 0) {
+          let peopleRows: ProfileLite[] = [];
+
+          try {
+            const { data: peopleFromRpc, error: peopleRpcError } = await withTimeout(
+              supabase.rpc("get_profile_briefs", { user_ids: profileIds }),
+              7000,
+              "Kullanıcı profilleri yüklenirken zaman aşımı oluştu."
+            );
+            if (!peopleRpcError && Array.isArray(peopleFromRpc)) {
+              peopleRows = peopleFromRpc as ProfileLite[];
+            }
+          } catch {
+            // fallback below
+          }
+
+          const loadedIds = new Set(peopleRows.map((row) => row.id));
+          const missingIds = profileIds.filter((id) => !loadedIds.has(id));
+
+          if (missingIds.length > 0) {
+            try {
+              const { data: profileRows, error: profileError } = await withTimeout(
+                supabase
+                  .from("profiles")
+                  .select("id, full_name, business_name, avatar_url, role")
+                  .in("id", missingIds),
+                7000,
+                "Eksik profiller yüklenemedi."
+              );
+              if (!profileError && Array.isArray(profileRows)) {
+                peopleRows = [...peopleRows, ...(profileRows as ProfileLite[])];
+              }
+            } catch {
+              // keep whatever we already have
+            }
+          }
+
+          if (!cancelled) {
+            const mapped: Record<string, ProfileLite> = {};
+            for (const row of peopleRows) {
+              mapped[row.id] = row;
+            }
+            setProfilesById(mapped);
+          }
+        } else {
+          setProfilesById({});
         }
 
         if (!cancelled) {
-          const mapped: Record<string, ProfileLite> = {};
-          for (const row of peopleRows) {
-            mapped[row.id] = row;
-          }
-          setProfilesById(mapped);
+          setError(setupError);
         }
-      } else {
-        setProfilesById({});
-      }
-
-      if (!cancelled) {
-        setError(setupError);
-        setLoading(false);
+      } catch (loadError) {
+        if (!cancelled) {
+          const message =
+            loadError instanceof Error
+              ? loadError.message
+              : "Bir hata oluştu, lütfen sayfayı yenileyin.";
+          setError(message);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
