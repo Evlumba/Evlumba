@@ -602,8 +602,9 @@ function DesignerCard({ d }: { d: Designer }) {
             loading="lazy"
           />
         ) : (
-          <div className="grid h-full w-full place-items-center bg-slate-100 text-sm font-medium text-slate-500">
-            Kapak fotoğrafı yok
+          <div className="relative grid h-full w-full place-items-center" style={{ background: "linear-gradient(135deg, #00704A 0%, #004d33 100%)" }}>
+            <svg className="absolute inset-0 h-full w-full opacity-10" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="dots-hp" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="white" /></pattern></defs><rect width="100%" height="100%" fill="url(#dots-hp)" /></svg>
+            <img src="/web_icon2.png" alt="Evlumba" className="relative h-10 w-auto opacity-90 drop-shadow-md" />
           </div>
         )}
         <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/45 via-black/0 to-transparent" />
