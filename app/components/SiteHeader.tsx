@@ -659,16 +659,11 @@ export default function SiteHeader() {
       void refreshUnread();
     };
 
-    const intervalId = window.setInterval(() => {
-      void refreshUnread();
-    }, 15000);
-
     window.addEventListener("focus", handleMessagesUpdated);
     window.addEventListener("evlumba:messages-updated", handleMessagesUpdated);
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
       window.removeEventListener("focus", handleMessagesUpdated);
       window.removeEventListener("evlumba:messages-updated", handleMessagesUpdated);
     };
