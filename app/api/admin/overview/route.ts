@@ -40,7 +40,7 @@ export async function GET() {
       forumPostCountResult,
       publishedListingsCountResult,
       activeBannedCountResult,
-      deletedUserCountResult,
+      totalProjectsCountResult,
       logsResult,
     ] = await Promise.all([
       admin.from("profiles").select("id", { count: "exact", head: true }),
@@ -52,10 +52,7 @@ export async function GET() {
         .select("user_id", { count: "exact", head: true })
         .eq("is_banned", true)
         .or(`banned_until.is.null,banned_until.gt.${nowIso}`),
-      admin
-        .from("user_moderation_states")
-        .select("user_id", { count: "exact", head: true })
-        .eq("is_deleted", true),
+      admin.from("designer_projects").select("id", { count: "exact", head: true }),
       admin
         .from("admin_audit_logs")
         .select("id, actor_user_id, actor_role, action, target_type, target_id, details, created_at")
@@ -68,7 +65,7 @@ export async function GET() {
     if (forumPostCountResult.error) return jsonError(forumPostCountResult.error.message, 500);
     if (publishedListingsCountResult.error) return jsonError(publishedListingsCountResult.error.message, 500);
     if (activeBannedCountResult.error) return jsonError(activeBannedCountResult.error.message, 500);
-    if (deletedUserCountResult.error) return jsonError(deletedUserCountResult.error.message, 500);
+    if (totalProjectsCountResult.error) return jsonError(totalProjectsCountResult.error.message, 500);
     if (logsResult.error) return jsonError(logsResult.error.message, 500);
 
     const logs = (logsResult.data ?? []) as AuditLogRow[];
@@ -96,7 +93,7 @@ export async function GET() {
         forumPosts: forumPostCountResult.count ?? 0,
         publishedListings: publishedListingsCountResult.count ?? 0,
         bannedUsers: activeBannedCountResult.count ?? 0,
-        deletedUsers: deletedUserCountResult.count ?? 0,
+        totalProjects: totalProjectsCountResult.count ?? 0,
       },
       recentLogs: logs.map((log) => ({
         id: log.id,

@@ -18,7 +18,7 @@ type OverviewMetrics = {
   forumPosts: number;
   publishedListings: number;
   bannedUsers: number;
-  deletedUsers: number;
+  totalProjects: number;
 };
 
 type RecentLog = {
@@ -688,8 +688,8 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
               <p className="mt-2 text-2xl font-bold text-rose-700">{overviewLoading ? "..." : metrics?.bannedUsers ?? 0}</p>
             </div>
             <div className="rounded-2xl border border-black/10 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pasif Hesap</p>
-              <p className="mt-2 text-2xl font-bold text-amber-700">{overviewLoading ? "..." : metrics?.deletedUsers ?? 0}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Toplam Proje</p>
+              <p className="mt-2 text-2xl font-bold text-slate-900">{overviewLoading ? "..." : metrics?.totalProjects ?? 0}</p>
             </div>
           </div>
 
