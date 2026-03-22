@@ -19,6 +19,7 @@ type OverviewMetrics = {
   publishedListings: number;
   bannedUsers: number;
   totalProjects: number;
+  todayLogins: number;
 };
 
 type RecentLog = {
@@ -690,6 +691,10 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
             <div className="rounded-2xl border border-black/10 bg-white p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Toplam Proje</p>
               <p className="mt-2 text-2xl font-bold text-slate-900">{overviewLoading ? "..." : metrics?.totalProjects ?? 0}</p>
+            </div>
+            <div className="rounded-2xl border border-black/10 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bugün Giriş</p>
+              <p className="mt-2 text-2xl font-bold text-emerald-700">{overviewLoading ? "..." : metrics?.todayLogins ?? 0}</p>
             </div>
           </div>
 

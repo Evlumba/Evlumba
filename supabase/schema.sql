@@ -190,6 +190,20 @@ $$;
 
 grant execute on function public.get_profile_briefs(uuid[]) to authenticated;
 
+create or replace function public.get_today_login_count()
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)::integer
+  from auth.users
+  where last_sign_in_at >= date_trunc('day', now() at time zone 'UTC');
+$$;
+
+grant execute on function public.get_today_login_count() to service_role;
+
 create or replace function public.get_profile_brief(user_id uuid)
 returns table (
   id uuid,

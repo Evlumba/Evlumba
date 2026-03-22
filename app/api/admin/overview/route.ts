@@ -41,6 +41,7 @@ export async function GET() {
       publishedListingsCountResult,
       activeBannedCountResult,
       totalProjectsCountResult,
+      todayLoginCountResult,
       logsResult,
     ] = await Promise.all([
       admin.from("profiles").select("id", { count: "exact", head: true }),
@@ -53,6 +54,7 @@ export async function GET() {
         .eq("is_banned", true)
         .or(`banned_until.is.null,banned_until.gt.${nowIso}`),
       admin.from("designer_projects").select("id", { count: "exact", head: true }),
+      admin.rpc("get_today_login_count"),
       admin
         .from("admin_audit_logs")
         .select("id, actor_user_id, actor_role, action, target_type, target_id, details, created_at")
@@ -66,6 +68,7 @@ export async function GET() {
     if (publishedListingsCountResult.error) return jsonError(publishedListingsCountResult.error.message, 500);
     if (activeBannedCountResult.error) return jsonError(activeBannedCountResult.error.message, 500);
     if (totalProjectsCountResult.error) return jsonError(totalProjectsCountResult.error.message, 500);
+    if (todayLoginCountResult.error) return jsonError(todayLoginCountResult.error.message, 500);
     if (logsResult.error) return jsonError(logsResult.error.message, 500);
 
     const logs = (logsResult.data ?? []) as AuditLogRow[];
@@ -94,6 +97,7 @@ export async function GET() {
         publishedListings: publishedListingsCountResult.count ?? 0,
         bannedUsers: activeBannedCountResult.count ?? 0,
         totalProjects: totalProjectsCountResult.count ?? 0,
+        todayLogins: (todayLoginCountResult.data as number) ?? 0,
       },
       recentLogs: logs.map((log) => ({
         id: log.id,
