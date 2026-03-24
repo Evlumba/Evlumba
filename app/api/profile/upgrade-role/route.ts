@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
 export const runtime = "nodejs";
 
@@ -11,12 +13,31 @@ function firstNonEmpty(...values: Array<string | null | undefined>) {
   return "";
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await getSupabaseServerClient();
-    const { data: authData, error: authError } = await supabase.auth.getUser();
+    const authHeader = request.headers.get("authorization");
+    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
-    if (authError || !authData.user) {
+    let authData: { user: import("@supabase/supabase-js").User | null };
+    let authError: { message: string } | null = null;
+
+    if (bearerToken) {
+      const { url, anonKey } = getSupabasePublicEnv();
+      const tokenClient = createClient(url, anonKey, {
+        global: { headers: { Authorization: `Bearer ${bearerToken}` } },
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const result = await tokenClient.auth.getUser(bearerToken);
+      authData = result.data;
+      authError = result.error;
+    } else {
+      const supabase = await getSupabaseServerClient();
+      const result = await supabase.auth.getUser();
+      authData = result.data;
+      authError = result.error;
+    }
+
+    if (authError || !authData?.user) {
       return NextResponse.json(
         { ok: false, error: authError?.message || "Oturum bulunamadı." },
         { status: 401 }
