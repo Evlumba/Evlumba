@@ -410,6 +410,28 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     });
   }, []);
 
+  async function changeUserRole(user: ModerationUser, newRole: string) {
+    const confirmed = window.confirm(
+      `${displayUserName(user)} kullanıcısının rolünü "${newRole}" olarak değiştirmek istiyor musun?`
+    );
+    if (!confirmed) return;
+    setBusyUserId(user.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      await requestJson<{ ok: true }>("/api/admin/users", {
+        method: "POST",
+        body: JSON.stringify({ userId: user.id, action: "change_role", newRole }),
+      });
+      setSuccessMessage(`${displayUserName(user)} rolü "${newRole}" olarak güncellendi.`);
+      await reloadAfterMutation();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Rol değiştirilemedi.");
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
   async function runUserAction(
     user: ModerationUser,
     action: "ban" | "unban" | "soft_delete" | "restore" | "hard_delete"
@@ -787,7 +809,16 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                         {user.city ? <div className="text-xs text-slate-500">{user.city}</div> : null}
                       </td>
                       <td className="py-2 pr-3 text-slate-700">
-                        {user.role}
+                        <select
+                          disabled={busyUserId === user.id || user.id === currentUserId}
+                          value={user.role}
+                          onChange={(e) => void changeUserRole(user, e.target.value)}
+                          className="rounded-md border border-black/10 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm hover:border-black/20 disabled:opacity-60 focus:outline-none"
+                        >
+                          <option value="homeowner">homeowner</option>
+                          <option value="designer">designer</option>
+                          <option value="designer_pending">designer_pending</option>
+                        </select>
                         {user.adminRole ? (
                           <div className="mt-1 text-xs font-semibold text-sky-700">admin: {user.adminRole}</div>
                         ) : null}

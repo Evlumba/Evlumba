@@ -5,7 +5,14 @@ export const runtime = "nodejs";
 // export const dynamic = "force-dynamic"; // COST-FIX
 export const revalidate = 60; // COST-FIX: 1 min for admin
 
-type UserAction = "ban" | "unban" | "soft_delete" | "restore" | "hard_delete";
+type UserAction = "ban" | "unban" | "soft_delete" | "restore" | "hard_delete" | "change_role";
+
+const VALID_ROLES = ["homeowner", "designer", "designer_pending"] as const;
+type UserRole = (typeof VALID_ROLES)[number];
+
+function isValidRole(value: unknown): value is UserRole {
+  return VALID_ROLES.includes(value as UserRole);
+}
 
 type ProfileRow = {
   id: string;
@@ -48,7 +55,8 @@ function isValidAction(value: unknown): value is UserAction {
     value === "unban" ||
     value === "soft_delete" ||
     value === "restore" ||
-    value === "hard_delete"
+    value === "hard_delete" ||
+    value === "change_role"
   );
 }
 
@@ -167,6 +175,7 @@ export async function POST(request: Request) {
           action?: UserAction;
           reason?: string;
           bannedUntil?: string | null;
+          newRole?: string;
         }
       | null;
 
@@ -273,6 +282,31 @@ export async function POST(request: Request) {
 
       const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
       if (deleteError) return jsonError(deleteError.message, 500);
+    }
+
+    if (action === "change_role") {
+      const newRole = body?.newRole;
+      if (!isValidRole(newRole)) {
+        return jsonError("Geçersiz rol. Geçerli değerler: homeowner, designer, designer_pending");
+      }
+      if (userId === actorUserId) {
+        return jsonError("Kendi rolünü değiştiremezsin.", 400);
+      }
+      const { error } = await admin
+        .from("profiles")
+        .update({ role: newRole })
+        .eq("id", userId);
+      if (error) return jsonError(error.message, 500);
+
+      await writeAdminAuditLog(admin, {
+        actorUserId,
+        actorRole,
+        action: "user_change_role",
+        targetType: "user",
+        targetId: userId,
+        details: { newRole },
+      });
+      return NextResponse.json({ ok: true });
     }
 
     await writeAdminAuditLog(admin, {
