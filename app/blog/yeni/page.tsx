@@ -16,6 +16,9 @@ const BLOG_COVER_WIDTH = 1600;
 const BLOG_COVER_HEIGHT = 900;
 const MAX_BLOG_IMAGE_MB = 5;
 const MAX_BLOG_IMAGE_BYTES = MAX_BLOG_IMAGE_MB * 1024 * 1024;
+const INLINE_IMAGE_MAX_MB = 1;
+const INLINE_IMAGE_MAX_BYTES = INLINE_IMAGE_MAX_MB * 1024 * 1024;
+const INLINE_IMAGE_MAX_DIMENSION = 1600;
 const FONT_SIZE_OPTIONS = [12, 14, 16, 18, 22, 28, 34];
 
 async function buildUniqueSlug(baseSlug: string) {
@@ -82,6 +85,52 @@ async function normalizeImageToSize(file: File, width: number, height: number): 
   return canvas.toDataURL("image/jpeg", 0.84);
 }
 
+function dataUrlSizeInBytes(dataUrl: string) {
+  const base64 = dataUrl.split(",")[1] ?? "";
+  const normalized = base64.replace(/\s+/g, "");
+  const padding = normalized.endsWith("==") ? 2 : normalized.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((normalized.length * 3) / 4) - padding);
+}
+
+async function normalizeInlineImageToMaxBytes(
+  file: File,
+  maxBytes: number,
+  maxDimension: number
+): Promise<string> {
+  const sourceDataUrl = await fileToDataUrl(file);
+  const image = await loadImage(sourceDataUrl);
+
+  const longestSide = Math.max(image.width, image.height);
+  const baseScale = longestSide > maxDimension ? maxDimension / longestSide : 1;
+
+  let width = Math.max(1, Math.round(image.width * baseScale));
+  let height = Math.max(1, Math.round(image.height * baseScale));
+  let quality = 0.9;
+  let result = "";
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas başlatılamadı");
+
+    ctx.drawImage(image, 0, 0, width, height);
+    result = canvas.toDataURL("image/jpeg", quality);
+    const size = dataUrlSizeInBytes(result);
+    if (size <= maxBytes) return result;
+
+    if (quality > 0.55) {
+      quality = Math.max(0.55, quality - 0.1);
+    } else {
+      width = Math.max(320, Math.round(width * 0.85));
+      height = Math.max(320, Math.round(height * 0.85));
+    }
+  }
+
+  throw new Error(`Görsel ${INLINE_IMAGE_MAX_MB} MB altına düşürülemedi. Daha küçük bir görsel seç.`);
+}
+
 function NewBlogPostPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -105,6 +154,7 @@ function NewBlogPostPageContent() {
   const [existingPublishedAt, setExistingPublishedAt] = useState<string | null>(null);
   const [hasEditablePost, setHasEditablePost] = useState(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const inlineImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const pickCoverImage = async (file: File | null) => {
     if (!file) return;
@@ -225,13 +275,110 @@ function NewBlogPostPageContent() {
 
   const insertLink = () => {
     if (!editorRef.current) return;
-    const raw = window.prompt("Link URL (https://...)");
-    if (!raw) return;
-    const value = raw.trim();
-    if (!value) return;
+    editorRef.current.focus();
 
-    const normalized = value.startsWith("/") ? value : /^https?:\/\//i.test(value) ? value : `https://${value}`;
-    runCommand("createLink", normalized);
+    const selection = window.getSelection();
+    const activeRange =
+      selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    const hasRangeInEditor = Boolean(
+      activeRange && editorRef.current.contains(activeRange.commonAncestorContainer)
+    );
+    const selectedText = hasRangeInEditor ? (selection?.toString().trim() ?? "") : "";
+
+    const rawLabel = window.prompt("Link metni", selectedText || "");
+    if (rawLabel === null) return;
+    const label = rawLabel.trim() || selectedText;
+    if (!label) {
+      setError("Link için görünen bir metin yazmalısın.");
+      return;
+    }
+
+    const rawHref = window.prompt("Link URL (https://...)");
+    if (!rawHref) return;
+    const value = rawHref.trim();
+    if (!value) return;
+    const normalized = value.startsWith("/")
+      ? value
+      : /^(https?:\/\/|mailto:|tel:)/i.test(value)
+        ? value
+        : `https://${value}`;
+
+    const anchor = document.createElement("a");
+    anchor.href = normalized;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer nofollow";
+    anchor.textContent = label;
+
+    if (hasRangeInEditor && activeRange && selection) {
+      activeRange.deleteContents();
+      activeRange.insertNode(anchor);
+      const after = document.createRange();
+      after.setStartAfter(anchor);
+      after.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(after);
+      syncContentFromEditor();
+      return;
+    }
+
+    editorRef.current.appendChild(anchor);
+    syncContentFromEditor();
+  };
+
+  const insertInlineImageAtCursor = (imageSrc: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+
+    const selection = window.getSelection();
+    const paragraph = document.createElement("p");
+    const image = document.createElement("img");
+    image.src = imageSrc;
+    image.alt = "Blog içi görsel";
+    paragraph.appendChild(image);
+
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (editorRef.current.contains(range.commonAncestorContainer)) {
+        range.deleteContents();
+        range.insertNode(paragraph);
+        range.setStartAfter(paragraph);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        syncContentFromEditor();
+        return;
+      }
+    }
+
+    editorRef.current.appendChild(paragraph);
+    syncContentFromEditor();
+  };
+
+  const pickInlineImage = async (file: File | null) => {
+    if (!file) return;
+    setError(null);
+    setNotice(null);
+
+    if (!file.type.startsWith("image/")) {
+      setError("Sadece görsel dosyası ekleyebilirsin.");
+      return;
+    }
+
+    try {
+      const normalized = await normalizeInlineImageToMaxBytes(
+        file,
+        INLINE_IMAGE_MAX_BYTES,
+        INLINE_IMAGE_MAX_DIMENSION
+      );
+      insertInlineImageAtCursor(normalized);
+      setNotice(`Görsel eklendi ve otomatik optimize edildi (maksimum ${INLINE_IMAGE_MAX_MB} MB).`);
+    } catch (imageError) {
+      setError(imageError instanceof Error ? imageError.message : "Görsel metne eklenemedi.");
+    } finally {
+      if (inlineImageInputRef.current) {
+        inlineImageInputRef.current.value = "";
+      }
+    }
   };
 
   const submit = async () => {
@@ -456,6 +603,15 @@ function NewBlogPostPageContent() {
               >
                 Link
               </button>
+              <button
+                type="button"
+                onClick={() => inlineImageInputRef.current?.click()}
+                disabled={submitting}
+                className="rounded-lg border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                title="Görsel ekle"
+              >
+                Görsel
+              </button>
               <label className="ml-1 text-xs font-semibold text-slate-600">
                 Punto
                 <select
@@ -477,13 +633,21 @@ function NewBlogPostPageContent() {
               contentEditable={!submitting}
               suppressContentEditableWarning
               onInput={syncContentFromEditor}
-              className="min-h-[340px] w-full px-3 py-3 text-sm leading-7 text-slate-900 outline-none [&_a]:text-sky-700 [&_a]:underline"
+              className="min-h-[340px] w-full px-3 py-3 text-sm leading-7 text-slate-900 outline-none [&_a]:text-sky-700 [&_a]:underline [&_img]:my-4 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-xl"
               role="textbox"
               aria-label="Blog içeriği"
             />
+            <input
+              ref={inlineImageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(event) => void pickInlineImage(event.target.files?.[0] ?? null)}
+              className="hidden"
+              disabled={submitting}
+            />
           </div>
           <p className="text-xs text-slate-500">
-            Metni seçip <strong>kalın</strong>, <em>italik</em>, <span style={{ fontSize: 18 }}>punto</span> veya link uygulayabilirsin.
+            Metni seçip <strong>kalın</strong>, <em>italik</em>, <span style={{ fontSize: 18 }}>punto</span>, link veya metin içine görsel ekleyebilirsin.
           </p>
           <select
             value={status}

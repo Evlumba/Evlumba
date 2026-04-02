@@ -19,6 +19,7 @@ const ALLOWED_TAGS = new Set([
   "code",
   "span",
   "a",
+  "img",
 ]);
 
 function escapeHtml(value: string) {
@@ -47,6 +48,32 @@ function normalizeHref(raw: string | null) {
     const parsed = new URL(value);
     const protocol = parsed.protocol.toLowerCase();
     if (protocol === "http:" || protocol === "https:" || protocol === "mailto:" || protocol === "tel:") {
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function normalizeImageSrc(raw: string | null) {
+  const value = String(raw ?? "").trim();
+  if (!value) return null;
+  if (value.startsWith("/")) return value;
+
+  const lower = value.toLowerCase();
+  if (lower.startsWith("data:image/")) {
+    const match = value.match(
+      /^data:image\/(?:png|jpe?g|webp|gif|avif);base64,([a-z0-9+/=\s]+)$/i
+    );
+    if (!match) return null;
+    return value.replace(/\s+/g, "");
+  }
+
+  try {
+    const parsed = new URL(value);
+    const protocol = parsed.protocol.toLowerCase();
+    if (protocol === "http:" || protocol === "https:") {
       return parsed.toString();
     }
   } catch {
@@ -110,6 +137,16 @@ function sanitizeNode(node: Node): string {
     if (!href) return children;
     const label = children || escapeHtml(href);
     return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer nofollow">${label}</a>`;
+  }
+
+  if (tag === "img") {
+    const src = normalizeImageSrc(element.getAttribute("src"));
+    if (!src) return "";
+    const alt = String(element.getAttribute("alt") ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 180);
+    return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" loading="lazy">`;
   }
 
   if (tag === "font") {

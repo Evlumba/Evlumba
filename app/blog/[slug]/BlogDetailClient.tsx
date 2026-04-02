@@ -280,7 +280,7 @@ export default function BlogDetailClient({
           </div>
 
           <div
-            className="prose prose-slate mt-6 max-w-none text-base leading-8 text-slate-800 [&_a]:break-words [&_a]:text-sky-700 [&_a]:underline"
+            className="prose prose-slate mt-6 max-w-none text-base leading-8 text-slate-800 [&_a]:break-words [&_a]:text-sky-700 [&_a]:underline [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-xl"
             dangerouslySetInnerHTML={{ __html: safeContentHtml }}
           />
         </div>
