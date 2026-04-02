@@ -352,14 +352,26 @@ export default function BusinessSection({ designer }: { designer: Designer }) {
                       href={`mailto:${business.email}`}
                     />
                   )}
-                  {business.website && (
-                    <InfoRow
-                      icon={<IconGlobe className="h-4 w-4" />}
-                      label="Website"
-                      value={business.website}
-                      href={`https://${business.website}`}
-                    />
-                  )}
+                  {business.website && (() => {
+                    const raw = business.website.trim();
+                    let safeHref: string | null = null;
+                    try {
+                      const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+                      if (url.protocol === "https:" || url.protocol === "http:") {
+                        safeHref = url.href;
+                      }
+                    } catch {
+                      // invalid URL — render text only
+                    }
+                    return (
+                      <InfoRow
+                        icon={<IconGlobe className="h-4 w-4" />}
+                        label="Website"
+                        value={raw}
+                        href={safeHref ?? undefined}
+                      />
+                    );
+                  })()}
                   {address && (
                     <InfoRow
                       icon={<IconMapPin className="h-4 w-4" />}
