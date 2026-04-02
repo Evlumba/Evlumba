@@ -1,15 +1,49 @@
 // app/tasarimcilar/page.tsx
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
+import type { Metadata } from "next";
 import { PROMATCH } from "../../lib/promatch";
 import { ArrowRight, BadgeCheck, Layers, Timer, Search } from "lucide-react";
 import DesignersResultsClient from "./_components/DesignersResultsClient";
 import { FEATURED_DESIGNERS, type Designer } from "./_data/designers";
 import { buildUniqueDesignerSlugs } from "./_data/slugs";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { DEFAULT_OG_IMAGE, toAbsoluteUrl } from "@/lib/seo";
 
 // export const dynamic = "force-dynamic"; // COST-FIX: removed
 export const revalidate = 3600; // COST-FIX: 1 hour ISR cache
+
+const title = "İç Mimar ve Mimar Keşfi";
+const description =
+  "Portföyleri, yorumları ve dönüş hızlarını karşılaştırarak iç mimar ve mimar profesyonelleri keşfet.";
+
+export const metadata: Metadata = {
+  title,
+  description,
+  keywords: [
+    "iç mimar bul",
+    "mimar bul",
+    "dekorasyon uzmanı",
+    "tasarımcı keşfet",
+    "iç mimarlık hizmeti",
+  ],
+  alternates: {
+    canonical: "/tasarimcilar",
+  },
+  openGraph: {
+    title,
+    description,
+    url: toAbsoluteUrl("/tasarimcilar"),
+    type: "website",
+    images: [{ url: DEFAULT_OG_IMAGE }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+    images: [DEFAULT_OG_IMAGE],
+  },
+};
 
 const shell: CSSProperties = {
   background: "rgba(255,255,255,0.62)",

@@ -359,6 +359,18 @@ export default function SiteFooter() {
                     }
                   />
                   <QuickPill
+                    href="/markalar"
+                    title="Markalar"
+                    desc="Mobilya & dekorasyon"
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-fuchsia-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 7h18" />
+                        <path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+                        <path d="M4 7l1 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l1-12" />
+                      </svg>
+                    }
+                  />
+                  <QuickPill
                     href="/ilanlar"
                     title="İlanlar"
                     desc="Yayınlanmış projeler"

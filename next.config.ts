@@ -44,6 +44,35 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: "/login",
+        destination: "/giris",
+        permanent: true,
+      },
+      {
+        source: "/register",
+        destination: "/kayit",
+        permanent: true,
+      },
+      {
+        source: "/designers",
+        destination: "/tasarimcilar",
+        permanent: true,
+      },
+      {
+        source: "/professionals",
+        destination: "/tasarimcilar",
+        permanent: true,
+      },
+      {
+        source: "/discover",
+        destination: "/kesfet",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

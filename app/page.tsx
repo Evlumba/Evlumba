@@ -1,11 +1,53 @@
 // app/page.tsx
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { Metadata, ReactNode } from "react";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  DEFAULT_OG_IMAGE,
+  SITE_NAME,
+  toAbsoluteUrl,
+  trimForDescription,
+} from "@/lib/seo";
 import SiteTestimonials, { type SiteTestimonialItem } from "./components/SiteTestimonials";
 
 // export const dynamic = "force-dynamic"; // COST-FIX: removed
 export const revalidate = 3600; // COST-FIX: 1 hour ISR cache
+
+const HOME_TITLE = "İç Mimar, Mimar ve Dekorasyon Platformu";
+const HOME_DESCRIPTION = trimForDescription(
+  "İç mimar, mimar, dekorasyon ve tasarım arayışın için ilham keşfet, beğenilerini kaydet ve doğru profesyonellerle eşleş."
+);
+
+export const metadata: Metadata = {
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
+  keywords: [
+    "iç mimar",
+    "mimar",
+    "dekorasyon",
+    "tasarım",
+    "iç mimarlık",
+    "ev dekorasyonu",
+    "iç mekan tasarımı",
+    "mimari ilham",
+  ],
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    url: toAbsoluteUrl("/"),
+    type: "website",
+    images: [{ url: DEFAULT_OG_IMAGE }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE],
+  },
+};
 
 type Project = {
   id: string;
@@ -99,6 +141,52 @@ type HomeNameRow = {
   business_name?: string | null;
 };
 
+type TopBlogPost = {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  coverImageUrl: string | null;
+  likeCount: number;
+};
+
+type HomeListingRow = {
+  id: string;
+  listing_type: "need_service" | "offer_service";
+  title: string;
+  description: string;
+  city: string;
+  district: string | null;
+  budget_min: number | null;
+  budget_max: number | null;
+  is_urgent: boolean | null;
+  status: "draft" | "published" | "closed";
+  created_at: string;
+};
+
+type HomeListingCard = {
+  id: string;
+  title: string;
+  description: string;
+  locationLabel: string;
+  budgetLabel: string;
+  typeLabel: string;
+  isUrgent: boolean;
+  href: string;
+};
+
+type HomeDbClient = Awaited<ReturnType<typeof getSupabaseServerClient>>;
+
+async function getHomeReadClient(): Promise<HomeDbClient> {
+  try {
+    return getSupabaseAdminClient() as unknown as HomeDbClient;
+  } catch {
+    // Local/dev ortamında service role key olmayabilir.
+    // Bu durumda anon/auth server client ile public verileri okumaya devam ederiz.
+    return await getSupabaseServerClient();
+  }
+}
+
 function normalize(value: string) {
   return value
     .toLowerCase()
@@ -125,6 +213,31 @@ function formatCompactCount(value: number) {
   }).format(value);
 }
 
+function toNumericOrNull(value: number | string | null | undefined) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatListingBudgetLabel(minValue: number | null, maxValue: number | null) {
+  const min = toNumericOrNull(minValue);
+  const max = toNumericOrNull(maxValue);
+
+  if (typeof min === "number" && typeof max === "number") {
+    return `${min.toLocaleString("tr-TR")} ₺ - ${max.toLocaleString("tr-TR")} ₺`;
+  }
+  if (typeof min === "number") return `${min.toLocaleString("tr-TR")} ₺ ve üzeri`;
+  if (typeof max === "number") return `${max.toLocaleString("tr-TR")} ₺ altı`;
+  return "Bütçe belirtilmedi";
+}
+
+function listingTypeLabel(type: "need_service" | "offer_service") {
+  return type === "need_service" ? "Hizmet Aranıyor" : "Hizmet Veriliyor";
+}
+
 function isRoomTag(value: string) {
   const normalized = normalize(value.trim());
   return normalized.startsWith("oda:") || normalized.startsWith("room:");
@@ -147,8 +260,8 @@ function pickProjectImage(project: HomeInspirationProjectRow) {
 
 async function loadHomeProjects(limit = 3): Promise<Project[]> {
   try {
-    const admin = getSupabaseAdminClient();
-    const { data, error } = await admin
+    const db = await getHomeReadClient();
+    const { data, error } = await db
       .from("designer_projects")
       .select(
         "id, designer_id, title, project_type, tags, cover_image_url, created_at, designer_project_images(image_url, sort_order)"
@@ -165,7 +278,7 @@ async function loadHomeProjects(limit = 3): Promise<Project[]> {
 
     const { data: savedRows } = await (
       projectIds.length > 0
-        ? admin
+        ? db
             .from("collection_items")
             .select("design_id, collections!inner(user_id)")
             .in("design_id", projectIds)
@@ -204,9 +317,9 @@ async function loadHomeProjects(limit = 3): Promise<Project[]> {
 
 async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
   try {
-    const admin = getSupabaseAdminClient();
+    const db = await getHomeReadClient();
 
-    const { data: profilesData, error: profilesError } = await admin
+    const { data: profilesData, error: profilesError } = await db
       .from("profiles")
       .select("id, full_name, business_name, specialty, city, about, response_time, cover_photo_url, avatar_url")
       .in("role", ["designer", "designer_pending"])
@@ -223,13 +336,13 @@ async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
     const ids = profiles.map((item) => item.id);
 
     const [{ data: projectsData }, { data: reviewsData }] = await Promise.all([
-      admin
+      db
         .from("designer_projects")
         .select("designer_id, cover_image_url")
         .in("designer_id", ids)
         .eq("is_published", true)
         .order("created_at", { ascending: false }),
-      admin
+      db
         .from("designer_reviews")
         .select("designer_id, rating, review_text, created_at")
         .in("designer_id", ids)
@@ -302,8 +415,8 @@ async function loadHomeDesigners(limit = 3): Promise<Designer[]> {
 
 async function loadHomeTestimonials(limit = 9): Promise<SiteTestimonialItem[]> {
   try {
-    const admin = getSupabaseAdminClient();
-    const { data, error } = await admin
+    const db = await getHomeReadClient();
+    const { data, error } = await db
       .from("designer_reviews")
       .select("id, designer_id, homeowner_id, rating, review_text, created_at")
       .gte("rating", 4)
@@ -325,10 +438,10 @@ async function loadHomeTestimonials(limit = 9): Promise<SiteTestimonialItem[]> {
 
     const [{ data: reviewerProfiles }, { data: designerProfiles }] = await Promise.all([
       reviewerIds.length > 0
-        ? admin.from("profiles").select("id, full_name").in("id", reviewerIds)
+        ? db.from("profiles").select("id, full_name").in("id", reviewerIds)
         : Promise.resolve({ data: [] as HomeNameRow[] }),
       designerIds.length > 0
-        ? admin
+        ? db
             .from("profiles")
             .select("id, full_name, business_name")
             .in("id", designerIds)
@@ -351,6 +464,88 @@ async function loadHomeTestimonials(limit = 9): Promise<SiteTestimonialItem[]> {
       text: row.review_text?.trim() || "",
       rating: Number(row.rating || 0),
       designerName: designerMap.get(row.designer_id) || "Profesyonel",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function loadTopBlogPosts(limit = 3): Promise<TopBlogPost[]> {
+  try {
+    const db = await getHomeReadClient();
+    const { data: posts, error } = await db
+      .from("blog_posts")
+      .select("id, slug, title, excerpt, cover_image_url, published_at")
+      .eq("status", "published")
+      .order("published_at", { ascending: false })
+      .limit(60);
+
+    if (error || !posts || posts.length === 0) return [];
+
+    const typedPosts = posts as Array<{
+      id: string;
+      slug: string;
+      title: string;
+      excerpt: string | null;
+      cover_image_url: string | null;
+    }>;
+    const postIds = typedPosts.map((post) => post.id);
+
+    const { data: likeRows } = await db
+      .from("blog_post_likes")
+      .select("post_id")
+      .in("post_id", postIds);
+
+    const likeCountByPost = new Map<string, number>();
+    for (const row of (likeRows ?? []) as Array<{ post_id: string }>) {
+      likeCountByPost.set(row.post_id, (likeCountByPost.get(row.post_id) ?? 0) + 1);
+    }
+
+    return typedPosts
+      .map((post) => ({
+        id: post.id,
+        slug: post.slug,
+        title: post.title?.trim() || "Blog yazısı",
+        excerpt: post.excerpt?.trim() || null,
+        coverImageUrl: post.cover_image_url?.trim() || null,
+        likeCount: likeCountByPost.get(post.id) ?? 0,
+      }))
+      .sort((a, b) => b.likeCount - a.likeCount)
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+async function loadHomeListings(limit = 3): Promise<HomeListingCard[]> {
+  try {
+    const db = await getHomeReadClient();
+    const { data, error } = await db
+      .from("listings")
+      .select(
+        "id, listing_type, title, description, city, district, budget_min, budget_max, is_urgent, status, created_at"
+      )
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(Math.max(limit, 60));
+
+    if (error || !data || data.length === 0) return [];
+
+    const sampled = [...(data as HomeListingRow[])]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, limit);
+
+    return sampled.map((row) => ({
+      id: row.id,
+      title: row.title?.trim() || "İlan",
+      description: row.description?.trim() || "İlan detayını görüntülemek için tıkla.",
+      locationLabel: row.district?.trim()
+        ? `${row.city.trim()} / ${row.district.trim()}`
+        : row.city.trim(),
+      budgetLabel: formatListingBudgetLabel(row.budget_min, row.budget_max),
+      typeLabel: listingTypeLabel(row.listing_type),
+      isUrgent: Boolean(row.is_urgent),
+      href: "/ilanlar",
     }));
   } catch {
     return [];
@@ -708,18 +903,51 @@ function DesignerCard({ d }: { d: Designer }) {
 }
 
 export default async function HomePage() {
-  const [homeProjects, designers, testimonials, authUser] = await Promise.all([
+  const [homeProjects, designers, testimonials, topBlogPosts, homeListings, authUser] = await Promise.all([
     loadHomeProjects(3),
     loadHomeDesigners(3),
     loadHomeTestimonials(9),
+    loadTopBlogPosts(3),
+    loadHomeListings(3),
     loadHomeAuthUser(),
   ]);
   const isLoggedIn = Boolean(authUser);
+  const structuredDataJson = JSON.stringify(
+    [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: SITE_NAME,
+        url: toAbsoluteUrl("/"),
+        logo: toAbsoluteUrl("/web_icon2.png"),
+        description: HOME_DESCRIPTION,
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: SITE_NAME,
+        url: toAbsoluteUrl("/"),
+        description: HOME_DESCRIPTION,
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${toAbsoluteUrl("/kesfet")}?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+    null,
+    0
+  ).replace(/</g, "\\u003c");
 
   return (
-    <div className="relative">
-      {/* HERO */}
-      <section className="mt-6 md:mt-8">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: structuredDataJson }}
+      />
+      <div className="relative">
+        {/* HERO */}
+        <section className="mt-6 md:mt-8">
         <div className="relative">
           <div
             className="pointer-events-none absolute -inset-x-6 -inset-y-6 rounded-[44px] bg-white/55 backdrop-blur-2xl"
@@ -1232,9 +1460,139 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      {/* ✅ TESTIMONIALS (Footer'ın hemen üstü) */}
-      <SiteTestimonials mentions={testimonials} />
+      <section className="mt-14">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <div className="text-xs font-extrabold tracking-widest text-slate-500">BLOG</div>
+              <div className="mt-2 text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+                Profesyonellerimizden dinleyin
+              </div>
+              <div className="mt-2 text-sm text-slate-600 max-w-2xl">
+                Evlumba blogundan öne çıkan yazılar.
+              </div>
+            </div>
+            <div className="hidden md:block">
+              <ButtonLink href="/blog" variant="secondary">
+                Tümünü gör
+              </ButtonLink>
+            </div>
+          </div>
 
-    </div>
+          {topBlogPosts.length > 0 ? (
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {topBlogPosts.map((post) => (
+                <Link
+                  key={post.id}
+                  href={`/blog/${encodeURIComponent(post.slug)}`}
+                  className="group overflow-hidden rounded-3xl border border-black/10 bg-white/75 hover:bg-white transition"
+                >
+                  <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
+                    {post.coverImageUrl ? (
+                      <img
+                        src={post.coverImageUrl}
+                        alt={post.title}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-br from-slate-300 via-slate-200 to-slate-100">
+                        <div className="absolute inset-0 grid place-items-center opacity-70">
+                          <img src="/web_icon2.png" alt="" className="h-14 w-14 object-contain" loading="lazy" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                      <div className="text-sm font-semibold text-white line-clamp-2">{post.title}</div>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-sm text-slate-600 line-clamp-3">
+                      {post.excerpt || "Blog yazısını açarak detayları inceleyebilirsin."}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white/70 p-6 text-sm text-slate-600">
+              Henüz yayınlanmış blog yazısı görünmüyor.
+            </div>
+          )}
+
+          <div className="mt-4 md:hidden">
+            <ButtonLink href="/blog" variant="secondary" className="w-full py-3">
+              Tümünü gör
+            </ButtonLink>
+          </div>
+      </section>
+
+      <section className="mt-12">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <div className="text-xs font-extrabold tracking-widest text-slate-500">İLANLAR</div>
+            <div className="mt-2 text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+              İlanlar akışından seçtiklerimiz
+            </div>
+            <div className="mt-2 text-sm text-slate-600 max-w-2xl">
+              Yayındaki ilanlardan rastgele 3 tanesi.
+            </div>
+          </div>
+          <div className="hidden md:block">
+            <ButtonLink href="/ilanlar" variant="secondary">
+              Tüm ilanlar
+            </ButtonLink>
+          </div>
+        </div>
+
+        {homeListings.length > 0 ? (
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {homeListings.map((listing) => (
+              <Link
+                key={listing.id}
+                href={listing.href}
+                className="rounded-3xl border border-black/10 bg-white/75 p-4 transition hover:bg-white"
+              >
+                <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
+                  <span className="inline-flex items-center rounded-full border border-black/10 bg-white px-2 py-1">
+                    {listing.typeLabel}
+                  </span>
+                  {listing.isUrgent ? (
+                    <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-rose-700">
+                      Acil
+                    </span>
+                  ) : null}
+                </div>
+
+                <h3 className="mt-3 text-base font-semibold leading-6 text-slate-900 line-clamp-2">
+                  {listing.title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600 line-clamp-3">
+                  {listing.description}
+                </p>
+
+                <div className="mt-4 flex items-center justify-between gap-2 text-xs text-slate-500">
+                  <span className="truncate">{listing.locationLabel}</span>
+                  <span className="shrink-0 font-semibold text-slate-700">{listing.budgetLabel}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white/70 p-6 text-sm text-slate-600">
+            Henüz yayınlanmış ilan görünmüyor.
+          </div>
+        )}
+
+        <div className="mt-4 md:hidden">
+          <ButtonLink href="/ilanlar" variant="secondary" className="w-full py-3">
+            Tüm ilanlar
+          </ButtonLink>
+        </div>
+      </section>
+
+        {/* ✅ TESTIMONIALS (Footer'ın hemen üstü) */}
+        <SiteTestimonials mentions={testimonials} />
+      </div>
+    </>
   );
 }
