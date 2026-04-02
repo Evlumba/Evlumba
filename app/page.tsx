@@ -24,13 +24,17 @@ export const metadata: Metadata = {
   description: HOME_DESCRIPTION,
   keywords: [
     "iç mimar",
+    "iç mimar bul",
     "mimar",
+    "mimar bul",
     "dekorasyon",
-    "tasarım",
+    "dekorasyon uzmanı",
     "iç mimarlık",
     "ev dekorasyonu",
     "iç mekan tasarımı",
     "mimari ilham",
+    "istanbul iç mimar",
+    "türkiye iç mimarlık platformu",
   ],
   alternates: {
     canonical: "/",
@@ -919,9 +923,79 @@ export default async function HomePage() {
         "@context": "https://schema.org",
         "@type": "Organization",
         name: SITE_NAME,
+        alternateName: ["Evlumba Platform", "Evlumba İç Mimarlık Platformu"],
         url: toAbsoluteUrl("/"),
         logo: toAbsoluteUrl("/web_icon2.png"),
+        description:
+          "Evlumba, Türkiye'nin iç mimarlık, mimarlık ve ev dekorasyonu alanında keşif ve profesyonel eşleşme platformudur.",
+        areaServed: { "@type": "Country", name: "Türkiye" },
+        knowsAbout: [
+          "İç Mimarlık",
+          "Mimarlık",
+          "Ev Dekorasyonu",
+          "İç Mekan Tasarımı",
+          "Mobilya Seçimi",
+          "Renk Paleti",
+          "Tadilat",
+        ],
+        hasOfferCatalog: {
+          "@type": "OfferCatalog",
+          name: "Evlumba Hizmetleri",
+          itemListElement: [
+            {
+              "@type": "Offer",
+              itemOffered: {
+                "@type": "Service",
+                name: "İç Mimar Eşleşme",
+                description:
+                  "Ev sahiplerini bütçe, tarz ve konum uyumuna göre en doğru iç mimar ile eşleştiren ProMatch sistemi.",
+              },
+            },
+            {
+              "@type": "Offer",
+              itemOffered: {
+                "@type": "Service",
+                name: "Dekorasyon İlham Keşfi",
+                description:
+                  "Oda tipine göre filtrelenebilen binlerce dekorasyon ve iç mimarlık projesi arasından ilham bulma.",
+              },
+            },
+            {
+              "@type": "Offer",
+              itemOffered: {
+                "@type": "Service",
+                name: "Tasarımcı Portföy Platformu",
+                description:
+                  "İç mimarlar ve mimarlar için portföy yayınlama, müşteri yorumu alma ve teklif sunma platformu.",
+              },
+            },
+          ],
+        },
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: SITE_NAME,
+        url: toAbsoluteUrl("/"),
         description: HOME_DESCRIPTION,
+        applicationCategory: "LifestyleApplication",
+        operatingSystem: "Web",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "TRY" },
+        featureList: [
+          "İç mimar ve mimar keşfi",
+          "AI tabanlı profesyonel eşleşme (ProMatch)",
+          "Oda bazlı dekorasyon ilham keşfi",
+          "Tarz belirleme oyunu",
+          "Portföy karşılaştırma",
+          "Gerçek müşteri yorumları",
+          "Proje ilanı ve teklif sistemi",
+        ],
+        inLanguage: "tr-TR",
+        audience: {
+          "@type": "Audience",
+          audienceType: "Ev Sahipleri, İç Mimarlar, Mimarlar, Dekorasyon Meraklıları",
+          geographicArea: { "@type": "Country", name: "Türkiye" },
+        },
       },
       {
         "@context": "https://schema.org",
@@ -929,6 +1003,7 @@ export default async function HomePage() {
         name: SITE_NAME,
         url: toAbsoluteUrl("/"),
         description: HOME_DESCRIPTION,
+        inLanguage: "tr-TR",
         potentialAction: {
           "@type": "SearchAction",
           target: `${toAbsoluteUrl("/kesfet")}?q={search_term_string}`,

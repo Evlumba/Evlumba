@@ -13,9 +13,9 @@ import { DEFAULT_OG_IMAGE, toAbsoluteUrl } from "@/lib/seo";
 // export const dynamic = "force-dynamic"; // COST-FIX: removed
 export const revalidate = 3600; // COST-FIX: 1 hour ISR cache
 
-const title = "İç Mimar ve Mimar Keşfi";
+const title = "İç Mimar, Mimar ve Dekorasyon Uzmanı Bul";
 const description =
-  "Portföyleri, yorumları ve dönüş hızlarını karşılaştırarak iç mimar ve mimar profesyonelleri keşfet.";
+  "Türkiye genelinde iç mimar, mimar ve dekorasyon uzmanı bul. Portföyleri, gerçek müşteri yorumlarını ve dönüş hızlarını karşılaştır, doğru profesyonelle eşleş.";
 
 export const metadata: Metadata = {
   title,
@@ -24,8 +24,13 @@ export const metadata: Metadata = {
     "iç mimar bul",
     "mimar bul",
     "dekorasyon uzmanı",
-    "tasarımcı keşfet",
+    "iç mimar ara",
     "iç mimarlık hizmeti",
+    "ev dekorasyonu uzmanı",
+    "istanbul iç mimar",
+    "ankara mimar",
+    "izmir iç mimar",
+    "türkiye iç mimarlık platformu",
   ],
   alternates: {
     canonical: "/tasarimcilar",
@@ -404,7 +409,30 @@ export default async function DesignersPage({
   const supabaseDesigners = await loadSupabaseDesigners();
   const designers = [...supabaseDesigners, ...FEATURED_DESIGNERS];
 
+  const serviceSchema = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: "İç Mimar ve Mimar Eşleşme Hizmeti",
+    description:
+      "Ev sahiplerini bütçe, tarz ve konum uyumuna göre en doğru iç mimar veya mimar ile buluşturan Evlumba ProMatch sistemi.",
+    provider: {
+      "@type": "Organization",
+      name: "Evlumba",
+      url: toAbsoluteUrl("/"),
+    },
+    areaServed: { "@type": "Country", name: "Türkiye" },
+    serviceType: ["İç Mimarlık", "Mimarlık", "Ev Dekorasyonu", "İç Mekan Tasarımı"],
+    audience: {
+      "@type": "Audience",
+      audienceType: "Ev Sahipleri, İç Mekan Tasarımı Arayanlar",
+    },
+    url: toAbsoluteUrl("/tasarimcilar"),
+    offers: { "@type": "Offer", price: "0", priceCurrency: "TRY", description: "Ücretsiz eşleşme ve keşif" },
+  }).replace(/</g, "\\u003c");
+
   return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serviceSchema }} />
     <main className="min-h-screen pt-28 md:pt-32">
       <ProMatchBannerInline />
 
@@ -463,6 +491,71 @@ export default async function DesignersPage({
           <DesignersResultsClient designers={designers} />
         </div>
       </section>
+
+      {/* SEO içerik bloğu — arama motorları ve LLM'ler için */}
+      <section className="px-4 pb-20">
+        <div className="mx-auto w-full max-w-4xl rounded-3xl border border-black/5 bg-white/50 backdrop-blur px-8 py-10">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Türkiye'nin İç Mimar ve Mimar Platformu
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            Evlumba, ev sahiplerini <strong>iç mimar</strong>, <strong>mimar</strong> ve{" "}
+            <strong>dekorasyon uzmanı</strong> ile buluşturan Türkiye merkezli bir platformdur.
+            İstanbul, Ankara, İzmir, Bursa, Antalya ve Türkiye genelindeki yüzlerce onaylı
+            profesyonelin portföyünü, müşteri yorumlarını ve hizmet paketlerini karşılaştırabilirsin.
+          </p>
+
+          <div className="mt-8 grid gap-6 sm:grid-cols-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">İç Mimar Nasıl Bulunur?</h3>
+              <p className="mt-2 text-xs leading-6 text-slate-600">
+                Bütçeni, konum tercihin ve tarz beklentini girerek ProMatch sistemi sana en uygun
+                iç mimarları önerir. Portföyleri incele, yorumları oku, doğrudan mesaj at.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Mimar ile İç Mimar Farkı</h3>
+              <p className="mt-2 text-xs leading-6 text-slate-600">
+                Mimarlar yapısal tasarım ve ruhsat süreçlerini yönetir. İç mimarlar ise mekan
+                düzenleme, renk, mobilya ve aksesuar seçimiyle yaşam alanını dönüştürür. Evlumba'da
+                her iki profesyoneli de bulabilirsin.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Dekorasyon Uzmanı Nedir?</h3>
+              <p className="mt-2 text-xs leading-6 text-slate-600">
+                Dekorasyon uzmanları resmi lisans gerektirmeyen; renk uyumu, mobilya yerleşimi ve
+                estetik düzenleme konularında hizmet veren profesyonellerdir. Evlumba'da portföylerine
+                ve yorumlarına göre değerlendirebilirsin.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                Hangi Şehirlerde İç Mimar Bulabilirim?
+              </h3>
+              <p className="text-xs leading-6 text-slate-600">
+                İstanbul iç mimar, Ankara mimar, İzmir dekorasyon uzmanı, Bursa iç mimar, Antalya
+                mimar ve Türkiye genelindeki diğer şehirlerde hizmet veren profesyonellere
+                Evlumba üzerinden ulaşabilirsin.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                Evlumba'da Tasarımcı Seçerken Nelere Dikkat Edilmeli?
+              </h3>
+              <p className="text-xs leading-6 text-slate-600">
+                Portföy kalitesi, müşteri yorumları, dönüş süresi ve bütçe uyumuna bakılmalıdır.
+                Evlumba'nın değerlendirme sistemi, gerçek müşteri deneyimlerini şeffaf biçimde
+                gösterir.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
+    </>
   );
 }
