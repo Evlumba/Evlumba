@@ -1,6 +1,7 @@
 // app/page.tsx
 import Link from "next/link";
-import type { Metadata, ReactNode } from "react";
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import {
   DEFAULT_OG_IMAGE,

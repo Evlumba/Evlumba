@@ -5,7 +5,11 @@ import { Resend } from "resend";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResendClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return null;
+  return new Resend(apiKey);
+}
 
 // Vercel Cron calls this with a secret to prevent unauthorized triggers
 function isAuthorized(req: Request) {
@@ -16,6 +20,12 @@ function isAuthorized(req: Request) {
 export async function GET(req: Request) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const resend = getResendClient();
+  if (!resend) {
+    console.error("unread-reminder: RESEND_API_KEY is missing");
+    return NextResponse.json({ error: "Mail service unavailable" }, { status: 500 });
   }
 
   const admin = getSupabaseAdminClient();

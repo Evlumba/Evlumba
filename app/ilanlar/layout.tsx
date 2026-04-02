@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DEFAULT_OG_IMAGE, toAbsoluteUrl } from "@/lib/seo";
+import { DEFAULT_OG_IMAGE, SITE_NAME, toAbsoluteUrl } from "@/lib/seo";
 
 const title = "İç Mimar, Mimar ve Dekorasyon İlanları";
 const description =
