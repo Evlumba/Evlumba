@@ -1,9 +1,4 @@
 // app/tasarimcilar/[slug]/proje/[projectId]/layout.tsx
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Proje Detayı | Evlumba",
-};
 
 export default function ProjectDetailLayout({
   children,

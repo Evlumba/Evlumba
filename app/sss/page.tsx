@@ -1,4 +1,30 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { DEFAULT_OG_IMAGE, SITE_NAME, SITE_URL, toAbsoluteUrl } from "@/lib/seo";
+
+export const metadata: Metadata = {
+  title: "Sık Sorulan Sorular – Evlumba",
+  description:
+    "Evlumba hakkında merak ettiğin her şey: platform kullanımı, profesyonel hesap, iç mimarlık hizmetleri ve daha fazlası.",
+  keywords: ["Evlumba SSS", "sık sorulan sorular", "iç mimarlık platform", "Evlumba nasıl çalışır"],
+  alternates: { canonical: "/sss" },
+  openGraph: {
+    title: "Sık Sorulan Sorular – Evlumba",
+    description:
+      "Evlumba hakkında merak ettiğin her şey: platform kullanımı, profesyonel hesap, iç mimarlık hizmetleri ve daha fazlası.",
+    url: toAbsoluteUrl("/sss"),
+    siteName: SITE_NAME,
+    type: "website",
+    images: [{ url: DEFAULT_OG_IMAGE }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sık Sorulan Sorular – Evlumba",
+    description:
+      "Evlumba hakkında merak ettiğin her şey: platform kullanımı, profesyonel hesap, iç mimarlık hizmetleri ve daha fazlası.",
+    images: [DEFAULT_OG_IMAGE],
+  },
+};
 
 const FAQS: Array<{ question: string; answer: string }> = [
   {
@@ -28,8 +54,30 @@ const FAQS: Array<{ question: string; answer: string }> = [
   },
 ];
 
+function toSchemaJson(obj: unknown) {
+  return JSON.stringify(obj).replace(/</g, "\\u003c");
+}
+
 export default function SssPage() {
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQS.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
+  };
+
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSchemaJson(faqSchema) }}
+      />
     <main className="min-h-screen bg-slate-100 px-4 py-12">
       <div className="mx-auto max-w-4xl">
         <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -69,5 +117,6 @@ export default function SssPage() {
         </section>
       </div>
     </main>
+    </>
   );
 }
