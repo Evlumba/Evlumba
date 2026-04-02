@@ -10,6 +10,7 @@ import {
   loginUser,
   syncSessionFromSupabase,
 } from "@/lib/storage";
+import { sanitizeInternalPath } from "@/lib/safe-path";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "@/lib/toast";
 
@@ -117,9 +118,7 @@ export default function AuthLoginView({
   const oauthHandledRef = useRef(false);
 
   const nextPath = useMemo(() => {
-    const raw = searchParams.get("next")?.trim();
-    if (!raw) return "/";
-    return raw.startsWith("/") ? raw : "/";
+    return sanitizeInternalPath(searchParams.get("next"), "/");
   }, [searchParams]);
 
   const isOAuthReturn = useMemo(

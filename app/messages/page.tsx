@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { normalizeAppUrlToPath } from "@/lib/safe-path";
 
 type Conversation = {
   id: string;
@@ -125,16 +126,7 @@ function parseStructuredMessage(raw: string) {
 }
 
 function normalizeListingHref(raw: string | null) {
-  if (!raw) return null;
-  const value = raw.trim();
-  if (!value) return null;
-  if (value.startsWith("/")) return value;
-  try {
-    const parsed = new URL(value);
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return null;
-  }
+  return normalizeAppUrlToPath(raw);
 }
 
 function normalizeListingNo(raw: string | null) {

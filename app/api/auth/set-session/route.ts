@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { sanitizeInternalPath } from "@/lib/safe-path";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
   const redirect = url.searchParams.get("redirect") ?? "/";
 
   // Validate redirect to prevent open redirect
-  const safePath = redirect.startsWith("/") ? redirect : "/";
+  const safePath = sanitizeInternalPath(redirect, "/");
 
   if (!accessToken || !refreshToken) {
     return NextResponse.redirect(new URL(safePath, url.origin));

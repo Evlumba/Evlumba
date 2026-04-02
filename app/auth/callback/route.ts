@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
+import { sanitizeInternalPath } from "@/lib/safe-path";
 
 export const runtime = "nodejs";
 
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
   const flow = requestUrl.searchParams.get("flow");
   const type = requestUrl.searchParams.get("type");
   const nextPath = requestUrl.searchParams.get("next");
-  const safeNextPath = nextPath && nextPath.startsWith("/") ? nextPath : "/";
+  const safeNextPath = sanitizeInternalPath(nextPath, "/");
 
   // Password reset flow — exchange code then redirect to password update page
   if (type === "recovery") {

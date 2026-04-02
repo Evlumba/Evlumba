@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeInternalPath } from "@/lib/safe-path";
 
 function sanitizeHostEntry(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -36,8 +37,9 @@ export function middleware(request: NextRequest) {
     const destination = request.nextUrl.clone();
     destination.pathname = "/admin/login";
     const requestedNext = request.nextUrl.searchParams.get("next") ?? request.nextUrl.searchParams.get("redirect");
-    if (requestedNext?.startsWith("/")) {
-      destination.searchParams.set("next", requestedNext);
+    const safeNext = sanitizeInternalPath(requestedNext, "");
+    if (safeNext) {
+      destination.searchParams.set("next", safeNext);
     }
     return NextResponse.redirect(destination);
   }
