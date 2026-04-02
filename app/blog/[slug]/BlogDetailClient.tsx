@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { buildDesignerProfileHref, formatBlogDate } from "../_lib";
+import { sanitizeBlogRichTextHtml } from "../rich-text";
 import type {
   AdminRole,
   BlogCommentRow,
@@ -185,6 +186,10 @@ export default function BlogDetailClient({
     slugById: initialData.designerSlugById,
   });
   const authorBlogHref = `/blog?author=${encodeURIComponent(post.author_id)}`;
+  const safeContentHtml = useMemo(
+    () => sanitizeBlogRichTextHtml(post.content),
+    [post.content]
+  );
 
   return (
     <main className="mx-auto w-full max-w-4xl py-4">
@@ -274,9 +279,10 @@ export default function BlogDetailClient({
             </button>
           </div>
 
-          <div className="prose prose-slate mt-6 max-w-none whitespace-pre-wrap text-base leading-8 text-slate-800">
-            {post.content}
-          </div>
+          <div
+            className="prose prose-slate mt-6 max-w-none text-base leading-8 text-slate-800 [&_a]:break-words [&_a]:text-sky-700 [&_a]:underline"
+            dangerouslySetInnerHTML={{ __html: safeContentHtml }}
+          />
         </div>
       </article>
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BRANDS, getBrandBySlug } from "@/lib/brands";
+import { getBrandDirectoryEntryBySlug } from "@/lib/brand-directory";
 import { SITE_NAME, toAbsoluteUrl, trimForDescription } from "@/lib/seo";
 
 type PageParams = {
@@ -12,17 +12,15 @@ type PageProps = {
   params: Promise<PageParams>;
 };
 
+export const revalidate = 300;
+
 function toSchemaJson(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-export async function generateStaticParams() {
-  return BRANDS.map((brand) => ({ slug: brand.slug }));
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const brand = getBrandBySlug(slug);
+  const brand = await getBrandDirectoryEntryBySlug(slug);
   if (!brand) {
     return {
       title: "Marka bulunamadı",
@@ -67,7 +65,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BrandDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const brand = getBrandBySlug(slug);
+  const brand = await getBrandDirectoryEntryBySlug(slug);
   if (!brand) {
     notFound();
   }
@@ -124,6 +122,15 @@ export default async function BrandDetailPage({ params }: PageProps) {
       </Link>
 
       <section className="mt-3 rounded-3xl border border-black/10 bg-white/85 p-6 shadow-[0_22px_55px_-40px_rgba(0,0,0,0.25)]">
+        {brand.bannerImageUrl ? (
+          <div className="mb-4 overflow-hidden rounded-2xl border border-black/10 bg-slate-100">
+            <img
+              src={brand.bannerImageUrl}
+              alt={`${brand.name} banner`}
+              className="h-44 w-full object-cover sm:h-56"
+            />
+          </div>
+        ) : null}
         <p className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
           {brand.category}
         </p>

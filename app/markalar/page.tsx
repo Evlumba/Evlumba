@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BRANDS } from "@/lib/brands";
+import { getBrandDirectoryEntries } from "@/lib/brand-directory";
 import { SITE_NAME, toAbsoluteUrl, trimForDescription } from "@/lib/seo";
 
 const title = "Mobilya ve Dekorasyon Markaları";
@@ -39,12 +39,13 @@ function toSchemaJson(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-export default function BrandsPage() {
+export default async function BrandsPage() {
+  const brands = await getBrandDirectoryEntries();
   const itemListSchema = {
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: `${SITE_NAME} marka rehberi`,
-    itemListElement: BRANDS.map((brand, index) => ({
+    itemListElement: brands.map((brand, index) => ({
       "@type": "ListItem",
       position: index + 1,
       name: brand.name,
@@ -73,12 +74,22 @@ export default function BrandsPage() {
       </section>
 
       <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {BRANDS.map((brand) => (
+        {brands.map((brand) => (
           <Link
             key={brand.slug}
             href={`/markalar/${brand.slug}`}
-            className="rounded-2xl border border-black/10 bg-white/80 p-4 transition hover:bg-white"
+            className="overflow-hidden rounded-2xl border border-black/10 bg-white/80 p-4 transition hover:bg-white"
           >
+            {brand.bannerImageUrl ? (
+              <div className="mb-3 overflow-hidden rounded-xl border border-black/5 bg-slate-100">
+                <img
+                  src={brand.bannerImageUrl}
+                  alt={`${brand.name} banner`}
+                  className="h-28 w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            ) : null}
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
               {brand.category}
             </p>

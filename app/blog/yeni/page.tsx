@@ -2,15 +2,21 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isProfessionalRole, normalizeRole, slugifyBlogTitle, type BlogRole } from "../_lib";
+import {
+  extractPlainTextFromRichText,
+  sanitizeBlogRichTextHtml,
+  toEditableBlogHtml,
+} from "../rich-text";
 
 type BlogStatus = "draft" | "published";
 const BLOG_COVER_WIDTH = 1600;
 const BLOG_COVER_HEIGHT = 900;
 const MAX_BLOG_IMAGE_MB = 5;
 const MAX_BLOG_IMAGE_BYTES = MAX_BLOG_IMAGE_MB * 1024 * 1024;
+const FONT_SIZE_OPTIONS = [12, 14, 16, 18, 22, 28, 34];
 
 async function buildUniqueSlug(baseSlug: string) {
   const supabase = getSupabaseBrowserClient();
@@ -93,9 +99,12 @@ function NewBlogPostPageContent() {
   const [excerpt, setExcerpt] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [content, setContent] = useState("");
+  const [editorSeed, setEditorSeed] = useState("");
+  const [selectedFontSize, setSelectedFontSize] = useState(16);
   const [status, setStatus] = useState<BlogStatus>("draft");
   const [existingPublishedAt, setExistingPublishedAt] = useState<string | null>(null);
   const [hasEditablePost, setHasEditablePost] = useState(false);
+  const editorRef = useRef<HTMLDivElement | null>(null);
 
   const pickCoverImage = async (file: File | null) => {
     if (!file) return;
@@ -157,6 +166,7 @@ function NewBlogPostPageContent() {
             setExcerpt(postRow.excerpt ?? "");
             setCoverImageUrl(postRow.cover_image_url ?? "");
             setContent(postRow.content ?? "");
+            setEditorSeed(postRow.content ?? "");
             setStatus((postRow.status as BlogStatus) ?? "draft");
             setExistingPublishedAt(postRow.published_at ?? null);
             setHasEditablePost(true);
@@ -164,6 +174,7 @@ function NewBlogPostPageContent() {
         }
       } else if (!cancelled) {
         setHasEditablePost(false);
+        setEditorSeed("");
       }
 
       setLoading(false);
@@ -175,9 +186,59 @@ function NewBlogPostPageContent() {
     };
   }, [editPostId]);
 
+  useEffect(() => {
+    if (loading) return;
+    if (!editorRef.current) return;
+    editorRef.current.innerHTML = toEditableBlogHtml(editorSeed);
+    setContent(editorRef.current.innerHTML);
+  }, [editorSeed, loading]);
+
   const canCreate = Boolean(userId && isProfessionalRole(role));
 
+  const syncContentFromEditor = () => {
+    if (!editorRef.current) return;
+    setContent(editorRef.current.innerHTML);
+  };
+
+  const runCommand = (command: string, value?: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(command, false, value);
+    syncContentFromEditor();
+  };
+
+  const applyFontSize = (sizePx: number) => {
+    if (!editorRef.current) return;
+    setSelectedFontSize(sizePx);
+    editorRef.current.focus();
+    document.execCommand("fontSize", false, "7");
+
+    const fontTags = editorRef.current.querySelectorAll("font[size='7']");
+    fontTags.forEach((fontTag) => {
+      const span = document.createElement("span");
+      span.style.fontSize = `${sizePx}px`;
+      span.innerHTML = fontTag.innerHTML;
+      fontTag.replaceWith(span);
+    });
+    syncContentFromEditor();
+  };
+
+  const insertLink = () => {
+    if (!editorRef.current) return;
+    const raw = window.prompt("Link URL (https://...)");
+    if (!raw) return;
+    const value = raw.trim();
+    if (!value) return;
+
+    const normalized = value.startsWith("/") ? value : /^https?:\/\//i.test(value) ? value : `https://${value}`;
+    runCommand("createLink", normalized);
+  };
+
   const submit = async () => {
+    const rawEditorHtml = editorRef.current?.innerHTML ?? content;
+    const safeContentHtml = sanitizeBlogRichTextHtml(rawEditorHtml);
+    const plainContent = extractPlainTextFromRichText(safeContentHtml);
+
     if (!userId) {
       setError("Yazı oluşturmak için giriş yapman gerekiyor.");
       return;
@@ -190,7 +251,7 @@ function NewBlogPostPageContent() {
       setError("Başlık en az 5 karakter olmalı.");
       return;
     }
-    if (content.trim().length < 20) {
+    if (plainContent.length < 20) {
       setError("İçerik en az 20 karakter olmalı.");
       return;
     }
@@ -211,7 +272,7 @@ function NewBlogPostPageContent() {
           title: title.trim(),
           excerpt: excerpt.trim() || null,
           cover_image_url: coverImageUrl.trim() || null,
-          content: content.trim(),
+          content: safeContentHtml,
           status,
           published_at:
             status === "published"
@@ -247,7 +308,7 @@ function NewBlogPostPageContent() {
           title: title.trim(),
           excerpt: excerpt.trim() || null,
           cover_image_url: coverImageUrl.trim() || null,
-          content: content.trim(),
+          content: safeContentHtml,
           status,
           published_at: status === "published" ? new Date().toISOString() : null,
         })
@@ -366,14 +427,64 @@ function NewBlogPostPageContent() {
               Sadece bilgisayardan görsel yüklenir; sistem otomatik kırpıp ölçekler. Maksimum dosya boyutu {MAX_BLOG_IMAGE_MB} MB.
             </p>
           </div>
-          <textarea
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            rows={16}
-            placeholder="Yazını buraya yaz..."
-            className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm leading-6"
-            disabled={submitting}
-          />
+          <div className="rounded-2xl border border-black/10 bg-white">
+            <div className="flex flex-wrap items-center gap-2 border-b border-black/10 bg-slate-50 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => runCommand("bold")}
+                disabled={submitting}
+                className="rounded-lg border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                title="Kalın"
+              >
+                B
+              </button>
+              <button
+                type="button"
+                onClick={() => runCommand("italic")}
+                disabled={submitting}
+                className="rounded-lg border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold italic text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                title="İtalik"
+              >
+                I
+              </button>
+              <button
+                type="button"
+                onClick={insertLink}
+                disabled={submitting}
+                className="rounded-lg border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                title="Link ekle"
+              >
+                Link
+              </button>
+              <label className="ml-1 text-xs font-semibold text-slate-600">
+                Punto
+                <select
+                  value={selectedFontSize}
+                  onChange={(event) => applyFontSize(Number(event.target.value))}
+                  disabled={submitting}
+                  className="ml-1 rounded-lg border border-black/10 bg-white px-2 py-1 text-xs text-slate-700"
+                >
+                  {FONT_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size}px
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div
+              ref={editorRef}
+              contentEditable={!submitting}
+              suppressContentEditableWarning
+              onInput={syncContentFromEditor}
+              className="min-h-[340px] w-full px-3 py-3 text-sm leading-7 text-slate-900 outline-none [&_a]:text-sky-700 [&_a]:underline"
+              role="textbox"
+              aria-label="Blog içeriği"
+            />
+          </div>
+          <p className="text-xs text-slate-500">
+            Metni seçip <strong>kalın</strong>, <em>italik</em>, <span style={{ fontSize: 18 }}>punto</span> veya link uygulayabilirsin.
+          </p>
           <select
             value={status}
             onChange={(event) => setStatus(event.target.value as BlogStatus)}

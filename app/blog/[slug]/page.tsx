@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import BlogDetailClient from "./BlogDetailClient";
 import { getBlogPostSeoBySlug, getBlogDetailInitialData } from "../server-data";
+import { extractPlainTextFromRichText } from "../rich-text";
 import { toAbsoluteUrl, trimForDescription } from "@/lib/seo";
 
 type PageParams = {
@@ -32,7 +33,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const title = post.title;
   const description = trimForDescription(
-    post.excerpt?.trim() || post.content || "İç mimar, mimar ve dekorasyon içerikleri."
+    post.excerpt?.trim() ||
+      extractPlainTextFromRichText(post.content) ||
+      "İç mimar, mimar ve dekorasyon içerikleri."
   );
   const canonicalPath = `/blog/${encodeURIComponent(post.slug)}`;
   const isPublished = post.status === "published";
@@ -92,7 +95,8 @@ export default async function BlogDetailPage({ params }: PageProps) {
     "@type": "Article",
     headline: initialData.post.title,
     description: trimForDescription(
-      initialData.post.excerpt?.trim() || initialData.post.content
+      initialData.post.excerpt?.trim() ||
+        extractPlainTextFromRichText(initialData.post.content)
     ),
     datePublished: initialData.post.published_at || initialData.post.created_at,
     dateModified: initialData.post.published_at || initialData.post.created_at,

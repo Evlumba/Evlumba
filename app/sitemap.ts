@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
+import { getBrandDirectoryEntries } from "@/lib/brand-directory";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
-import { BRANDS } from "@/lib/brands";
 import { SITE_URL } from "@/lib/seo";
 
 type BlogSitemapRow = {
@@ -67,12 +67,13 @@ async function loadBlogEntries(): Promise<MetadataRoute.Sitemap> {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [staticEntries, blogEntries] = await Promise.all([
+  const [staticEntries, blogEntries, brands] = await Promise.all([
     Promise.resolve(buildStaticEntries()),
     loadBlogEntries(),
+    getBrandDirectoryEntries(),
   ]);
 
-  const brandEntries: MetadataRoute.Sitemap = BRANDS.map((brand) => ({
+  const brandEntries: MetadataRoute.Sitemap = brands.map((brand) => ({
     url: `${SITE_URL}/markalar/${brand.slug}`,
     lastModified: new Date(),
     changeFrequency: "weekly",

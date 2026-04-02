@@ -139,12 +139,22 @@ type ManagedAdminUser = {
   userName: string;
 };
 
-type TabId = "overview" | "users" | "content" | "admins" | "banners" | "project-images";
+type BrandDirectoryItem = {
+  slug: string;
+  name: string;
+  category: "mobilya" | "dekorasyon" | "aydınlatma" | "tekstil" | "yapı-market";
+  summary: string;
+  bannerImageUrl: string | null;
+  sortOrder: number;
+};
+
+type TabId = "overview" | "users" | "content" | "admins" | "banners" | "project-images" | "brands";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Genel Durum" },
   { id: "users", label: "Kullanıcı Moderasyonu" },
   { id: "content", label: "İçerik Moderasyonu" },
+  { id: "brands", label: "Marka Yönetimi" },
   { id: "banners", label: "Bannerlar" },
   { id: "project-images", label: "Proje Görselleri" },
   { id: "admins", label: "Admin Yetkileri" },
@@ -161,6 +171,21 @@ function shortText(value: string, max = 120) {
   const text = value.trim();
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1)}…`;
+}
+
+function slugify(value: string) {
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ı/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
 }
 
 function displayUserName(user: ModerationUser) {
@@ -243,6 +268,20 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   ]);
   const [bannerUploading, setBannerUploading] = useState<number | null>(null);
   const [bannerError, setBannerError] = useState<string | null>(null);
+
+  const [brandsLoading, setBrandsLoading] = useState(false);
+  const [brandSetupWarning, setBrandSetupWarning] = useState<string | null>(null);
+  const [brands, setBrands] = useState<BrandDirectoryItem[]>([]);
+  const [brandBusySlug, setBrandBusySlug] = useState<string | null>(null);
+  const [brandBannerUploading, setBrandBannerUploading] = useState(false);
+  const [brandForm, setBrandForm] = useState({
+    name: "",
+    slug: "",
+    category: "dekorasyon" as BrandDirectoryItem["category"],
+    summary: "",
+    bannerImageUrl: "",
+    sortOrder: 1000,
+  });
 
   const canManageAdmins = currentRole === "super_admin";
   const visibleTabs = canManageAdmins ? TABS : TABS.filter((tab) => tab.id !== "admins");
@@ -327,6 +366,21 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     }
   }
 
+  async function loadBrands() {
+    setBrandsLoading(true);
+    try {
+      const json = await requestJson<{ brands: BrandDirectoryItem[]; needsSetup?: boolean }>("/api/admin/brands");
+      setBrands(json.brands ?? []);
+      setBrandSetupWarning(
+        json.needsSetup
+          ? "Marka tablosu henüz kurulmamış görünüyor. Migration çalıştırıldıktan sonra kayıtlar kalıcı olur."
+          : null
+      );
+    } finally {
+      setBrandsLoading(false);
+    }
+  }
+
   async function saveProjectType(imageId: string, projectId: string) {
     setSavingProjectId(imageId);
     try {
@@ -371,6 +425,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       loadOverview(),
       loadUsers(),
       loadContent(),
+      loadBrands(),
       canManageAdmins ? loadAdminUsers() : Promise.resolve(),
     ]);
   }
@@ -383,6 +438,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
           loadOverview(),
           loadUsers(),
           loadContent(),
+          loadBrands(),
           loadProjectImages(),
           canManageAdmins ? loadAdminUsers() : Promise.resolve(),
         ]);
@@ -617,6 +673,122 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       setBannerError(msg || "Yükleme başarısız.");
     } finally {
       setBannerUploading(null);
+    }
+  }
+
+  function resetBrandForm() {
+    setBrandForm({
+      name: "",
+      slug: "",
+      category: "dekorasyon",
+      summary: "",
+      bannerImageUrl: "",
+      sortOrder: 1000,
+    });
+  }
+
+  function editBrand(item: BrandDirectoryItem) {
+    setBrandForm({
+      name: item.name,
+      slug: item.slug,
+      category: item.category,
+      summary: item.summary,
+      bannerImageUrl: item.bannerImageUrl ?? "",
+      sortOrder: item.sortOrder,
+    });
+    setActiveTab("brands");
+  }
+
+  async function saveBrand() {
+    const name = brandForm.name.trim();
+    const slug = slugify(brandForm.slug.trim() || name);
+    if (!name) {
+      setErrorMessage("Marka adı zorunlu.");
+      return;
+    }
+    if (!slug) {
+      setErrorMessage("Geçerli bir slug üretilemedi.");
+      return;
+    }
+    if (!brandForm.summary.trim()) {
+      setErrorMessage("Marka özeti zorunlu.");
+      return;
+    }
+
+    setBrandBusySlug(slug);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      await requestJson<{ ok: true; slug: string }>("/api/admin/brands", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "upsert",
+          item: {
+            slug,
+            name,
+            category: brandForm.category,
+            summary: brandForm.summary.trim(),
+            bannerImageUrl: brandForm.bannerImageUrl.trim() || null,
+            sortOrder: Number(brandForm.sortOrder) || 1000,
+          },
+        }),
+      });
+      setSuccessMessage(`${name} markası kaydedildi.`);
+      await loadBrands();
+      resetBrandForm();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Marka kaydı başarısız.");
+    } finally {
+      setBrandBusySlug(null);
+    }
+  }
+
+  async function deleteBrand(slug: string) {
+    const confirmed = window.confirm(`${slug} markasını silmek istediğine emin misin?`);
+    if (!confirmed) return;
+
+    setBrandBusySlug(slug);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      await requestJson<{ ok: true }>("/api/admin/brands", {
+        method: "POST",
+        body: JSON.stringify({ action: "delete", slug }),
+      });
+      setSuccessMessage(`${slug} silindi.`);
+      await loadBrands();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Marka silinemedi.");
+    } finally {
+      setBrandBusySlug(null);
+    }
+  }
+
+  async function uploadBrandBanner(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage("Banner dosyası 5 MB'dan büyük olamaz.");
+      return;
+    }
+    setBrandBannerUploading(true);
+    setErrorMessage(null);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `brands/${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("app-banners")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from("app-banners").getPublicUrl(path);
+      setBrandForm((prev) => ({
+        ...prev,
+        bannerImageUrl: data.publicUrl,
+      }));
+      setSuccessMessage("Banner görseli yüklendi.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Banner yüklenemedi.");
+    } finally {
+      setBrandBannerUploading(false);
     }
   }
 
@@ -1310,6 +1482,212 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
               })()}
             </>
           )}
+        </section>
+      ) : null}
+
+      {activeTab === "brands" ? (
+        <section className="mt-4 space-y-4">
+          {brandSetupWarning ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              {brandSetupWarning}
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-black/10 bg-white p-4">
+            <h2 className="text-base font-semibold text-slate-900">Marka Ekle / Güncelle</h2>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className="text-sm text-slate-700">
+                Marka adı
+                <input
+                  value={brandForm.name}
+                  onChange={(event) =>
+                    setBrandForm((prev) => ({
+                      ...prev,
+                      name: event.target.value,
+                      slug: prev.slug ? prev.slug : slugify(event.target.value),
+                    }))
+                  }
+                  placeholder="Örn: IKEA"
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+              <label className="text-sm text-slate-700">
+                Slug
+                <input
+                  value={brandForm.slug}
+                  onChange={(event) =>
+                    setBrandForm((prev) => ({ ...prev, slug: slugify(event.target.value) }))
+                  }
+                  placeholder="Örn: ikea"
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+              <label className="text-sm text-slate-700">
+                Kategori
+                <select
+                  value={brandForm.category}
+                  onChange={(event) =>
+                    setBrandForm((prev) => ({
+                      ...prev,
+                      category: event.target.value as BrandDirectoryItem["category"],
+                    }))
+                  }
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                >
+                  <option value="mobilya">mobilya</option>
+                  <option value="dekorasyon">dekorasyon</option>
+                  <option value="aydınlatma">aydınlatma</option>
+                  <option value="tekstil">tekstil</option>
+                  <option value="yapı-market">yapı-market</option>
+                </select>
+              </label>
+              <label className="text-sm text-slate-700">
+                Sıralama
+                <input
+                  type="number"
+                  min={1}
+                  max={9999}
+                  value={brandForm.sortOrder}
+                  onChange={(event) =>
+                    setBrandForm((prev) => ({ ...prev, sortOrder: Number(event.target.value) || 1000 }))
+                  }
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Kısa özet
+                <textarea
+                  value={brandForm.summary}
+                  onChange={(event) => setBrandForm((prev) => ({ ...prev, summary: event.target.value }))}
+                  rows={3}
+                  placeholder="Marka için kısa açıklama..."
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Banner görsel URL
+                <input
+                  value={brandForm.bannerImageUrl}
+                  onChange={(event) =>
+                    setBrandForm((prev) => ({ ...prev, bannerImageUrl: event.target.value }))
+                  }
+                  placeholder="https://..."
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={brandBannerUploading}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void uploadBrandBanner(file);
+                    event.target.value = "";
+                  }}
+                  className="hidden"
+                />
+                <span className="cursor-pointer rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  {brandBannerUploading ? "Banner yükleniyor..." : "Banner Yükle"}
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => void saveBrand()}
+                disabled={brandBusySlug !== null}
+                className="rounded-xl border border-black/10 bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+              >
+                Kaydet
+              </button>
+              <button
+                type="button"
+                onClick={resetBrandForm}
+                className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Formu Temizle
+              </button>
+            </div>
+
+            {brandForm.bannerImageUrl ? (
+              <div className="mt-3 overflow-hidden rounded-xl border border-black/10 bg-slate-100">
+                <img
+                  src={brandForm.bannerImageUrl}
+                  alt="Marka banner önizleme"
+                  className="h-36 w-full object-cover"
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-2xl border border-black/10 bg-white p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-slate-900">Mevcut Markalar</h2>
+              <button
+                type="button"
+                onClick={() => void loadBrands()}
+                className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Listeyi Yenile
+              </button>
+            </div>
+
+            {brandsLoading ? <p className="mt-3 text-sm text-slate-500">Yükleniyor...</p> : null}
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {brands.map((item) => (
+                <article key={item.slug} className="rounded-xl border border-black/10 bg-slate-50 p-3">
+                  {item.bannerImageUrl ? (
+                    <div className="mb-2 overflow-hidden rounded-lg border border-black/10 bg-slate-100">
+                      <img
+                        src={item.bannerImageUrl}
+                        alt={`${item.name} banner`}
+                        className="h-24 w-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-slate-500">
+                    {item.category} • sıra {item.sortOrder}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{item.name}</p>
+                  <p className="mt-1 text-xs text-slate-600">/{item.slug}</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-600">{shortText(item.summary, 140)}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <a
+                      href={`/markalar/${item.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Sayfayı Aç
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => editBrand(item)}
+                      className="rounded-lg border border-sky-300 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+                    >
+                      Düzenle
+                    </button>
+                    <button
+                      type="button"
+                      disabled={brandBusySlug === item.slug}
+                      onClick={() => void deleteBrand(item.slug)}
+                      className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                    >
+                      Sil
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {!brandsLoading && brands.length === 0 ? (
+                <p className="text-sm text-slate-500">Henüz marka kaydı yok.</p>
+              ) : null}
+            </div>
+          </div>
         </section>
       ) : null}
 
