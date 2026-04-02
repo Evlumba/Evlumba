@@ -24,7 +24,7 @@ export default async function AdminLoginPage() {
 
   return (
     <Suspense fallback={<AdminLoginFallback />}>
-      <AuthLoginView title="Admin Girişi" subtitle="" googleLabel="" minimal />
+      <AuthLoginView title="Admin Girişi" subtitle="" googleLabel="" minimal requireAdmin />
     </Suspense>
   );
 }

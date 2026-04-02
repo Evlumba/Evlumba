@@ -19,6 +19,7 @@ type AuthLoginViewProps = {
   subtitle: string;
   googleLabel: string;
   minimal?: boolean;
+  requireAdmin?: boolean;
 };
 
 function ArchitectureSide() {
@@ -103,6 +104,7 @@ export default function AuthLoginView({
   subtitle,
   googleLabel,
   minimal = false,
+  requireAdmin = false,
 }: AuthLoginViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -118,8 +120,9 @@ export default function AuthLoginView({
   const oauthHandledRef = useRef(false);
 
   const nextPath = useMemo(() => {
-    return sanitizeInternalPath(searchParams.get("next"), "/");
-  }, [searchParams]);
+    const fallback = requireAdmin ? "/admin" : "/";
+    return sanitizeInternalPath(searchParams.get("next"), fallback);
+  }, [requireAdmin, searchParams]);
 
   const isOAuthReturn = useMemo(
     () => searchParams.get("oauth") === "1" || searchParams.has("code"),
@@ -153,6 +156,57 @@ export default function AuthLoginView({
     toast(successMessage);
     router.push(nextPath || "/");
   }, [nextPath, router]);
+
+  const ensureAdminAccess = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user?.id) {
+      return {
+        ok: false as const,
+        error: authError?.message || "Admin yetkisi doğrulanamadı.",
+      };
+    }
+
+    const { data: roleData, error: roleError } = await supabase.rpc("get_admin_role", {
+      user_uuid: authData.user.id,
+    });
+
+    const role = typeof roleData === "string" ? roleData.trim() : "";
+    if (role === "admin" || role === "super_admin") {
+      return { ok: true as const };
+    }
+
+    if (roleError) {
+      return {
+        ok: false as const,
+        error: roleError.message || "Admin yetkisi doğrulanamadı.",
+      };
+    }
+
+    return {
+      ok: false as const,
+      error: "Bu hesap admin paneli yetkisine sahip değil veya yetkisi pasif.",
+    };
+  }, []);
+
+  const redirectWithServerSession = useCallback(async (targetPath: string) => {
+    const supabase = getSupabaseBrowserClient();
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token ?? "";
+    const refreshToken = data.session?.refresh_token ?? "";
+
+    if (!accessToken || !refreshToken) {
+      router.push(targetPath);
+      return;
+    }
+
+    const destination = sanitizeInternalPath(targetPath, requireAdmin ? "/admin" : "/");
+    const url = new URL("/api/auth/set-session", window.location.origin);
+    url.searchParams.set("access_token", accessToken);
+    url.searchParams.set("refresh_token", refreshToken);
+    url.searchParams.set("redirect", destination);
+    window.location.assign(url.toString());
+  }, [requireAdmin, router]);
 
   const syncSessionWithRetry = useCallback(
     async (
@@ -245,6 +299,20 @@ export default function AuthLoginView({
     setLoading(false);
     if (!response.ok) {
       setFormError(response.error || "Giriş başarısız.");
+      return;
+    }
+
+    if (requireAdmin) {
+      const adminCheck = await ensureAdminAccess();
+      if (!adminCheck.ok) {
+        const supabase = getSupabaseBrowserClient();
+        await supabase.auth.signOut();
+        setFormError(adminCheck.error);
+        return;
+      }
+
+      toast("Admin girişi başarılı ✅");
+      await redirectWithServerSession(nextPath || "/admin");
       return;
     }
 
