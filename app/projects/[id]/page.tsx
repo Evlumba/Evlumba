@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { SITE_NAME, SITE_URL } from "@/lib/seo";
+import SaveButton from "./SaveButton";
 
 export const revalidate = 3600;
 
@@ -117,7 +118,7 @@ export default async function ProjectPage({
             Evlumba
           </Link>
           <Link
-            href="/explore"
+            href="/kesfet"
             className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
             Keşfet
@@ -217,7 +218,7 @@ export default async function ProjectPage({
                 <>
                   <div className="my-5 h-px bg-slate-100" />
                   <Link
-                    href={`/designers/${(designer as any).id}`}
+                    href={`/tasarimcilar/supa_${(designer as any).id}`}
                     className="flex items-center gap-3 rounded-xl p-2 -mx-2 transition hover:bg-slate-50"
                   >
                     <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full ring-2 ring-white shadow">
@@ -251,10 +252,18 @@ export default async function ProjectPage({
                 </>
               )}
 
+              {/* Kaydet */}
+              {designer && (
+                <SaveButton
+                  designerId={(designer as any).id}
+                  projectId={project.id as string}
+                />
+              )}
+
               {/* CTA */}
               <Link
-                href={designer ? `/designers/${(designer as any).id}` : "/explore"}
-                className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
+                href={designer ? `/tasarimcilar/supa_${(designer as any).id}` : "/kesfet"}
+                className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
                 style={{
                   background: "linear-gradient(135deg, #0d9488 0%, #14b8a6 50%, #2dd4bf 100%)",
                 }}
