@@ -1,234 +1,251 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { toast } from "../../../lib/toast";
-import { buildFeedUniverse } from "../../../lib/reco";
-import { designers as allDesigners } from "../../../lib/data";
-import { loadState } from "../../../lib/storage";
 import {
   deleteCollection,
   loadCollections,
   renameCollection,
-  setCollectionShareable,
+  createCollection,
+  toggleSaveToCollection,
+  fetchProjectCardsByIds,
   type Collection,
   type CollectionsState,
+  type ProjectCard,
 } from "../../../lib/collections";
-
-function relShareUrl(shareId: string) {
-  return `/collection/${shareId}`;
-}
-
-function absShareUrl(shareId: string) {
-  if (typeof window === "undefined") return relShareUrl(shareId);
-  return `${window.location.origin}${relShareUrl(shareId)}`;
-}
 
 export default function CollectionsPage() {
   const [state, setState] = useState<CollectionsState>({ collections: [] });
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [projectCards, setProjectCards] = useState<Map<string, ProjectCard>>(new Map());
+  const [newColName, setNewColName] = useState("");
+  const [showNewCol, setShowNewCol] = useState(false);
 
-  useEffect(() => {
-    void refresh();
-  }, []);
+  const allItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    state.collections.forEach((c) => c.itemIds.forEach((id) => ids.add(id)));
+    return [...ids];
+  }, [state.collections]);
 
-  const universe = useMemo(() => buildFeedUniverse(), []);
-  const byId = useMemo(() => {
-    const m = new Map<string, { id: string; designerId: string; pid: string; imageUrl: string; title: string }>();
-    universe.forEach((x) => m.set(x.id, x));
-    return m;
-  }, [universe]);
-
-  const followedDesigners = useMemo(() => {
-    const follows = loadState().follows ?? {};
-    const ids = Object.entries(follows)
-      .filter(([, active]) => Boolean(active))
-      .map(([id]) => id);
-    return allDesigners.filter((d) => ids.includes(d.id));
-  }, [state.collections.length]);
-
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setState(await loadCollections());
+      const s = await loadCollections();
+      setState(s);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (allItemIds.length === 0) return;
+    fetchProjectCardsByIds(allItemIds).then(setProjectCards);
+  }, [allItemIds.join(",")]);
+
+  async function handleCreateCollection() {
+    const name = newColName.trim();
+    if (!name) return;
+    await createCollection(name);
+    setNewColName("");
+    setShowNewCol(false);
+    await refresh();
+    toast("Koleksiyon oluşturuldu ✅");
   }
 
-  function copyShare(shareId: string) {
-    const url = absShareUrl(shareId);
-    try {
-      navigator.clipboard.writeText(url);
-      toast("Link kopyalandı ✅");
-    } catch {
-      toast("Kopyalama başarısız (tarayıcı izni)");
-    }
-  }
-
-  function shareWhatsApp(shareId: string) {
-    const url = absShareUrl(shareId);
-    const msg = `Evlumba koleksiyonuma bak: ${url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  async function handleRemoveItem(collectionId: string, itemId: string) {
+    await toggleSaveToCollection(collectionId, itemId);
+    await refresh();
+    toast("Kaldırıldı");
   }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="rounded-2xl border bg-white p-6">
-        <div className="flex items-end justify-between">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Koleksiyonlarım</h1>
-            <p className="mt-1 text-gray-600">
-              Kaydettiğin tasarımlar burada. Paylaşımı açarsan link/WhatsApp ile gönderebilirsin.
-            </p>
+            <p className="mt-1 text-sm text-gray-500">Kaydettiğin projeler burada listelenir.</p>
           </div>
-          <Link href="/designs" className="rounded-xl bg-black px-4 py-2 text-sm text-white">
-            Tasarımlara Git
-          </Link>
+          <button
+            onClick={() => setShowNewCol(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Yeni Koleksiyon
+          </button>
         </div>
-      </div>
 
-      <div className="rounded-2xl border bg-white p-6">
-        <h2 className="text-lg font-semibold">Beğendiğim Mimarlar</h2>
-        {followedDesigners.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-600">Henüz beğendiğin mimar yok.</p>
-        ) : (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {followedDesigners.map((d) => (
-              <Link key={d.id} href={`/designers/${d.id}`} className="rounded-xl border p-3 hover:bg-gray-50">
-                <div className="text-sm font-semibold">{d.name}</div>
-                <div className="text-xs text-gray-500">{d.city}</div>
-              </Link>
-            ))}
+        {/* Yeni koleksiyon formu */}
+        {showNewCol && (
+          <div className="mt-4 flex items-center gap-2">
+            <input
+              autoFocus
+              type="text"
+              placeholder="Koleksiyon adı (ör. Mutfak, Banyo…)"
+              value={newColName}
+              onChange={(e) => setNewColName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreateCollection()}
+              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-teal-500"
+            />
+            <button
+              onClick={handleCreateCollection}
+              className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Oluştur
+            </button>
+            <button
+              onClick={() => { setShowNewCol(false); setNewColName(""); }}
+              className="rounded-xl border px-4 py-2 text-sm text-gray-600"
+            >
+              İptal
+            </button>
           </div>
         )}
       </div>
 
+      {/* Collections */}
       {loading ? (
-        <div className="rounded-2xl border bg-white p-6 text-gray-600">Koleksiyonlar yükleniyor…</div>
+        <div className="rounded-2xl border bg-white p-8 text-center text-gray-500">Yükleniyor…</div>
+      ) : state.collections.length === 0 ? (
+        <div className="rounded-2xl border bg-white p-8 text-center">
+          <p className="text-gray-500">Henüz kaydedilmiş proje yok.</p>
+          <Link href="/kesfet" className="mt-4 inline-block rounded-xl bg-teal-600 px-5 py-2 text-sm font-semibold text-white">
+            Projeleri Keşfet
+          </Link>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {state.collections.map((c: Collection) => {
-            const expanded = expandedId === c.id;
-
-            return (
-              <div key={c.id} className="rounded-2xl border bg-white p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-lg font-semibold">{c.name}</div>
-                    <div className="mt-1 text-sm text-gray-600">{c.itemIds.length} kayıt</div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      className="rounded-xl border px-3 py-2 text-sm"
-                      onClick={() => setExpandedId(expanded ? null : c.id)}
-                    >
-                      {expanded ? "Kapat" : "Aç"}
-                    </button>
-
-                    <button
-                      className="rounded-xl border px-3 py-2 text-sm"
-                      onClick={async () => {
-                        const name = prompt("Koleksiyon adını güncelle", c.name);
-                        if (!name) return;
-                        await renameCollection(c.id, name.trim());
-                        refresh();
-                        toast("Güncellendi ✅");
-                      }}
-                    >
-                      Adlandır
-                    </button>
-
-                    <button
-                      className="rounded-xl border px-3 py-2 text-sm"
-                      onClick={async () => {
-                        if (!confirm("Koleksiyon silinsin mi?")) return;
-                        await deleteCollection(c.id);
-                        refresh();
-                        toast("Silindi");
-                      }}
-                    >
-                      Sil
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border bg-gray-50 p-3">
-                  <div>
-                    <div className="text-sm font-semibold">Paylaş</div>
-                    <div className="text-xs text-gray-600">Açık olursa linkten herkes görüntüleyebilir.</div>
-                  </div>
-
-                  <button
-                    className={`rounded-xl px-4 py-2 text-sm ${c.isShareable ? "bg-black text-white" : "border"}`}
-                    onClick={async () => {
-                      await setCollectionShareable(c.id, !c.isShareable);
-                      refresh();
-                      toast(c.isShareable ? "Paylaşım kapatıldı" : "Paylaşım açıldı ✅");
-                    }}
-                  >
-                    {c.isShareable ? "Açık" : "Kapalı"}
-                  </button>
-                </div>
-
-                {c.isShareable && c.shareId ? (
-                  <div className="mt-3 rounded-2xl border p-3">
-                    <div className="text-xs text-gray-500">Paylaşım Linki</div>
-                    {/* ✅ SSR/CSR aynı olsun diye RELATIVE gösteriyoruz */}
-                    <div className="mt-1 break-all text-sm font-medium">{relShareUrl(c.shareId)}</div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button className="rounded-xl border px-3 py-2 text-sm" onClick={() => copyShare(c.shareId!)}>
-                        Linki Kopyala
-                      </button>
-                      <button
-                        className="rounded-xl bg-green-600 px-3 py-2 text-sm text-white"
-                        onClick={() => shareWhatsApp(c.shareId!)}
-                      >
-                        WhatsApp Paylaş
-                      </button>
-                      <Link className="rounded-xl border px-3 py-2 text-sm" href={relShareUrl(c.shareId)}>
-                        Public Görünüm
-                      </Link>
-                    </div>
-                  </div>
-                ) : null}
-
-                {expanded ? (
-                  <div className="mt-4">
-                    {c.itemIds.length ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        {c.itemIds.slice(0, 6).map((id) => {
-                          const d = byId.get(id);
-                          if (!d) return null;
-                          return (
-                            <Link
-                              key={id}
-                              href={`/designers/${d.designerId}/projects/${d.pid}`}
-                              className="overflow-hidden rounded-xl border hover:shadow-sm transition"
-                            >
-                              <div className="aspect-[4/3] bg-gray-100">
-                                <img src={d.imageUrl} alt={d.title} className="h-full w-full object-cover" />
-                              </div>
-                              <div className="p-2 text-xs font-medium">{d.title}</div>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border bg-gray-50 p-4 text-sm text-gray-600">
-                        Bu koleksiyon boş. /designs sayfasından “Kaydet” ile ekleyebilirsin.
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {state.collections.map((c: Collection) => (
+            <CollectionCard
+              key={c.id}
+              collection={c}
+              projectCards={projectCards}
+              onRename={async () => {
+                const name = prompt("Yeni koleksiyon adı", c.name);
+                if (!name?.trim()) return;
+                await renameCollection(c.id, name.trim());
+                await refresh();
+                toast("Güncellendi ✅");
+              }}
+              onDelete={async () => {
+                if (!confirm(`"${c.name}" silinsin mi?`)) return;
+                await deleteCollection(c.id);
+                await refresh();
+                toast("Silindi");
+              }}
+              onRemoveItem={(itemId) => handleRemoveItem(c.id, itemId)}
+            />
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function CollectionCard({
+  collection,
+  projectCards,
+  onRename,
+  onDelete,
+  onRemoveItem,
+}: {
+  collection: Collection;
+  projectCards: Map<string, ProjectCard>;
+  onRename: () => void;
+  onDelete: () => void;
+  onRemoveItem: (id: string) => void;
+}) {
+  const items = collection.itemIds
+    .map((id) => projectCards.get(id))
+    .filter(Boolean) as ProjectCard[];
+
+  const coverImage = items[0]?.coverImageUrl ?? null;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+      {/* Kapak görseli */}
+      {coverImage ? (
+        <div className="relative h-36 w-full bg-gray-100">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={coverImage} alt={collection.name} className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+          <div className="absolute bottom-3 left-4">
+            <p className="text-lg font-bold text-white drop-shadow">{collection.name}</p>
+            <p className="text-xs text-white/80">{collection.itemIds.length} proje</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex h-24 items-center justify-center bg-slate-50">
+          <div>
+            <p className="text-base font-semibold text-gray-700">{collection.name}</p>
+            <p className="text-center text-xs text-gray-400">{collection.itemIds.length} proje</p>
+          </div>
+        </div>
+      )}
+
+      {/* Proje ızgarası */}
+      <div className="p-4">
+        {items.length === 0 ? (
+          <p className="text-sm text-gray-400">Bu koleksiyon boş.</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {items.slice(0, 6).map((p) => (
+              <div key={p.id} className="group relative overflow-hidden rounded-xl bg-gray-100">
+                <Link href={`/projects/${p.id}`}>
+                  {p.coverImageUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={p.coverImageUrl}
+                      alt={p.title}
+                      className="aspect-square h-full w-full object-cover transition group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="aspect-square flex items-center justify-center text-xs text-gray-400">
+                      Görsel yok
+                    </div>
+                  )}
+                </Link>
+                <button
+                  onClick={() => onRemoveItem(p.id)}
+                  className="absolute right-1 top-1 hidden h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white group-hover:flex"
+                  title="Kaldır"
+                >
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            {items.length > 6 && (
+              <div className="flex aspect-square items-center justify-center rounded-xl bg-gray-100 text-sm font-semibold text-gray-500">
+                +{items.length - 6}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Aksiyonlar */}
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            onClick={onRename}
+            className="rounded-lg border px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+          >
+            Yeniden Adlandır
+          </button>
+          <button
+            onClick={onDelete}
+            className="rounded-lg border border-red-100 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50"
+          >
+            Sil
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

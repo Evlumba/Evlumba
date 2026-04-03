@@ -163,3 +163,29 @@ export async function getCollectionByShareId(shareId: string): Promise<Collectio
   if (error || !data) return null;
   return mapCollectionRow(data);
 }
+
+export type ProjectCard = {
+  id: string;
+  title: string;
+  coverImageUrl: string | null;
+  designerId: string;
+};
+
+export async function fetchProjectCardsByIds(ids: string[]): Promise<Map<string, ProjectCard>> {
+  if (ids.length === 0) return new Map();
+  const supabase = getSupabaseBrowserClient();
+  const { data } = await supabase
+    .from("designer_projects")
+    .select("id, title, cover_image_url, designer_id")
+    .in("id", ids);
+  const map = new Map<string, ProjectCard>();
+  for (const row of data ?? []) {
+    map.set(row.id, {
+      id: row.id,
+      title: row.title,
+      coverImageUrl: row.cover_image_url,
+      designerId: row.designer_id,
+    });
+  }
+  return map;
+}
