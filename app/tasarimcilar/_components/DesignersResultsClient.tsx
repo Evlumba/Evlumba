@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type CSSProperties, type ReactNode, useEffect } from "react";
+import { useMemo, type CSSProperties, type ReactNode, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
@@ -500,71 +500,135 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
         ) : null}
       </div>
 
+      {/* Seçili filtreler — mobilde başlığın hemen altında, scroll gerektirmeden */}
+      {hasAny && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 lg:hidden">
+          {active.map((a) => (
+            <Chip key={a.key} label={a.label} onRemove={() => patchFilter({ [a.key]: "" })} />
+          ))}
+          <button
+            type="button"
+            onClick={clearAll}
+            className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs transition hover:opacity-95"
+            style={{
+              background: "rgba(255,255,255,0.78)",
+              boxShadow: "0 0 0 1px rgba(15,23,42,0.10)",
+              color: "rgba(15,23,42,0.78)",
+            }}
+          >
+            <X className="h-3.5 w-3.5 opacity-60" />
+            Temizle
+          </button>
+        </div>
+      )}
+
       <div className="mt-5 lg:grid lg:grid-cols-[240px,1fr] lg:gap-6">
-        <aside className="hidden lg:block">
-          <div className="sticky top-28 rounded-3xl p-4" style={glass}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-[#0f172a]">Seçili filtreler</div>
+        <aside className=”hidden lg:block”>
+          <div className=”sticky top-28 rounded-3xl p-4” style={glass}>
+            <div className=”flex items-center justify-between”>
+              <div className=”text-sm font-semibold text-[#0f172a]”>Filtreler</div>
               {hasAny ? (
                 <button
-                  type="button"
+                  type=”button”
                   onClick={clearAll}
-                  className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs transition hover:opacity-95"
+                  className=”inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs transition hover:opacity-95”
                   style={{
-                    background: "rgba(255,255,255,0.78)",
-                    boxShadow: "0 0 0 1px rgba(15,23,42,0.10)",
-                    color: "rgba(15,23,42,0.78)",
+                    background: “rgba(255,255,255,0.78)”,
+                    boxShadow: “0 0 0 1px rgba(15,23,42,0.10)”,
+                    color: “rgba(15,23,42,0.78)”,
                   }}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className=”h-3.5 w-3.5” />
                   Temizle
                 </button>
               ) : null}
             </div>
 
-            {hasAny ? (
-              <div className="mt-3 flex flex-wrap gap-2">
+            {/* Aktif filtre chip'leri */}
+            {hasAny && (
+              <div className=”mt-3 flex flex-wrap gap-2”>
                 {active.map((a) => (
-                  <Chip key={a.key} label={a.label} onRemove={() => patchFilter({ [a.key]: "" })} />
+                  <Chip key={a.key} label={a.label} onRemove={() => patchFilter({ [a.key]: “” })} />
                 ))}
-              </div>
-            ) : (
-              <div className="mt-3 text-xs text-[rgba(15,23,42,0.55)]">
-                Liste alanına gelince sol altta <span className="font-semibold">Filtrele</span> butonu çıkacak.
               </div>
             )}
 
-            <div className="mt-4 rounded-2xl p-3 text-xs" style={{ ...glass, background: "rgba(255,255,255,0.74)" }}>
-              <div className="flex items-start gap-2 text-[rgba(15,23,42,0.60)]">
-                <BadgeCheck className="mt-0.5 h-4 w-4 opacity-70" />
-                <span>“Doğrulanmış” ile en güvenli profillerden başlayabilirsin.</span>
+            {/* Filtre kontrolleri */}
+            <div className=”mt-4 space-y-3”>
+              <div>
+                <div className=”mb-1.5 text-xs font-semibold text-[rgba(15,23,42,0.60)]”>Şehir</div>
+                <div className=”rounded-xl px-3 py-2” style={{ background: “rgba(255,255,255,0.86)”, boxShadow: “0 0 0 1px rgba(15,23,42,0.08)” }}>
+                  <div className=”flex items-center gap-2”>
+                    <MapPin className=”h-4 w-4 shrink-0 opacity-50” />
+                    <select
+                      value={city}
+                      onChange={(e) => patchFilter({ city: e.target.value })}
+                      className=”w-full bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none”
+                    >
+                      <option value=””>Tümü</option>
+                      {options.cities.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className=”mb-1.5 text-xs font-semibold text-[rgba(15,23,42,0.60)]”>Proje tipi</div>
+                <div className=”rounded-xl px-3 py-2” style={{ background: “rgba(255,255,255,0.86)”, boxShadow: “0 0 0 1px rgba(15,23,42,0.08)” }}>
+                  <div className=”flex items-center gap-2”>
+                    <Briefcase className=”h-4 w-4 shrink-0 opacity-50” />
+                    <select
+                      value={project}
+                      onChange={(e) => patchFilter({ project: e.target.value })}
+                      className=”w-full bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none”
+                    >
+                      <option value=””>Tümü</option>
+                      {options.projects.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className=”mb-1.5 text-xs font-semibold text-[rgba(15,23,42,0.60)]”>Hizmet</div>
+                <div className=”rounded-xl px-3 py-2” style={{ background: “rgba(255,255,255,0.86)”, boxShadow: “0 0 0 1px rgba(15,23,42,0.08)” }}>
+                  <div className=”flex items-center gap-2”>
+                    <Bookmark className=”h-4 w-4 shrink-0 opacity-50” />
+                    <select
+                      value={service}
+                      onChange={(e) => patchFilter({ service: e.target.value })}
+                      className=”w-full bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none”
+                    >
+                      <option value=””>Tümü</option>
+                      {options.services.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className=”rounded-xl px-3 py-2.5” style={{ background: “rgba(255,255,255,0.86)”, boxShadow: “0 0 0 1px rgba(15,23,42,0.08)” }}>
+                <label className=”flex cursor-pointer items-center gap-2 text-sm text-[rgba(15,23,42,0.78)]”>
+                  <input
+                    type=”checkbox”
+                    checked={verified === “1”}
+                    onChange={(e) => patchFilter({ verified: e.target.checked ? “1” : “” })}
+                    className=”h-4 w-4 rounded”
+                  />
+                  <BadgeCheck className=”h-4 w-4 opacity-60” />
+                  Sadece doğrulanmış
+                </label>
               </div>
             </div>
           </div>
         </aside>
 
         <div className="min-w-0">
-          {hasAny ? (
-            <div className="mb-4 flex flex-wrap gap-2 lg:hidden">
-              {active.map((a) => (
-                <Chip key={a.key} label={a.label} onRemove={() => patchFilter({ [a.key]: "" })} />
-              ))}
-              <button
-                type="button"
-                onClick={clearAll}
-                className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs transition hover:opacity-95"
-                style={{
-                  background: "rgba(255,255,255,0.78)",
-                  boxShadow: "0 0 0 1px rgba(15,23,42,0.10)",
-                  color: "rgba(15,23,42,0.78)",
-                }}
-              >
-                <X className="h-3.5 w-3.5 opacity-60" />
-                Temizle
-              </button>
-            </div>
-          ) : null}
-
           {pageItems.length === 0 ? (
             <div className="w-full rounded-3xl p-6" style={glass}>
               <div className="text-base font-semibold text-[#0f172a]">Sonuç bulunamadı</div>

@@ -4,6 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Designer } from "../../_data/designers";
+import {
+  loadCollections,
+  createCollection,
+  toggleSaveToCollection,
+} from "../../../../lib/collections";
+
+const PRO_HAVUZU_NAME = "Profesyonel Havuzum";
 
 /** Rounded + modern icons (stroke style) */
 function IconChat({ className }: { className?: string }) {
@@ -174,10 +181,18 @@ export default function ProfileHero({ designer }: { designer: Designer }) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    try {
-      setSaved(localStorage.getItem(savedKey) === "1");
-    } catch {}
-  }, [savedKey]);
+    const liveId = designer.liveDesignerId as string | undefined;
+    if (!liveId) {
+      try { setSaved(localStorage.getItem(savedKey) === "1"); } catch {}
+      return;
+    }
+    loadCollections().then((state) => {
+      const proHavuzu = state.collections.find((c) => c.name === PRO_HAVUZU_NAME);
+      setSaved(proHavuzu?.itemIds.includes(liveId) ?? false);
+    }).catch(() => {
+      try { setSaved(localStorage.getItem(savedKey) === "1"); } catch {}
+    });
+  }, [savedKey, designer.liveDesignerId]);
 
   const onWriteReview = () => {
     document
@@ -197,12 +212,25 @@ export default function ProfileHero({ designer }: { designer: Designer }) {
     } catch {}
   };
 
-  const onToggleSave = () => {
+  const onToggleSave = async () => {
+    const liveId = designer.liveDesignerId as string | undefined;
+    if (!liveId) {
+      try {
+        const next = !saved;
+        setSaved(next);
+        localStorage.setItem(savedKey, next ? "1" : "0");
+      } catch {}
+      return;
+    }
+    setSaved((v) => !v);
     try {
-      const next = !saved;
-      setSaved(next);
-      localStorage.setItem(savedKey, next ? "1" : "0");
-    } catch {}
+      const state = await loadCollections();
+      let proHavuzu = state.collections.find((c) => c.name === PRO_HAVUZU_NAME);
+      if (!proHavuzu) proHavuzu = await createCollection(PRO_HAVUZU_NAME);
+      await toggleSaveToCollection(proHavuzu.id, liveId);
+    } catch {
+      setSaved((v) => !v); // geri al
+    }
   };
 
   const subtitle = [designer.title, designer.city].filter(Boolean).join(" • ");

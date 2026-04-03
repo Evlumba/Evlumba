@@ -164,6 +164,35 @@ export async function getCollectionByShareId(shareId: string): Promise<Collectio
   return mapCollectionRow(data);
 }
 
+export type DesignerCard = {
+  id: string;
+  displayName: string;
+  specialty: string | null;
+  avatarUrl: string | null;
+  city: string | null;
+};
+
+export async function fetchDesignerCardsByIds(ids: string[]): Promise<Map<string, DesignerCard>> {
+  if (ids.length === 0) return new Map();
+  const supabase = getSupabaseBrowserClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name, business_name, specialty, avatar_url, city")
+    .in("id", ids);
+  const map = new Map<string, DesignerCard>();
+  for (const row of data ?? []) {
+    const displayName = ((row.business_name || row.full_name || "Tasarımcı") as string).trim();
+    map.set(row.id, {
+      id: row.id,
+      displayName,
+      specialty: row.specialty,
+      avatarUrl: row.avatar_url,
+      city: row.city,
+    });
+  }
+  return map;
+}
+
 export type ProjectCard = {
   id: string;
   title: string;

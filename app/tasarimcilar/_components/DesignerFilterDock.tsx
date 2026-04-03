@@ -61,8 +61,8 @@ export default function DesignerFilterDock({
 
   const [open, setOpen] = useState(false);
 
-  // ✅ sadece liste alanına gelince göster
-  const [visible, setVisible] = useState(false);
+  // Mobilde her zaman görünür
+  const [visible, setVisible] = useState(true);
 
   const qs = sp.toString();
   const q = sp.get("q") || "";
@@ -114,32 +114,20 @@ export default function DesignerFilterDock({
     };
   }, [open]);
 
-  // ✅ IntersectionObserver: #liste görünür olunca buton görünür
+  // Desktop'ta sadece #liste görünürken göster, mobilde her zaman
   useEffect(() => {
+    if (isMobile()) return; // mobilde always visible
     const el = document.getElementById(anchorId);
     if (!el) {
-      // fallback
-      const onScroll = () => {
-        const y = window.scrollY || 0;
-        setVisible(y > 400);
-      };
+      const onScroll = () => setVisible(window.scrollY > 400);
       onScroll();
       window.addEventListener("scroll", onScroll, { passive: true });
       return () => window.removeEventListener("scroll", onScroll);
     }
-
     const obs = new IntersectionObserver(
-      (entries) => {
-        setVisible(entries[0]?.isIntersecting ?? false);
-      },
-      {
-        root: null,
-        // listeye yaklaşınca da tetiklesin
-        rootMargin: "-10% 0px -60% 0px",
-        threshold: 0.01,
-      }
+      (entries) => { setVisible(entries[0]?.isIntersecting ?? false); },
+      { root: null, rootMargin: "-10% 0px -60% 0px", threshold: 0.01 }
     );
-
     obs.observe(el);
     return () => obs.disconnect();
   }, [anchorId]);
