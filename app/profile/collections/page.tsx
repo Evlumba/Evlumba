@@ -45,17 +45,14 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     if (allItemIds.length === 0) return;
-
-    // "Profesyonel Havuzum" koleksiyonlarındaki ID'leri designer olarak getir
-    const proHavuzuIds = new Set<string>();
-    state.collections
-      .filter((c) => c.name === "Profesyonel Havuzum")
-      .forEach((c) => c.itemIds.forEach((id) => proHavuzuIds.add(id)));
-
-    const projectIds = allItemIds.filter((id) => !proHavuzuIds.has(id));
-
-    if (projectIds.length > 0) fetchProjectCardsByIds(projectIds).then(setProjectCards);
-    if (proHavuzuIds.size > 0) fetchDesignerCardsByIds([...proHavuzuIds]).then(setDesignerCards);
+    // Her iki tablodan da sorgula — koleksiyon adı yerine veri tipine bak
+    Promise.all([
+      fetchProjectCardsByIds(allItemIds),
+      fetchDesignerCardsByIds(allItemIds),
+    ]).then(([projects, designers]) => {
+      setProjectCards(projects);
+      setDesignerCards(designers);
+    });
   }, [allItemIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCreateCollection() {
@@ -177,19 +174,13 @@ function CollectionCard({
   onDelete: () => void;
   onRemoveItem: (id: string) => void;
 }) {
-  const isProHavuzu = collection.name === "Profesyonel Havuzum";
-
-  const projectItems = isProHavuzu
-    ? []
-    : (collection.itemIds.map((id) => projectCards.get(id)).filter(Boolean) as ProjectCard[]);
-
-  const designerItems = isProHavuzu
-    ? (collection.itemIds.map((id) => designerCards.get(id)).filter(Boolean) as DesignerCard[])
-    : [];
+  // Koleksiyon adına değil, gerçek veri tipine göre ayır
+  const projectItems = collection.itemIds.map((id) => projectCards.get(id)).filter(Boolean) as ProjectCard[];
+  const designerItems = collection.itemIds.map((id) => designerCards.get(id)).filter(Boolean) as DesignerCard[];
 
   const coverImage = projectItems[0]?.coverImageUrl ?? null;
   const itemCount = collection.itemIds.length;
-  const itemLabel = isProHavuzu ? "profesyonel" : "proje";
+  const itemLabel = designerItems.length > 0 && projectItems.length === 0 ? "profesyonel" : "öğe";
 
   return (
     <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
@@ -205,7 +196,7 @@ function CollectionCard({
           </div>
         </div>
       ) : (
-        <div className={`flex h-24 items-center justify-center ${isProHavuzu ? "bg-teal-50" : "bg-slate-50"}`}>
+        <div className={`flex h-24 items-center justify-center ${designerItems.length > 0 && projectItems.length === 0 ? "bg-teal-50" : "bg-slate-50"}`}>
           <div className="text-center">
             <p className="text-base font-semibold text-gray-700">{collection.name}</p>
             <p className="text-xs text-gray-400">{itemCount} {itemLabel}</p>
@@ -214,11 +205,48 @@ function CollectionCard({
       )}
 
       <div className="p-4">
-        {/* Profesyonel Havuzu — yatay liste */}
-        {isProHavuzu ? (
-          designerItems.length === 0 ? (
-            <p className="text-sm text-gray-400">Henüz profesyonel eklenmedi.</p>
-          ) : (
+        {projectItems.length === 0 && designerItems.length === 0 && (
+          <p className="text-sm text-gray-400">Bu koleksiyon boş.</p>
+        )}
+
+        {/* Proje ızgarası */}
+        {projectItems.length > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            {projectItems.slice(0, 6).map((p) => (
+              <div key={p.id} className="group relative overflow-hidden rounded-xl bg-gray-100">
+                <Link href={`/projects/${p.id}`}>
+                  {p.coverImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.coverImageUrl} alt={p.title} className="aspect-square h-full w-full object-cover transition group-hover:scale-105" />
+                  ) : (
+                    <div className="aspect-square flex items-center justify-center text-xs text-gray-400">Görsel yok</div>
+                  )}
+                </Link>
+                <button
+                  onClick={() => onRemoveItem(p.id)}
+                  className="absolute right-1 top-1 hidden h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white group-hover:flex"
+                  title="Kaldır"
+                >
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            {projectItems.length > 6 && (
+              <div className="flex aspect-square items-center justify-center rounded-xl bg-gray-100 text-sm font-semibold text-gray-500">
+                +{projectItems.length - 6}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tasarımcı listesi */}
+        {designerItems.length > 0 && (
+          <>
+            {projectItems.length > 0 && (
+              <p className="mt-3 mb-1 text-xs font-semibold text-gray-400">Profesyoneller</p>
+            )}
             <div className="space-y-2">
               {designerItems.slice(0, 5).map((d) => (
                 <div key={d.id} className="group flex items-center justify-between gap-3 rounded-xl border p-2 hover:bg-gray-50">
@@ -255,41 +283,7 @@ function CollectionCard({
                 <p className="text-xs text-gray-400">+{designerItems.length - 5} daha…</p>
               )}
             </div>
-          )
-        ) : (
-          /* Proje ızgarası */
-          projectItems.length === 0 ? (
-            <p className="text-sm text-gray-400">Bu koleksiyon boş.</p>
-          ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {projectItems.slice(0, 6).map((p) => (
-                <div key={p.id} className="group relative overflow-hidden rounded-xl bg-gray-100">
-                  <Link href={`/projects/${p.id}`}>
-                    {p.coverImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.coverImageUrl} alt={p.title} className="aspect-square h-full w-full object-cover transition group-hover:scale-105" />
-                    ) : (
-                      <div className="aspect-square flex items-center justify-center text-xs text-gray-400">Görsel yok</div>
-                    )}
-                  </Link>
-                  <button
-                    onClick={() => onRemoveItem(p.id)}
-                    className="absolute right-1 top-1 hidden h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white group-hover:flex"
-                    title="Kaldır"
-                  >
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-              {projectItems.length > 6 && (
-                <div className="flex aspect-square items-center justify-center rounded-xl bg-gray-100 text-sm font-semibold text-gray-500">
-                  +{projectItems.length - 6}
-                </div>
-              )}
-            </div>
-          )
+          </>
         )}
 
         {/* Aksiyonlar */}
