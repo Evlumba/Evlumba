@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { SITE_NAME, SITE_URL } from "@/lib/seo";
 import SaveButton from "./SaveButton";
+import AppBanner from "./AppBanner";
 
 export const revalidate = 3600;
 
@@ -117,12 +118,15 @@ export default async function ProjectPage({
           >
             Evlumba
           </Link>
-          <Link
-            href="/kesfet"
-            className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-          >
-            Keşfet
-          </Link>
+          <div className="flex items-center gap-2">
+            <SaveButton projectId={project.id as string} />
+            <Link
+              href="/kesfet"
+              className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Keşfet
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -252,14 +256,6 @@ export default async function ProjectPage({
                 </>
               )}
 
-              {/* Kaydet */}
-              {designer && (
-                <SaveButton
-                  designerId={(designer as any).id}
-                  projectId={project.id as string}
-                />
-              )}
-
               {/* CTA */}
               <Link
                 href={designer ? `/tasarimcilar/supa_${(designer as any).id}` : "/kesfet"}
@@ -274,6 +270,7 @@ export default async function ProjectPage({
           </div>
         </div>
       </main>
+      <AppBanner projectId={project.id as string} />
     </div>
   );
 }

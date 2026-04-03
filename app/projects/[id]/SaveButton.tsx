@@ -1,52 +1,71 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { getSession, setIntendedAction } from "../../../lib/storage";
 import {
-  getSession,
-  isProjectSaved,
-  setIntendedAction,
-  toggleProjectSave,
-} from "../../../lib/storage";
+  loadCollections,
+  createCollection,
+  toggleSaveToCollection,
+  getSavedCollectionsForDesign,
+} from "../../../lib/collections";
 import { toast } from "../../../lib/toast";
 
-export default function SaveButton({
-  designerId,
-  projectId,
-}: {
-  designerId: string;
-  projectId: string;
-}) {
+export default function SaveButton({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const checkSaved = useCallback(async () => {
+    if (!getSession()) return;
+    try {
+      const cols = await getSavedCollectionsForDesign(projectId);
+      setSaved(cols.length > 0);
+    } catch {}
+  }, [projectId]);
 
   useEffect(() => {
-    setSaved(isProjectSaved(designerId, projectId));
-  }, [designerId, projectId]);
+    checkSaved();
+  }, [checkSaved]);
 
-  function handleClick() {
+  async function handleClick() {
     if (!getSession()) {
       setIntendedAction({
-        type: "toggleProjectSave",
-        payload: { designerId, pid: projectId },
+        type: "save",
+        targetId: projectId,
         returnTo: window.location.pathname,
       });
-      toast("Proje kaydetmek için giriş yap");
+      toast("Kaydetmek için giriş yap");
       router.push("/login");
       return;
     }
-    const v = toggleProjectSave(designerId, projectId);
-    setSaved(v);
-    toast(v ? "Proje kaydedildi ✅" : "Proje kaydı kaldırıldı");
+
+    setLoading(true);
+    try {
+      const state = await loadCollections();
+      let collection = state.collections.find((c) => c.name === "Kaydedilenler");
+      if (!collection) {
+        collection = await createCollection("Kaydedilenler");
+      }
+      await toggleSaveToCollection(collection.id, projectId);
+      const next = !saved;
+      setSaved(next);
+      toast(next ? "Projeye kaydedildi ✅" : "Kaydedilenden çıkarıldı");
+    } catch {
+      toast("Bir hata oluştu");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <button
       onClick={handleClick}
-      className={`mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-sm font-semibold transition ${
+      disabled={loading}
+      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition ${
         saved
-          ? "border-rose-200 bg-rose-50 text-rose-600"
-          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+          ? "bg-rose-50 text-rose-600 ring-1 ring-rose-200"
+          : "bg-white/80 text-gray-600 ring-1 ring-black/10 hover:bg-white"
       }`}
     >
       <svg
