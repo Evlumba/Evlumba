@@ -498,6 +498,14 @@ function ProfileMenu({
           Profil Ayarları
         </Link>
         <Link
+          href="/profile/collections"
+          role="menuitem"
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100"
+        >
+          <CollectionIcon />
+          Koleksiyonlarım
+        </Link>
+        <Link
           href="/ilanlar"
           role="menuitem"
           className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100"
@@ -772,20 +780,6 @@ export default function SiteHeader() {
                       >
                         <ProjectsIcon />
                         <span className="hidden sm:inline">Projelerim</span>
-                      </Link>
-                    ) : null}
-                    {showCollectionsShortcut ? (
-                      <Link
-                        href={collectionsHref}
-                        className={cn(
-                          "inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10",
-                          "bg-white/65 text-slate-800 hover:bg-white transition",
-                          "shadow-[0_10px_30px_-26px_rgba(0,0,0,0.18)] backdrop-blur",
-                          "px-3.5 py-2 text-sm font-semibold whitespace-nowrap"
-                        )}
-                      >
-                        <CollectionIcon />
-                        <span className="hidden sm:inline">Koleksiyonlar</span>
                       </Link>
                     ) : null}
                     <Link
