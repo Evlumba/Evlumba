@@ -523,22 +523,22 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
       )}
 
       <div className="mt-5 lg:grid lg:grid-cols-[240px,1fr] lg:gap-6">
-        <aside className=”hidden lg:block”>
-          <div className=”sticky top-28 rounded-3xl p-4” style={glass}>
-            <div className=”flex items-center justify-between”>
-              <div className=”text-sm font-semibold text-[#0f172a]”>Filtreler</div>
+        <aside className="hidden lg:block">
+          <div className="sticky top-28 rounded-3xl p-4" style={glass}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-[#0f172a]">Filtreler</div>
               {hasAny ? (
                 <button
-                  type=”button”
+                  type="button"
                   onClick={clearAll}
-                  className=”inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs transition hover:opacity-95”
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs transition hover:opacity-95"
                   style={{
-                    background: “rgba(255,255,255,0.78)”,
-                    boxShadow: “0 0 0 1px rgba(15,23,42,0.10)”,
-                    color: “rgba(15,23,42,0.78)”,
+                    background: "rgba(255,255,255,0.78)",
+                    boxShadow: "0 0 0 1px rgba(15,23,42,0.10)",
+                    color: "rgba(15,23,42,0.78)",
                   }}
                 >
-                  <X className=”h-3.5 w-3.5” />
+                  <X className="h-3.5 w-3.5" />
                   Temizle
                 </button>
               ) : null}
@@ -546,26 +546,26 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
 
             {/* Aktif filtre chip'leri */}
             {hasAny && (
-              <div className=”mt-3 flex flex-wrap gap-2”>
+              <div className="mt-3 flex flex-wrap gap-2">
                 {active.map((a) => (
-                  <Chip key={a.key} label={a.label} onRemove={() => patchFilter({ [a.key]: “” })} />
+                  <Chip key={a.key} label={a.label} onRemove={() => patchFilter({ [a.key]: "" })} />
                 ))}
               </div>
             )}
 
             {/* Filtre kontrolleri */}
-            <div className=”mt-4 space-y-3”>
+            <div className="mt-4 space-y-3">
               <div>
-                <div className=”mb-1.5 text-xs font-semibold text-[rgba(15,23,42,0.60)]”>Şehir</div>
-                <div className=”rounded-xl px-3 py-2” style={{ background: “rgba(255,255,255,0.86)”, boxShadow: “0 0 0 1px rgba(15,23,42,0.08)” }}>
-                  <div className=”flex items-center gap-2”>
-                    <MapPin className=”h-4 w-4 shrink-0 opacity-50” />
+                <div className="mb-1.5 text-xs font-semibold text-[rgba(15,23,42,0.60)]">Şehir</div>
+                <div className="rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.86)", boxShadow: "0 0 0 1px rgba(15,23,42,0.08)" }}>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 shrink-0 opacity-50" />
                     <select
                       value={city}
                       onChange={(e) => patchFilter({ city: e.target.value })}
-                      className=”w-full bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none”
+                      className="w-full bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none"
                     >
-                      <option value=””>Tümü</option>
+                      <option value="">Tümü</option>
                       {options.cities.map((c) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -575,16 +575,16 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
               </div>
 
               <div>
-                <div className=”mb-1.5 text-xs font-semibold text-[rgba(15,23,42,0.60)]”>Proje tipi</div>
-                <div className=”rounded-xl px-3 py-2” style={{ background: “rgba(255,255,255,0.86)”, boxShadow: “0 0 0 1px rgba(15,23,42,0.08)” }}>
-                  <div className=”flex items-center gap-2”>
-                    <Briefcase className=”h-4 w-4 shrink-0 opacity-50” />
+                <div className="mb-1.5 text-xs font-semibold text-[rgba(15,23,42,0.60)]">Proje tipi</div>
+                <div className="rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.86)", boxShadow: "0 0 0 1px rgba(15,23,42,0.08)" }}>
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 shrink-0 opacity-50" />
                     <select
                       value={project}
                       onChange={(e) => patchFilter({ project: e.target.value })}
-                      className=”w-full bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none”
+                      className="w-full bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none"
                     >
-                      <option value=””>Tümü</option>
+                      <option value="">Tümü</option>
                       {options.projects.map((p) => (
                         <option key={p} value={p}>{p}</option>
                       ))}
@@ -594,16 +594,16 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
               </div>
 
               <div>
-                <div className=”mb-1.5 text-xs font-semibold text-[rgba(15,23,42,0.60)]”>Hizmet</div>
-                <div className=”rounded-xl px-3 py-2” style={{ background: “rgba(255,255,255,0.86)”, boxShadow: “0 0 0 1px rgba(15,23,42,0.08)” }}>
-                  <div className=”flex items-center gap-2”>
-                    <Bookmark className=”h-4 w-4 shrink-0 opacity-50” />
+                <div className="mb-1.5 text-xs font-semibold text-[rgba(15,23,42,0.60)]">Hizmet</div>
+                <div className="rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.86)", boxShadow: "0 0 0 1px rgba(15,23,42,0.08)" }}>
+                  <div className="flex items-center gap-2">
+                    <Bookmark className="h-4 w-4 shrink-0 opacity-50" />
                     <select
                       value={service}
                       onChange={(e) => patchFilter({ service: e.target.value })}
-                      className=”w-full bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none”
+                      className="w-full bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none"
                     >
-                      <option value=””>Tümü</option>
+                      <option value="">Tümü</option>
                       {options.services.map((s) => (
                         <option key={s} value={s}>{s}</option>
                       ))}
@@ -612,15 +612,15 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
                 </div>
               </div>
 
-              <div className=”rounded-xl px-3 py-2.5” style={{ background: “rgba(255,255,255,0.86)”, boxShadow: “0 0 0 1px rgba(15,23,42,0.08)” }}>
-                <label className=”flex cursor-pointer items-center gap-2 text-sm text-[rgba(15,23,42,0.78)]”>
+              <div className="rounded-xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.86)", boxShadow: "0 0 0 1px rgba(15,23,42,0.08)" }}>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-[rgba(15,23,42,0.78)]">
                   <input
-                    type=”checkbox”
-                    checked={verified === “1”}
-                    onChange={(e) => patchFilter({ verified: e.target.checked ? “1” : “” })}
-                    className=”h-4 w-4 rounded”
+                    type="checkbox"
+                    checked={verified === "1"}
+                    onChange={(e) => patchFilter({ verified: e.target.checked ? "1" : "" })}
+                    className="h-4 w-4 rounded"
                   />
-                  <BadgeCheck className=”h-4 w-4 opacity-60” />
+                  <BadgeCheck className="h-4 w-4 opacity-60" />
                   Sadece doğrulanmış
                 </label>
               </div>
