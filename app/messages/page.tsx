@@ -401,6 +401,14 @@ function MessagesPageContent() {
     let cancelled = false;
     const supabase = getSupabaseBrowserClient();
 
+    // Immediately clear the badge for the selected conversation
+    setUnreadByConv((prev) => {
+      if (!prev[activeConversationId]) return prev;
+      const next = { ...prev };
+      delete next[activeConversationId];
+      return next;
+    });
+
     void supabase
       .from("messages")
       .select("id, conversation_id, sender_id, body, created_at")
@@ -415,17 +423,14 @@ function MessagesPageContent() {
         setMessages(data ?? []);
       });
 
-    void supabase
+    supabase
       .rpc("mark_conversation_read", { conversation_uuid: activeConversationId })
-      .then(({ data }) => {
-        if (!cancelled && typeof data === "number" && data > 0) {
-          setUnreadByConv((prev) => {
-            const next = { ...prev };
-            delete next[activeConversationId!];
-            return next;
-          });
-          emitMessagesUpdated();
+      .then(({ error: rpcError }) => {
+        if (cancelled) return;
+        if (rpcError) {
+          console.error("mark_conversation_read failed:", rpcError.message);
         }
+        emitMessagesUpdated();
       });
 
     return () => {
