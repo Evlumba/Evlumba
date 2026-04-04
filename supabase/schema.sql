@@ -615,17 +615,31 @@ create table if not exists public.blog_posts (
 
 do $$
 begin
-  if not exists (
+  -- Drop the old overly-permissive constraint (allowed 3M chars / base64)
+  if exists (
     select 1
     from pg_constraint
     where conname = 'blog_posts_cover_image_url_max_len'
       and conrelid = 'public.blog_posts'::regclass
   ) then
+    alter table public.blog_posts drop constraint blog_posts_cover_image_url_max_len;
+  end if;
+
+  -- Add strict constraint: must be an HTTP(S) URL, max 2048 chars
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'blog_posts_cover_image_url_valid'
+      and conrelid = 'public.blog_posts'::regclass
+  ) then
     alter table public.blog_posts
-      add constraint blog_posts_cover_image_url_max_len
+      add constraint blog_posts_cover_image_url_valid
       check (
         cover_image_url is null
-        or char_length(cover_image_url) <= 3000000
+        or (
+          char_length(cover_image_url) <= 2048
+          and cover_image_url like 'https://%'
+        )
       );
   end if;
 end
