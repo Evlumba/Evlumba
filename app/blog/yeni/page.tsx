@@ -85,6 +85,34 @@ async function normalizeImageToSize(file: File, width: number, height: number): 
   return canvas.toDataURL("image/jpeg", 0.84);
 }
 
+async function uploadDataUrlToStorage(
+  dataUrl: string,
+  postId: string,
+): Promise<string> {
+  const match = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!match) throw new Error("Geçersiz görsel verisi");
+
+  const mimeType = match[1];
+  const ext = mimeType.split("/")[1] ?? "jpeg";
+  const byteString = atob(match[2]);
+  const bytes = new Uint8Array(byteString.length);
+  for (let i = 0; i < byteString.length; i++) {
+    bytes[i] = byteString.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: mimeType });
+
+  const supabase = getSupabaseBrowserClient();
+  const storagePath = `blog-covers/${postId}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("app-banners")
+    .upload(storagePath, blob, { upsert: true, contentType: mimeType });
+  if (uploadError) throw new Error(`Görsel yüklenemedi: ${uploadError.message}`);
+
+  const { data } = supabase.storage.from("app-banners").getPublicUrl(storagePath);
+  return data.publicUrl;
+}
+
 function dataUrlSizeInBytes(dataUrl: string) {
   const base64 = dataUrl.split(",")[1] ?? "";
   const normalized = base64.replace(/\s+/g, "");
@@ -415,10 +443,15 @@ function NewBlogPostPageContent() {
       const supabase = getSupabaseBrowserClient();
 
       if (isEditMode && editPostId) {
+        let finalCoverUrl = coverImageUrl.trim() || null;
+        if (finalCoverUrl && finalCoverUrl.startsWith("data:")) {
+          finalCoverUrl = await uploadDataUrlToStorage(finalCoverUrl, editPostId);
+        }
+
         const payload = {
           title: title.trim(),
           excerpt: excerpt.trim() || null,
-          cover_image_url: coverImageUrl.trim() || null,
+          cover_image_url: finalCoverUrl,
           content: safeContentHtml,
           status,
           published_at:
@@ -454,18 +487,31 @@ function NewBlogPostPageContent() {
           slug,
           title: title.trim(),
           excerpt: excerpt.trim() || null,
-          cover_image_url: coverImageUrl.trim() || null,
+          cover_image_url: null,
           content: safeContentHtml,
           status,
           published_at: status === "published" ? new Date().toISOString() : null,
         })
-        .select("slug")
+        .select("id, slug")
         .single();
 
       if (insertError || !inserted) {
         setError(insertError?.message || "Yazı oluşturulamadı.");
         setSubmitting(false);
         return;
+      }
+
+      if (coverImageUrl.trim() && coverImageUrl.trim().startsWith("data:")) {
+        const publicUrl = await uploadDataUrlToStorage(coverImageUrl.trim(), inserted.id);
+        await supabase
+          .from("blog_posts")
+          .update({ cover_image_url: publicUrl })
+          .eq("id", inserted.id);
+      } else if (coverImageUrl.trim()) {
+        await supabase
+          .from("blog_posts")
+          .update({ cover_image_url: coverImageUrl.trim() })
+          .eq("id", inserted.id);
       }
 
       setNotice(status === "published" ? "Yazın yayına alındı." : "Yazın taslak olarak kaydedildi.");
