@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "plus.unsplash.com" },
       { protocol: "https", hostname: "static.wixstatic.com" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "vgtgcjnrsladdharzkwn.supabase.co" },
     ],
     // COST-FIX: Cache optimized images longer
     minimumCacheTTL: 86400, // 24 hours
