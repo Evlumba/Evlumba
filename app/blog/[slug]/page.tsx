@@ -39,7 +39,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   );
   const canonicalPath = `/blog/${encodeURIComponent(post.slug)}`;
   const isPublished = post.status === "published";
-  const imageUrl = post.cover_image_url?.trim() ? toAbsoluteUrl(post.cover_image_url) : undefined;
+  const rawMetaCover = post.cover_image_url?.trim() || "";
+  const imageUrl =
+    rawMetaCover && !rawMetaCover.startsWith("data:")
+      ? toAbsoluteUrl(rawMetaCover)
+      : undefined;
 
   return {
     title,
@@ -87,9 +91,11 @@ export default async function BlogDetailPage({ params }: PageProps) {
   }
 
   const canonicalPath = `/blog/${encodeURIComponent(initialData.post.slug)}`;
-  const imageUrl = initialData.post.cover_image_url?.trim()
-    ? toAbsoluteUrl(initialData.post.cover_image_url)
-    : undefined;
+  const rawCover = initialData.post.cover_image_url?.trim() || "";
+  const imageUrl =
+    rawCover && !rawCover.startsWith("data:")
+      ? toAbsoluteUrl(rawCover)
+      : undefined;
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "Article",
