@@ -153,6 +153,7 @@ function MessagesPageContent() {
   const [profilesById, setProfilesById] = useState<Record<string, ProfileLite>>({});
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [unreadByConv, setUnreadByConv] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -297,6 +298,24 @@ function MessagesPageContent() {
             : list[0]?.id ?? null;
         setActiveConversationId(nextActive);
 
+        // Fetch per-conversation unread counts
+        if (list.length > 0) {
+          const convIds = list.map((c) => c.id);
+          const { data: unreadRows } = await supabase
+            .from("messages")
+            .select("conversation_id")
+            .in("conversation_id", convIds)
+            .neq("sender_id", currentUserId)
+            .is("read_at", null);
+          if (!cancelled && unreadRows) {
+            const counts: Record<string, number> = {};
+            for (const row of unreadRows) {
+              counts[row.conversation_id] = (counts[row.conversation_id] ?? 0) + 1;
+            }
+            setUnreadByConv(counts);
+          }
+        }
+
         const profileIds = Array.from(new Set(list.flatMap((c) => [c.homeowner_id, c.designer_id])));
         if (profileIds.length > 0) {
           let peopleRows: ProfileLite[] = [];
@@ -400,6 +419,11 @@ function MessagesPageContent() {
       .rpc("mark_conversation_read", { conversation_uuid: activeConversationId })
       .then(({ data }) => {
         if (!cancelled && typeof data === "number" && data > 0) {
+          setUnreadByConv((prev) => {
+            const next = { ...prev };
+            delete next[activeConversationId!];
+            return next;
+          });
           emitMessagesUpdated();
         }
       });
@@ -478,12 +502,13 @@ function MessagesPageContent() {
               const label =
                 displayName(partner, partnerIsDesigner ? "Profesyonel" : "Kullanıcı");
               const partnerRole = partner?.role ?? (partnerIsDesigner ? "designer" : "homeowner");
+              const unread = unreadByConv[conversation.id] ?? 0;
 
               return (
                 <button
                   key={conversation.id}
                   onClick={() => setActiveConversationId(conversation.id)}
-                  className={`w-full rounded-xl border px-3 py-2 text-left text-sm ${
+                  className={`relative w-full rounded-xl border px-3 py-2 text-left text-sm ${
                     activeConversationId === conversation.id ? "bg-slate-900 text-white" : "bg-white"
                   }`}
                 >
@@ -495,6 +520,11 @@ function MessagesPageContent() {
                   >
                     {roleLabel(partnerRole)}
                   </div>
+                  {unread > 0 && activeConversationId !== conversation.id ? (
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold leading-5 text-white">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
