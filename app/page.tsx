@@ -980,7 +980,7 @@ export default async function HomePage() {
         description: HOME_DESCRIPTION,
         applicationCategory: "LifestyleApplication",
         operatingSystem: "Web",
-        offers: { "@type": "Offer", price: "0", priceCurrency: "TRY" },
+        offers: { "@type": "Offer", price: 0, priceCurrency: "TRY" },
         featureList: [
           "İç mimar ve mimar keşfi",
           "AI tabanlı profesyonel eşleşme (ProMatch)",

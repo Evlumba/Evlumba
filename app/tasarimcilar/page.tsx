@@ -427,7 +427,7 @@ export default async function DesignersPage({
       audienceType: "Ev Sahipleri, İç Mekan Tasarımı Arayanlar",
     },
     url: toAbsoluteUrl("/tasarimcilar"),
-    offers: { "@type": "Offer", price: "0", priceCurrency: "TRY", description: "Ücretsiz eşleşme ve keşif" },
+    offers: { "@type": "Offer", price: 0, priceCurrency: "TRY", description: "Ücretsiz eşleşme ve keşif" },
   }).replace(/</g, "\\u003c");
 
   return (

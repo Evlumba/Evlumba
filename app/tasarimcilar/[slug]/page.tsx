@@ -58,17 +58,6 @@ export async function generateMetadata({
     "Evlumba",
   ].filter(Boolean);
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    name: displayName,
-    description,
-    url: `${SITE_URL}${canonicalPath}`,
-    image: ogImage,
-    ...(city ? { address: { "@type": "PostalAddress", addressLocality: city, addressCountry: "TR" } } : {}),
-    ...(designer.rating ? { aggregateRating: { "@type": "AggregateRating", ratingValue: designer.rating, reviewCount: designer.reviews || 1, bestRating: 5 } } : {}),
-  };
-
   return {
     title,
     description,
@@ -88,9 +77,6 @@ export async function generateMetadata({
       description,
       images: [ogImage],
     },
-    other: {
-      "script:ld+json": JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
-    },
   };
 }
 
@@ -104,7 +90,34 @@ export default async function DesignerSlugPage({
   if (!designer) return notFound();
   const hasInstagram = Boolean(designer.business?.socials?.instagram?.trim());
 
+  const displayName = designer.business?.name?.trim() || designer.name?.trim() || "Profesyonel";
+  const specialty = designer.title?.trim() || "İç Mimar";
+  const city = designer.city?.trim() || "";
+  const canonicalPath = `/tasarimcilar/${encodeURIComponent(slug)}`;
+  const ogImage =
+    designer.coverUrl?.trim() ||
+    designer.avatarUrl?.trim() ||
+    designer.gallery?.[0]?.trim() ||
+    "";
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: displayName,
+    description: designer.about?.bio?.trim() || designer.about?.headline?.trim() || `${displayName}, Evlumba'da yer alan ${specialty.toLowerCase()} profili.`,
+    url: `${SITE_URL}${canonicalPath}`,
+    image: ogImage || undefined,
+    ...(city ? { address: { "@type": "PostalAddress", addressLocality: city, addressCountry: "TR" } } : {}),
+    ...(designer.rating ? { aggregateRating: { "@type": "AggregateRating", ratingValue: Number(designer.rating), reviewCount: Number(designer.reviews) || 1, bestRating: 5 } } : {}),
+  };
+  const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
+
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdHtml }}
+      />
     <main className="pb-16">
       <ProfileHero designer={designer} />
 
@@ -129,5 +142,6 @@ export default async function DesignerSlugPage({
       {/* Blog */}
       <BlogSection designer={designer} />
     </main>
+    </>
   );
 }

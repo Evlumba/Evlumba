@@ -39,24 +39,6 @@ export async function generateMetadata({
   const ogImage = project.coverUrl?.trim() || project.images?.[0]?.trim() || DEFAULT_OG_IMAGE;
   const canonicalPath = `/tasarimcilar/${encodeURIComponent(slug)}/proje/${encodeURIComponent(projectId)}`;
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: title,
-    description,
-    image: ogImage,
-    author: { "@type": "Person", name: designerName },
-    mainEntityOfPage: { "@type": "WebPage", "@id": `${SITE_URL}${canonicalPath}` },
-    breadcrumb: {
-      "@type": "BreadcrumbList",
-      itemListElement: [
-        { "@type": "ListItem", position: 1, name: "Tasarımcılar", item: `${SITE_URL}/tasarimcilar` },
-        { "@type": "ListItem", position: 2, name: designerName, item: `${SITE_URL}/tasarimcilar/${encodeURIComponent(slug)}` },
-        { "@type": "ListItem", position: 3, name: projectTitle, item: `${SITE_URL}${canonicalPath}` },
-      ],
-    },
-  };
-
   return {
     title,
     description,
@@ -75,9 +57,6 @@ export async function generateMetadata({
       title,
       description,
       images: [ogImage],
-    },
-    other: {
-      "script:ld+json": JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
     },
   };
 }
@@ -108,12 +87,57 @@ export default async function ProjectDetailPage({
         };
       })();
 
+  const designerName = designer.business?.name?.trim() || designer.name?.trim() || "Profesyonel";
+  const projectTitle = project.title?.trim() || "Proje";
+  const pTitle = `${projectTitle} – ${designerName}`;
+  const pDesc = trimForDescription(
+    project.description?.trim()
+      ? project.description.trim()
+      : `${designerName} tarafından tasarlanan ${projectTitle} projesi. Evlumba'da iç mimarlık ilhamı keşfet.`
+  );
+  const pImage = project.coverUrl?.trim() || project.images?.[0]?.trim() || DEFAULT_OG_IMAGE;
+  const canonicalPath = `/tasarimcilar/${encodeURIComponent(slug)}/proje/${encodeURIComponent(projectId)}`;
+
+  function toSchemaJson(value: unknown) {
+    return JSON.stringify(value).replace(/</g, "\\u003c");
+  }
+
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: pTitle,
+    description: pDesc,
+    image: pImage,
+    author: { "@type": "Person", name: designerName },
+    mainEntityOfPage: { "@type": "WebPage", "@id": `${SITE_URL}${canonicalPath}` },
+  };
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Tasarımcılar", item: `${SITE_URL}/tasarimcilar` },
+      { "@type": "ListItem", position: 2, name: designerName, item: `${SITE_URL}/tasarimcilar/${encodeURIComponent(slug)}` },
+      { "@type": "ListItem", position: 3, name: projectTitle, item: `${SITE_URL}${canonicalPath}` },
+    ],
+  };
+
   return (
-    <ProjectDetailClient
-      designer={designer}
-      project={project}
-      prevProject={prev}
-      nextProject={next}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSchemaJson(articleSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toSchemaJson(breadcrumbSchema) }}
+      />
+      <ProjectDetailClient
+        designer={designer}
+        project={project}
+        prevProject={prev}
+        nextProject={next}
+      />
+    </>
   );
 }
