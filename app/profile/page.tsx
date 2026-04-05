@@ -806,10 +806,8 @@ function ProfilePageContent() {
             </button>
             {message ? <p className="mt-3 text-sm text-slate-600">{message}</p> : null}
           </div>
-        </section>
 
-        {!loading ? (
-          <div className="mt-6 flex justify-end">
+          <div className="mt-8 flex justify-end border-t border-slate-100 pt-4">
             <button
               type="button"
               onClick={() => void requestAccountDeletion()}
@@ -819,7 +817,7 @@ function ProfilePageContent() {
               Hesabımı sil
             </button>
           </div>
-        ) : null}
+        </section>
       </div>
 
       {showUpgradeConfirm ? (
