@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cancelSelfDeleteIfWithinGracePeriod } from "@/lib/account-deletion";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import { sanitizeInternalPath } from "@/lib/safe-path";
 
@@ -103,6 +104,15 @@ export async function GET(request: Request) {
   const { data: authData } = await supabase.auth.getUser();
   let needsContactConsent = false;
   if (authData.user) {
+    const admin = getSupabaseAdminClient();
+    const deleteFlow = await cancelSelfDeleteIfWithinGracePeriod(admin, authData.user.id);
+    if (deleteFlow.expired) {
+      await supabase.auth.signOut();
+      const expiredUrl = new URL("/giris", requestUrl.origin);
+      expiredUrl.searchParams.set("auth_error", "account_deletion_expired");
+      return NextResponse.redirect(expiredUrl);
+    }
+
     const metadata = authData.user.user_metadata || {};
     const appMetadata = authData.user.app_metadata || {};
     const provider = String(appMetadata.provider ?? "").toLowerCase();

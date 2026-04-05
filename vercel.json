@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/unread-reminder",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/account-deletion",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

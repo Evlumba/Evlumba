@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { logout } from "@/lib/storage";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "@/lib/toast";
 
@@ -459,6 +460,56 @@ function ProfilePageContent() {
     }
   }
 
+  async function requestAccountDeletion() {
+    if (!userId) return toast("Hesap silme için önce giriş yapmalısın.");
+
+    const confirmed = window.confirm(
+      "Hesabını pasife alıp 1 hafta sonra tamamen silinmek üzere işaretlemek istediğine emin misin?"
+    );
+    if (!confirmed) return;
+
+    setSecurityLoading(true);
+    try {
+      const response = await fetch("/api/profile/account-deletion", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+
+      const result = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            message?: string;
+            error?: string;
+          }
+        | null;
+
+      if (!response.ok || !result?.ok) {
+        const failMessage = result?.error || "Hesap silme süreci başlatılamadı.";
+        setMessage(failMessage);
+        toast(failMessage);
+        return;
+      }
+
+      const infoMessage =
+        result.message ||
+        "hesabın pasife alındı ve 1 hafta içerisinde silinecek, bu süre içerisinde tekrar login olursan hesabının silme süreci duracaktır.";
+      setMessage(infoMessage);
+      toast(infoMessage);
+      window.alert(infoMessage);
+
+      await logout();
+      router.replace("/giris?account_delete_scheduled=1");
+    } catch (error) {
+      const failMessage = error instanceof Error ? error.message : "Hesap silme süreci başlatılamadı.";
+      setMessage(failMessage);
+      toast(failMessage);
+    } finally {
+      setSecurityLoading(false);
+    }
+  }
+
   async function upgradeToProfessional() {
     setUpgradeLoading(true);
     setMessage(null);
@@ -676,6 +727,21 @@ function ProfilePageContent() {
                 </button>
                 <button type="button" onClick={() => void sendResetPasswordMail()} disabled={securityLoading} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60">
                   Şifre Sıfırlama Maili Gönder
+                </button>
+              </div>
+
+              <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                <p className="text-sm font-semibold text-rose-900">Hesabı Sil</p>
+                <p className="mt-1 text-sm text-rose-800">
+                  Bu işlem hesabını pasife alır. 1 hafta içinde tekrar giriş yaparsan silme süreci durur.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void requestAccountDeletion()}
+                  disabled={securityLoading}
+                  className="mt-3 rounded-xl border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                >
+                  Hesabımı Sil
                 </button>
               </div>
             </div>

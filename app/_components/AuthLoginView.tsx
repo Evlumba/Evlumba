@@ -8,6 +8,7 @@ import {
   consumeIntendedAction,
   executeIntendedAction,
   loginUser,
+  logout,
   syncSessionFromSupabase,
 } from "@/lib/storage";
 import { sanitizeInternalPath } from "@/lib/safe-path";
@@ -141,7 +142,42 @@ export default function AuthLoginView({
       ? "Google ile giriş tamamlanamadı. Lütfen tekrar deneyin."
       : authError === "profile_sync_failed"
       ? "Giriş tamamlandı ancak profil bilgileri kaydedilemedi. Lütfen tekrar dene."
+      : authError === "account_deletion_expired"
+      ? "Hesabının silinme süresi dolduğu için giriş yapılamadı."
       : null;
+  const deletionScheduledMessage =
+    searchParams.get("account_delete_scheduled") === "1"
+      ? "hesabın pasife alındı ve 1 hafta içerisinde silinecek, bu süre içerisinde tekrar login olursan hesabının silme süreci duracaktır."
+      : null;
+
+  const handleSelfDeleteRecoveryOnLogin = useCallback(async () => {
+    try {
+      const response = await fetch("/api/profile/account-deletion", {
+        method: "DELETE",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      const result = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            cancelled?: boolean;
+            expired?: boolean;
+          }
+        | null;
+
+      if (!response.ok || !result?.ok) {
+        return { cancelled: false, expired: false };
+      }
+
+      return {
+        cancelled: Boolean(result.cancelled),
+        expired: Boolean(result.expired),
+      };
+    } catch {
+      return { cancelled: false, expired: false };
+    }
+  }, []);
 
   const afterLogin = useCallback((successMessage: string) => {
     const action = consumeIntendedAction();
@@ -265,6 +301,17 @@ export default function AuthLoginView({
         setFormError(synced.error || "Google ile giriş tamamlanamadı.");
         return;
       }
+
+      const selfDeleteResult = await handleSelfDeleteRecoveryOnLogin();
+      if (cancelled) return;
+      if (selfDeleteResult.expired) {
+        await logout();
+        setFormError("Hesabının silinme süresi dolduğu için giriş yapılamadı.");
+        return;
+      }
+      if (selfDeleteResult.cancelled) {
+        toast("Hesap silme süreci durduruldu.");
+      }
       afterGoogleLogin("Google ile giriş başarılı ✅");
     };
 
@@ -272,7 +319,14 @@ export default function AuthLoginView({
     return () => {
       cancelled = true;
     };
-  }, [afterGoogleLogin, isOAuthReturn, minimal, needsContactConsent, syncSessionWithRetry]);
+  }, [
+    afterGoogleLogin,
+    handleSelfDeleteRecoveryOnLogin,
+    isOAuthReturn,
+    minimal,
+    needsContactConsent,
+    syncSessionWithRetry,
+  ]);
 
   useEffect(() => {
     if (minimal) return;
@@ -306,6 +360,16 @@ export default function AuthLoginView({
     if (!response.ok) {
       setFormError(response.error || "Giriş başarısız.");
       return;
+    }
+
+    const selfDeleteResult = await handleSelfDeleteRecoveryOnLogin();
+    if (selfDeleteResult.expired) {
+      await logout();
+      setFormError("Hesabının silinme süresi dolduğu için giriş yapılamadı.");
+      return;
+    }
+    if (selfDeleteResult.cancelled) {
+      toast("Hesap silme süreci durduruldu.");
     }
 
     if (requireAdmin) {
@@ -375,6 +439,15 @@ export default function AuthLoginView({
         setFormError(synced.error || "Google ile giriş tamamlanamadı.");
         return;
       }
+      const selfDeleteResult = await handleSelfDeleteRecoveryOnLogin();
+      if (selfDeleteResult.expired) {
+        await logout();
+        setFormError("Hesabının silinme süresi dolduğu için giriş yapılamadı.");
+        return;
+      }
+      if (selfDeleteResult.cancelled) {
+        toast("Hesap silme süreci durduruldu.");
+      }
       setConsentAfterOauth(false);
       afterGoogleLogin("Google ile giriş başarılı ✅");
       return;
@@ -421,6 +494,12 @@ export default function AuthLoginView({
           {formError || authErrorMessage ? (
             <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
               {formError || authErrorMessage}
+            </p>
+          ) : null}
+
+          {deletionScheduledMessage ? (
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {deletionScheduledMessage}
             </p>
           ) : null}
         </div>
@@ -489,6 +568,12 @@ export default function AuthLoginView({
               {formError || authErrorMessage ? (
                 <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                   {formError || authErrorMessage}
+                </p>
+              ) : null}
+
+              {deletionScheduledMessage ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {deletionScheduledMessage}
                 </p>
               ) : null}
 
