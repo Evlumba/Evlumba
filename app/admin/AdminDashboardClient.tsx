@@ -148,12 +148,52 @@ type BrandDirectoryItem = {
   sortOrder: number;
 };
 
-type TabId = "overview" | "users" | "content" | "admins" | "banners" | "project-images" | "brands";
+type CareerJobStatus = "draft" | "published" | "closed";
+
+type CareerJobApplicationItem = {
+  id: string;
+  applicantId: string;
+  fullName: string | null;
+  linkedinUrl: string | null;
+  employmentStatus: string | null;
+  status: string;
+  cvFilePath: string | null;
+  cvFileName: string | null;
+  cvContentType: string | null;
+  cvSizeBytes: number | null;
+  cvSignedUrl: string | null;
+  createdAt: string;
+};
+
+type CareerJobItem = {
+  id: string;
+  position: string | null;
+  summary: string | null;
+  responsibilities: string | null;
+  requirements: string | null;
+  city: string | null;
+  workMode: string | null;
+  status: CareerJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  applications: CareerJobApplicationItem[];
+};
+
+type TabId =
+  | "overview"
+  | "users"
+  | "content"
+  | "careers"
+  | "admins"
+  | "banners"
+  | "project-images"
+  | "brands";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Genel Durum" },
   { id: "users", label: "Kullanıcı Moderasyonu" },
   { id: "content", label: "İçerik Moderasyonu" },
+  { id: "careers", label: "İş İlanları" },
   { id: "brands", label: "Marka Yönetimi" },
   { id: "banners", label: "Bannerlar" },
   { id: "project-images", label: "Proje Görselleri" },
@@ -165,6 +205,13 @@ function formatDate(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("tr-TR");
+}
+
+function formatFileSize(sizeInBytes: number | null | undefined) {
+  if (!sizeInBytes || sizeInBytes <= 0) return "-";
+  const sizeInMb = sizeInBytes / (1024 * 1024);
+  if (sizeInMb >= 1) return `${sizeInMb.toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(sizeInBytes / 1024))} KB`;
 }
 
 function shortText(value: string, max = 120) {
@@ -283,6 +330,28 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     sortOrder: 1000,
   });
 
+  const [careerJobsLoading, setCareerJobsLoading] = useState(false);
+  const [careerJobBusyId, setCareerJobBusyId] = useState<string | null>(null);
+  const [careerJobs, setCareerJobs] = useState<CareerJobItem[]>([]);
+  const [editingCareerJobId, setEditingCareerJobId] = useState<string | null>(null);
+  const [careerJobForm, setCareerJobForm] = useState<{
+    position: string;
+    summary: string;
+    responsibilities: string;
+    requirements: string;
+    city: string;
+    workMode: string;
+    status: CareerJobStatus;
+  }>({
+    position: "",
+    summary: "",
+    responsibilities: "",
+    requirements: "",
+    city: "",
+    workMode: "",
+    status: "published",
+  });
+
   const canManageAdmins = currentRole === "super_admin";
   const visibleTabs = canManageAdmins ? TABS : TABS.filter((tab) => tab.id !== "admins");
 
@@ -381,6 +450,21 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     }
   }
 
+  async function loadCareerJobs() {
+    setCareerJobsLoading(true);
+    try {
+      const json = await requestJson<{ jobs: CareerJobItem[] }>("/api/admin/career-jobs");
+      setCareerJobs(
+        (json.jobs ?? []).map((item) => ({
+          ...item,
+          applications: item.applications ?? [],
+        }))
+      );
+    } finally {
+      setCareerJobsLoading(false);
+    }
+  }
+
   async function saveProjectType(imageId: string, projectId: string) {
     setSavingProjectId(imageId);
     try {
@@ -425,6 +509,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       loadOverview(),
       loadUsers(),
       loadContent(),
+      loadCareerJobs(),
       loadBrands(),
       canManageAdmins ? loadAdminUsers() : Promise.resolve(),
     ]);
@@ -438,6 +523,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
           loadOverview(),
           loadUsers(),
           loadContent(),
+          loadCareerJobs(),
           loadBrands(),
           loadProjectImages(),
           canManageAdmins ? loadAdminUsers() : Promise.resolve(),
@@ -789,6 +875,110 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       setErrorMessage(error instanceof Error ? error.message : "Banner yüklenemedi.");
     } finally {
       setBrandBannerUploading(false);
+    }
+  }
+
+  function resetCareerJobForm() {
+    setEditingCareerJobId(null);
+    setCareerJobForm({
+      position: "",
+      summary: "",
+      responsibilities: "",
+      requirements: "",
+      city: "",
+      workMode: "",
+      status: "published",
+    });
+  }
+
+  function editCareerJob(job: CareerJobItem) {
+    setEditingCareerJobId(job.id);
+    setCareerJobForm({
+      position: job.position ?? "",
+      summary: job.summary ?? "",
+      responsibilities: job.responsibilities ?? "",
+      requirements: job.requirements ?? "",
+      city: job.city ?? "",
+      workMode: job.workMode ?? "",
+      status: job.status,
+    });
+    setErrorMessage(null);
+    setSuccessMessage("İlan düzenleme moduna alındı.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function createCareerJob() {
+    const isEditing = Boolean(editingCareerJobId);
+    const targetId = editingCareerJobId ?? "create";
+    setCareerJobBusyId(targetId);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      await requestJson<{ ok: true }>("/api/admin/career-jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          action: isEditing ? "update" : "create",
+          id: editingCareerJobId,
+          item: {
+            position: careerJobForm.position,
+            summary: careerJobForm.summary,
+            responsibilities: careerJobForm.responsibilities,
+            requirements: careerJobForm.requirements,
+            city: careerJobForm.city,
+            workMode: careerJobForm.workMode,
+            status: careerJobForm.status,
+          },
+        }),
+      });
+      setSuccessMessage(isEditing ? "İş ilanı güncellendi." : "İş ilanı kaydedildi.");
+      resetCareerJobForm();
+      await loadCareerJobs();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "İş ilanı kaydedilemedi.");
+    } finally {
+      setCareerJobBusyId(null);
+    }
+  }
+
+  async function deleteCareerJob(id: string) {
+    const confirmed = window.confirm("Bu iş ilanını silmek istediğine emin misin?");
+    if (!confirmed) return;
+    setCareerJobBusyId(id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      await requestJson<{ ok: true }>("/api/admin/career-jobs", {
+        method: "POST",
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      setSuccessMessage("İş ilanı silindi.");
+      await loadCareerJobs();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "İş ilanı silinemedi.");
+    } finally {
+      setCareerJobBusyId(null);
+    }
+  }
+
+  async function setCareerJobStatus(id: string, status: CareerJobStatus) {
+    setCareerJobBusyId(id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      await requestJson<{ ok: true }>("/api/admin/career-jobs", {
+        method: "POST",
+        body: JSON.stringify({ action: "set_status", id, status }),
+      });
+      setCareerJobs((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status } : item))
+      );
+      setSuccessMessage("İlan durumu güncellendi.");
+      await loadCareerJobs();
+    } catch (error) {
+      await loadCareerJobs();
+      setErrorMessage(error instanceof Error ? error.message : "İlan durumu güncellenemedi.");
+    } finally {
+      setCareerJobBusyId(null);
     }
   }
 
@@ -1301,6 +1491,252 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                   <p className="text-xs text-slate-500">Proje yorumu bulunamadı.</p>
                 ) : null}
               </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "careers" ? (
+        <section className="mt-4 space-y-4">
+          <div className="rounded-2xl border border-black/10 bg-white p-4">
+            <h2 className="text-base font-semibold text-slate-900">
+              {editingCareerJobId ? "İş İlanı Düzenle" : "İş İlanı Oluştur"}
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Tüm alanlar opsiyoneldir. Boş bıraktığın alanlar aday sayfasında gösterilmez.
+              {editingCareerJobId ? " Düzenleme modundasın." : ""}
+            </p>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className="text-sm text-slate-700">
+                Pozisyon
+                <input
+                  value={careerJobForm.position}
+                  onChange={(event) => setCareerJobForm((prev) => ({ ...prev, position: event.target.value }))}
+                  placeholder="Örn: İç Mimar"
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+              <label className="text-sm text-slate-700">
+                Şehir
+                <input
+                  value={careerJobForm.city}
+                  onChange={(event) => setCareerJobForm((prev) => ({ ...prev, city: event.target.value }))}
+                  placeholder="Örn: İstanbul"
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+              <label className="text-sm text-slate-700">
+                Çalışma Şekli
+                <input
+                  value={careerJobForm.workMode}
+                  onChange={(event) => setCareerJobForm((prev) => ({ ...prev, workMode: event.target.value }))}
+                  placeholder="Örn: Hibrit / Uzaktan / Ofis"
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+              <label className="text-sm text-slate-700">
+                Durum
+                <select
+                  value={careerJobForm.status}
+                  onChange={(event) =>
+                    setCareerJobForm((prev) => ({ ...prev, status: event.target.value as CareerJobStatus }))
+                  }
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                >
+                  <option value="published">Yayında</option>
+                  <option value="draft">Taslak</option>
+                  <option value="closed">Kapalı</option>
+                </select>
+              </label>
+              <label className="text-sm text-slate-700 md:col-span-2">
+                İlan Özeti
+                <textarea
+                  rows={3}
+                  value={careerJobForm.summary}
+                  onChange={(event) => setCareerJobForm((prev) => ({ ...prev, summary: event.target.value }))}
+                  placeholder="Pozisyon hakkında kısa bilgi..."
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Sorumluluklar
+                <textarea
+                  rows={4}
+                  value={careerJobForm.responsibilities}
+                  onChange={(event) =>
+                    setCareerJobForm((prev) => ({ ...prev, responsibilities: event.target.value }))
+                  }
+                  placeholder="Sorumlulukları yaz..."
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Aranan Kriterler
+                <textarea
+                  rows={4}
+                  value={careerJobForm.requirements}
+                  onChange={(event) => setCareerJobForm((prev) => ({ ...prev, requirements: event.target.value }))}
+                  placeholder="Beklenen yetkinlikleri yaz..."
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                />
+              </label>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void createCareerJob()}
+                disabled={Boolean(careerJobBusyId)}
+                className="rounded-xl border border-black/10 bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+              >
+                {careerJobBusyId
+                  ? "Kaydediliyor..."
+                  : editingCareerJobId
+                    ? "İlanı Güncelle"
+                    : "İlanı Kaydet"}
+              </button>
+              <button
+                type="button"
+                onClick={resetCareerJobForm}
+                className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                {editingCareerJobId ? "Düzenlemeyi İptal Et" : "Formu Temizle"}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-black/10 bg-white p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-slate-900">Mevcut İş İlanları</h2>
+              <button
+                type="button"
+                onClick={() => void loadCareerJobs()}
+                className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Listeyi Yenile
+              </button>
+            </div>
+
+            {careerJobsLoading ? <p className="mt-3 text-sm text-slate-500">Yükleniyor...</p> : null}
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {careerJobs.map((job) => (
+                <article key={job.id} className="rounded-xl border border-black/10 bg-slate-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-slate-500">
+                    {job.status} • {formatDate(job.createdAt)}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                    {shortText(job.position || "Pozisyon belirtilmedi", 80)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">{shortText(job.summary || "-", 120)}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {job.city || "-"} • {job.workMode || "-"}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-700">
+                    Başvuru Sayısı: {job.applications.length}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      disabled={careerJobBusyId === job.id}
+                      onClick={() => editCareerJob(job)}
+                      className="rounded-lg border border-sky-300 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-60"
+                    >
+                      Düzenle
+                    </button>
+                    <button
+                      type="button"
+                      disabled={careerJobBusyId === job.id}
+                      onClick={() => void setCareerJobStatus(job.id, "published")}
+                      className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                    >
+                      Yayına Al
+                    </button>
+                    <button
+                      type="button"
+                      disabled={careerJobBusyId === job.id}
+                      onClick={() => void setCareerJobStatus(job.id, "draft")}
+                      className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                    >
+                      Taslak
+                    </button>
+                    <button
+                      type="button"
+                      disabled={careerJobBusyId === job.id}
+                      onClick={() => void setCareerJobStatus(job.id, "closed")}
+                      className="rounded-lg border border-slate-300 bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+                    >
+                      Kapat
+                    </button>
+                    <button
+                      type="button"
+                      disabled={careerJobBusyId === job.id}
+                      onClick={() => void deleteCareerJob(job.id)}
+                      className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                    >
+                      Sil
+                    </button>
+                  </div>
+
+                  <div className="mt-3 rounded-lg border border-black/10 bg-white p-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Başvurular
+                    </p>
+                    {job.applications.length === 0 ? (
+                      <p className="mt-1 text-xs text-slate-500">Henüz başvuru yok.</p>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        {job.applications.map((application) => (
+                          <div key={application.id} className="rounded-lg border border-black/10 bg-slate-50 p-2.5">
+                            <p className="text-xs font-semibold text-slate-900">
+                              {application.fullName?.trim() || application.applicantId}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-slate-600">
+                              Durum: {application.employmentStatus || "-"} • {formatDate(application.createdAt)}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-slate-600">
+                              LinkedIn:{" "}
+                              {application.linkedinUrl ? (
+                                <a
+                                  href={application.linkedinUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-semibold text-sky-700 hover:underline"
+                                >
+                                  Profili Aç
+                                </a>
+                              ) : (
+                                "-"
+                              )}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-slate-600">
+                              CV:{" "}
+                              {application.cvSignedUrl ? (
+                                <a
+                                  href={application.cvSignedUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-semibold text-emerald-700 hover:underline"
+                                >
+                                  İncele
+                                </a>
+                              ) : (
+                                "CV eklenmedi"
+                              )}{" "}
+                              {application.cvFileName ? `(${application.cvFileName})` : ""}
+                              {application.cvSizeBytes ? ` • ${formatFileSize(application.cvSizeBytes)}` : ""}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              ))}
+              {!careerJobsLoading && careerJobs.length === 0 ? (
+                <p className="text-sm text-slate-500">Henüz iş ilanı yok.</p>
+              ) : null}
             </div>
           </div>
         </section>

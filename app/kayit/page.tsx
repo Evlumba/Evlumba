@@ -259,10 +259,12 @@ function KayitPageContent() {
       setLoading(true);
       setFeedback("");
       const supabase = getSupabaseBrowserClient();
+      const signupNextPath =
+        nextPathFromQuery !== "/" ? nextPathFromQuery : role === "designer" ? "/designer-panel" : "/";
       const redirectTo = new URL("/auth/callback", window.location.origin);
       redirectTo.searchParams.set("flow", "signup");
       redirectTo.searchParams.set("role", role);
-      redirectTo.searchParams.set("next", role === "designer" ? "/designer-panel" : "/");
+      redirectTo.searchParams.set("next", signupNextPath);
 
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -309,10 +311,12 @@ function KayitPageContent() {
     setGoogleLoading(true);
 
     const supabase = getSupabaseBrowserClient();
+    const signupNextPath =
+      nextPathFromQuery !== "/" ? nextPathFromQuery : role === "designer" ? "/designer-panel" : "/";
     const redirectUrl = new URL("/auth/callback", window.location.origin);
     redirectUrl.searchParams.set("flow", "signup");
     redirectUrl.searchParams.set("role", role);
-    redirectUrl.searchParams.set("next", role === "designer" ? "/designer-panel" : "/");
+    redirectUrl.searchParams.set("next", signupNextPath);
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

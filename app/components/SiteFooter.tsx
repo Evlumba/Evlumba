@@ -381,6 +381,19 @@ export default function SiteFooter() {
                     }
                   />
                   <QuickPill
+                    href="/aday"
+                    title="Bizimle Çalışın"
+                    desc="Açık pozisyonlar"
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-emerald-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="8.5" cy="7" r="4" />
+                        <path d="M20 8v6" />
+                        <path d="M23 11h-6" />
+                      </svg>
+                    }
+                  />
+                  <QuickPill
                     href="/evlumba-tools"
                     title="Evlumba Tools"
                     desc="Çok yakında"

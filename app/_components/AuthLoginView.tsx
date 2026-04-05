@@ -123,6 +123,12 @@ export default function AuthLoginView({
     const fallback = requireAdmin ? "/admin" : "/";
     return sanitizeInternalPath(searchParams.get("next"), fallback);
   }, [requireAdmin, searchParams]);
+  const registerHref = useMemo(() => {
+    if (nextPath && nextPath !== "/") {
+      return `/kayit?next=${encodeURIComponent(nextPath)}`;
+    }
+    return "/kayit";
+  }, [nextPath]);
 
   const isOAuthReturn = useMemo(
     () => searchParams.get("oauth") === "1" || searchParams.has("code"),
@@ -490,7 +496,7 @@ export default function AuthLoginView({
                 <Link href="/sifremi-unuttum" className="hover:text-slate-900 hover:underline">
                   Şifremi unuttum
                 </Link>
-                <Link href="/kayit" className="font-medium text-slate-800 hover:underline">
+                <Link href={registerHref} className="font-medium text-slate-800 hover:underline">
                   Hesap oluştur
                 </Link>
               </div>

@@ -23,6 +23,7 @@ function buildStaticEntries(): MetadataRoute.Sitemap {
     "/tasarimcilar",
     "/blog",
     "/markalar",
+    "/aday",
     "/ilanlar",
     "/forum",
     "/oyun",
