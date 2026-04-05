@@ -730,20 +730,6 @@ function ProfilePageContent() {
                 </button>
               </div>
 
-              <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 p-4">
-                <p className="text-sm font-semibold text-rose-900">Hesabı Sil</p>
-                <p className="mt-1 text-sm text-rose-800">
-                  Bu işlem hesabını pasife alır. 1 hafta içinde tekrar giriş yaparsan silme süreci durur.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void requestAccountDeletion()}
-                  disabled={securityLoading}
-                  className="mt-3 rounded-xl border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
-                >
-                  Hesabımı Sil
-                </button>
-              </div>
             </div>
           ) : null}
 
@@ -821,6 +807,19 @@ function ProfilePageContent() {
             {message ? <p className="mt-3 text-sm text-slate-600">{message}</p> : null}
           </div>
         </section>
+
+        {!loading ? (
+          <div className="mt-6 flex justify-end">
+            <button
+              type="button"
+              onClick={() => void requestAccountDeletion()}
+              disabled={securityLoading}
+              className="text-xs text-slate-400 underline decoration-slate-300 hover:text-rose-500 disabled:opacity-50"
+            >
+              Hesabımı sil
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {showUpgradeConfirm ? (
