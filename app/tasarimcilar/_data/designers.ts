@@ -108,6 +108,7 @@ export type Designer = {
     phone?: string;
     email?: string;
     website?: string;
+    locationUrl?: string;
     address?: {
       street?: string;
       district?: string;

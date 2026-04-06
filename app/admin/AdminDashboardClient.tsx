@@ -187,12 +187,14 @@ type TabId =
   | "admins"
   | "banners"
   | "project-images"
-  | "brands";
+  | "brands"
+  | "verification";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Genel Durum" },
   { id: "users", label: "Kullanıcı Moderasyonu" },
   { id: "content", label: "İçerik Moderasyonu" },
+  { id: "verification", label: "Hesap Doğrulama" },
   { id: "careers", label: "İş İlanları" },
   { id: "brands", label: "Marka Yönetimi" },
   { id: "banners", label: "Bannerlar" },
@@ -315,6 +317,24 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   ]);
   const [bannerUploading, setBannerUploading] = useState<number | null>(null);
   const [bannerError, setBannerError] = useState<string | null>(null);
+
+  // Verification state
+  type VerificationRequest = {
+    id: string;
+    user_id: string;
+    full_name: string;
+    evlumba_url: string;
+    email: string;
+    petition: string;
+    status: string;
+    created_at: string;
+    reviewed_at: string | null;
+    reviewed_by: string | null;
+  };
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
+  const [verificationFilter, setVerificationFilter] = useState<"pending" | "approved" | "rejected">("pending");
+  const [verificationBusyId, setVerificationBusyId] = useState<string | null>(null);
 
   const [brandsLoading, setBrandsLoading] = useState(false);
   const [brandSetupWarning, setBrandSetupWarning] = useState<string | null>(null);
@@ -551,6 +571,47 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       }
     });
   }, []);
+
+  async function loadVerificationRequests(status: "pending" | "approved" | "rejected" = "pending") {
+    setVerificationLoading(true);
+    try {
+      const response = await fetch(`/api/admin/verification?status=${status}`, { credentials: "include" });
+      const result = (await response.json()) as { ok?: boolean; requests?: VerificationRequest[] };
+      if (result.ok && result.requests) {
+        setVerificationRequests(result.requests);
+      }
+    } catch {
+      setErrorMessage("Doğrulama talepleri yüklenemedi.");
+    } finally {
+      setVerificationLoading(false);
+    }
+  }
+
+  async function handleVerification(requestId: string, action: "approve" | "reject") {
+    const label = action === "approve" ? "onaylamak" : "reddetmek";
+    if (!window.confirm(`Bu talebi ${label} istediğine emin misin?`)) return;
+
+    setVerificationBusyId(requestId);
+    try {
+      const response = await fetch("/api/admin/verification", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, action }),
+      });
+      const result = (await response.json()) as { ok?: boolean; message?: string; error?: string };
+      if (result.ok) {
+        setSuccessMessage(result.message ?? "İşlem başarılı.");
+        await loadVerificationRequests(verificationFilter);
+      } else {
+        setErrorMessage(result.error ?? "İşlem başarısız.");
+      }
+    } catch {
+      setErrorMessage("İşlem sırasında hata oluştu.");
+    } finally {
+      setVerificationBusyId(null);
+    }
+  }
 
   async function changeUserRole(user: ModerationUser, newRole: string) {
     const confirmed = window.confirm(
@@ -1917,6 +1978,104 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                 );
               })()}
             </>
+          )}
+        </section>
+      ) : null}
+
+      {activeTab === "verification" ? (
+        <section className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-lg font-semibold">Hesap Doğrulama Talepleri</h2>
+            <div className="flex gap-1">
+              {(["pending", "approved", "rejected"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { setVerificationFilter(s); void loadVerificationRequests(s); }}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    verificationFilter === s
+                      ? "bg-slate-900 text-white"
+                      : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {s === "pending" ? "Bekleyen" : s === "approved" ? "Onaylanan" : "Reddedilen"}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadVerificationRequests(verificationFilter)}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Yenile
+            </button>
+          </div>
+
+          {verificationLoading ? (
+            <p className="text-sm text-slate-500">Yükleniyor...</p>
+          ) : verificationRequests.length === 0 ? (
+            <p className="text-sm text-slate-500">Bu durumda talep yok.</p>
+          ) : (
+            <div className="space-y-3">
+              {verificationRequests.map((req) => (
+                <div
+                  key={req.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-semibold text-slate-900">{req.full_name}</p>
+                      <p className="text-xs text-slate-500">{req.email}</p>
+                      <a
+                        href={req.evlumba_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-sky-600 underline"
+                      >
+                        {req.evlumba_url}
+                      </a>
+                      <p className="text-xs text-slate-400">
+                        {new Date(req.created_at).toLocaleString("tr-TR")}
+                      </p>
+                    </div>
+
+                    {req.status === "pending" ? (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleVerification(req.id, "approve")}
+                          disabled={verificationBusyId === req.id}
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          Doğrula
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleVerification(req.id, "reject")}
+                          disabled={verificationBusyId === req.id}
+                          className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                        >
+                          Reddet
+                        </button>
+                      </div>
+                    ) : (
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        req.status === "approved"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-rose-50 text-rose-700"
+                      }`}>
+                        {req.status === "approved" ? "Onaylandı" : "Reddedildi"}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs font-medium text-slate-500">Dilekçe:</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{req.petition}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </section>
       ) : null}

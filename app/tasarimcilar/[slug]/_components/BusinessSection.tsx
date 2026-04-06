@@ -380,6 +380,14 @@ export default function BusinessSection({ designer }: { designer: Designer }) {
                       href={`https://maps.google.com/?q=${encodeURIComponent(address)}`}
                     />
                   )}
+                  {business.locationUrl && (
+                    <InfoRow
+                      icon={<IconMapPin className="h-4 w-4" />}
+                      label="Konum"
+                      value="Konum için tıklayınız"
+                      href={business.locationUrl}
+                    />
+                  )}
                 </div>
               </div>
 

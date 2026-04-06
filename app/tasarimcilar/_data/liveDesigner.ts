@@ -13,6 +13,7 @@ type ProfileRow = {
   about: string | null;
   phone: string | null;
   contact_email: string | null;
+  konum: string | null;
   address: string | null;
   website: string | null;
   instagram: string | null;
@@ -225,7 +226,7 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
   const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select(
-      "id, full_name, role, avatar_url, business_name, specialty, city, about, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url, tags, starting_from, about_details"
+      "id, full_name, role, avatar_url, business_name, specialty, city, about, phone, contact_email, konum, address, website, instagram, facebook, linkedin, cover_photo_url, tags, starting_from, about_details"
     )
     .eq("id", designerId)
     .in("role", ["designer", "designer_pending"])
@@ -420,6 +421,7 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
       phone: p.phone || undefined,
       email: p.contact_email || undefined,
       website: p.website || undefined,
+      locationUrl: p.konum || undefined,
       address: p.address
         ? {
             street: p.address,
