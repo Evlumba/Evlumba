@@ -42,6 +42,7 @@ type DesignerProfileDraft = {
   phone: string;
   contactEmail: string;
   address: string;
+  konum: string;
   website: string;
   instagram: string;
   facebook: string;
@@ -79,6 +80,7 @@ const DEFAULT_DRAFT: DesignerProfileDraft = {
   phone: "",
   contactEmail: "",
   address: "",
+  konum: "",
   website: "",
   instagram: "",
   facebook: "",
@@ -393,7 +395,7 @@ export default function DesignerProfileEditPage() {
             supabase
               .from("profiles")
               .select(
-                "full_name, avatar_url, business_name, specialty, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url, tags, starting_from, about_details, business_details"
+                "full_name, avatar_url, business_name, specialty, city, phone, contact_email, address, konum, website, instagram, facebook, linkedin, cover_photo_url, tags, starting_from, about_details, business_details"
               )
               .eq("id", id)
               .maybeSingle(),
@@ -436,6 +438,7 @@ export default function DesignerProfileEditPage() {
               phone: profile?.phone ?? local.phone ?? "",
               contactEmail: resolvedContactEmail,
               address: profile?.address ?? local.address ?? "",
+              konum: profile?.konum ?? local.konum ?? "",
               website: profile?.website ?? local.website ?? "",
               instagram: profile?.instagram ?? local.instagram ?? "",
               facebook: profile?.facebook ?? local.facebook ?? "",
@@ -581,6 +584,7 @@ async function onPickCover(file: File | null) {
         phone: draft.phone || null,
         contact_email: normalizedContactEmail,
         address: draft.address || null,
+        konum: draft.konum || null,
         website: draft.website || null,
         instagram: normalizedInstagram || null,
         facebook: draft.facebook || null,
@@ -799,6 +803,7 @@ async function onPickCover(file: File | null) {
               />
               <input className={inputCls} value={draft.phone} onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))} placeholder="Telefon" />
               <input className={inputCls} value={draft.address} onChange={(e) => setDraft((p) => ({ ...p, address: e.target.value }))} placeholder="Adres" />
+              <input className={inputCls} value={draft.konum} onChange={(e) => setDraft((p) => ({ ...p, konum: e.target.value }))} placeholder="Google Maps Konum URL'si" />
               <input className={inputCls} value={draft.website} onChange={(e) => setDraft((p) => ({ ...p, website: e.target.value }))} placeholder="Website" />
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                 <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
