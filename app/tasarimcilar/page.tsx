@@ -384,7 +384,7 @@ async function loadSupabaseDesigners(): Promise<Designer[]> {
         pinnedReview: (aboutDetails.bio as string | undefined) || "Evlumba profesyoneli",
         pinnedBy: profile.full_name?.trim() || "Evlumba",
         tags: uniqTags.length ? uniqTags : ["Yeni Profesyonel"],
-        coverUrl: (profile.cover_photo_url ?? "").trim(),
+        coverUrl: (profile.cover_photo_url ?? "").trim() || (latest?.cover_image_url ?? "").trim(),
         response: formatResponseFromMinutes(avgResponseByDesigner.get(profile.id) ?? null),
         startingFrom: profile.starting_from || budgetLabel(latest?.budget_level ?? null),
         portfolioCount: list.length,
