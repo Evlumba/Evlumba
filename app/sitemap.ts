@@ -85,7 +85,11 @@ async function loadDesignerEntries(): Promise<MetadataRoute.Sitemap> {
       .neq("slug", "")
       .limit(5000);
 
-    if (error || !data) return [];
+    if (error) {
+      console.error("[sitemap] loadDesignerEntries error:", error);
+      return [];
+    }
+    if (!data) return [];
 
     return (data as DesignerSitemapRow[])
       .map((row) => {
@@ -99,7 +103,8 @@ async function loadDesignerEntries(): Promise<MetadataRoute.Sitemap> {
         };
       })
       .filter(Boolean) as MetadataRoute.Sitemap;
-  } catch {
+  } catch (e) {
+    console.error("[sitemap] loadDesignerEntries exception:", e);
     return [];
   }
 }
