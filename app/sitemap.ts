@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { getBrandDirectoryEntries } from "@/lib/brand-directory";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 import { SITE_URL } from "@/lib/seo";
 
 type BlogSitemapRow = {
