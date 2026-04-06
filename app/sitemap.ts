@@ -83,7 +83,7 @@ async function loadDesignerEntries(): Promise<MetadataRoute.Sitemap> {
       .in("role", ["designer", "designer_pending"])
       .not("slug", "is", null)
       .neq("slug", "")
-      .limit(5000);
+      .limit(50000);
 
     if (error) {
       console.error("[sitemap] loadDesignerEntries error:", error);
