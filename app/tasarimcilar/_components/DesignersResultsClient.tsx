@@ -132,7 +132,7 @@ function ListRow({ d }: { d: Designer }) {
   const needsMore = pinned.length > 90;
 
   return (
-    <article className="w-full cursor-pointer overflow-hidden rounded-3xl hover:shadow-lg transition-shadow duration-200" style={glass}>
+    <Link href={href} className="block w-full cursor-pointer overflow-hidden rounded-3xl hover:shadow-lg transition-shadow duration-200" style={glass}>
       <div className="flex flex-col gap-4 p-4 md:flex-row md:items-start md:gap-6 md:p-5">
         <div
           className="relative overflow-hidden rounded-3xl md:w-[320px] md:shrink-0"
@@ -315,7 +315,7 @@ function ListRow({ d }: { d: Designer }) {
           ) : null}
         </div>
       </div>
-    </article>
+    </Link>
   );
 }
 
