@@ -256,19 +256,23 @@ async function loadSupabaseDesigners(): Promise<Designer[]> {
     const slugById = buildUniqueDesignerSlugs(validProfiles, FEATURED_DESIGNERS.map((d) => d.slug));
 
     const ids = validProfiles.map((p) => p.id);
-    const { data: projects, error: projectsError } = await admin
-      .from("designer_projects")
-      .select("designer_id, title, project_type, tags, budget_level, cover_image_url, created_at")
-      .in("designer_id", ids)
-      .eq("is_published", true)
-      .order("created_at", { ascending: false });
 
-    const projectRows = !projectsError && projects ? (projects as ProjectRow[]) : [];
+    // Fetch projects and reviews in parallel
+    const [projectsResult, reviewsResult] = await Promise.all([
+      admin
+        .from("designer_projects")
+        .select("designer_id, title, project_type, tags, budget_level, cover_image_url, created_at")
+        .in("designer_id", ids)
+        .eq("is_published", true)
+        .order("created_at", { ascending: false }),
+      admin
+        .from("designer_reviews")
+        .select("designer_id, rating")
+        .in("designer_id", ids),
+    ]);
 
-    const { data: reviews } = await admin
-      .from("designer_reviews")
-      .select("designer_id, rating")
-      .in("designer_id", ids);
+    const projectRows = !projectsResult.error && projectsResult.data ? (projectsResult.data as ProjectRow[]) : [];
+    const reviews = reviewsResult.data;
 
     const reviewStats = new Map<string, { count: number; total: number }>();
     for (const row of ((reviews ?? []) as ReviewAggRow[])) {
@@ -278,10 +282,13 @@ async function loadSupabaseDesigners(): Promise<Designer[]> {
       reviewStats.set(row.designer_id, prev);
     }
 
+    // Only fetch recent conversations (last 30 days) for response time calculation
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const { data: conversations } = await admin
       .from("conversations")
       .select("id, homeowner_id, designer_id")
-      .in("designer_id", ids);
+      .in("designer_id", ids)
+      .gte("created_at", thirtyDaysAgo);
 
     const avgResponseByDesigner = new Map<string, number>();
     if (conversations && conversations.length) {
@@ -293,7 +300,9 @@ async function loadSupabaseDesigners(): Promise<Designer[]> {
         .from("messages")
         .select("conversation_id, sender_id, created_at")
         .in("conversation_id", conversationIds)
-        .order("created_at", { ascending: true });
+        .gte("created_at", thirtyDaysAgo)
+        .order("created_at", { ascending: true })
+        .limit(5000);
 
       if (messages && messages.length) {
         const msgByConversation = new Map<string, MessageRow[]>();

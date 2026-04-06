@@ -17,6 +17,12 @@ import BlogSection from "./_components/BlogSection";
 // export const dynamic = "force-dynamic"; // COST-FIX: removed
 export const revalidate = 3600; // COST-FIX: 1 hour ISR cache
 
+export async function generateStaticParams() {
+  // Pre-generate featured designer pages at build time
+  const { default: FEATURED_DESIGNERS } = await import("../_data/designers");
+  return FEATURED_DESIGNERS.map((d) => ({ slug: d.slug }));
+}
+
 export async function generateMetadata({
   params,
 }: {
