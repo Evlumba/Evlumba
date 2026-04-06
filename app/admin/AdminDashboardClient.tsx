@@ -188,13 +188,15 @@ type TabId =
   | "banners"
   | "project-images"
   | "brands"
-  | "verification";
+  | "verification"
+  | "messages";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Genel Durum" },
   { id: "users", label: "Kullanıcı Moderasyonu" },
   { id: "content", label: "İçerik Moderasyonu" },
   { id: "verification", label: "Hesap Doğrulama" },
+  { id: "messages", label: "Mesaj Durumu" },
   { id: "careers", label: "İş İlanları" },
   { id: "brands", label: "Marka Yönetimi" },
   { id: "banners", label: "Bannerlar" },
@@ -317,6 +319,18 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   ]);
   const [bannerUploading, setBannerUploading] = useState<number | null>(null);
   const [bannerError, setBannerError] = useState<string | null>(null);
+
+  // Messages state
+  type DesignerMessages = {
+    designerId: string;
+    designerName: string;
+    unreadCount: number;
+    uniqueSenders: number;
+    lastSenderName: string;
+    lastMessageAt: string;
+  };
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [designerMessages, setDesignerMessages] = useState<DesignerMessages[]>([]);
 
   // Verification state
   type VerificationRequest = {
@@ -571,6 +585,21 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       }
     });
   }, []);
+
+  async function loadDesignerMessages() {
+    setMessagesLoading(true);
+    try {
+      const response = await fetch("/api/admin/messages", { credentials: "include" });
+      const result = (await response.json()) as { ok?: boolean; designers?: DesignerMessages[] };
+      if (result.ok && result.designers) {
+        setDesignerMessages(result.designers);
+      }
+    } catch {
+      setErrorMessage("Mesaj durumu yüklenemedi.");
+    } finally {
+      setMessagesLoading(false);
+    }
+  }
 
   async function loadVerificationRequests(status: "pending" | "approved" | "rejected" = "pending") {
     setVerificationLoading(true);
@@ -2075,6 +2104,59 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {activeTab === "messages" ? (
+        <section className="mt-4 space-y-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold">Profesyonel Mesaj Durumu</h2>
+            <button
+              type="button"
+              onClick={() => void loadDesignerMessages()}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Yükle / Yenile
+            </button>
+          </div>
+          <p className="text-sm text-slate-500">Profesyonellere gelen okunmamış mesajların özeti.</p>
+
+          {messagesLoading ? (
+            <p className="text-sm text-slate-500">Yükleniyor...</p>
+          ) : designerMessages.length === 0 ? (
+            <p className="text-sm text-slate-500">Bekleyen okunmamış mesaj yok veya henüz yüklenmedi.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <th className="px-4 py-3">Profesyonel</th>
+                    <th className="px-4 py-3 text-center">Okunmamış</th>
+                    <th className="px-4 py-3 text-center">Farklı Kişi</th>
+                    <th className="px-4 py-3">Son Mesaj Gönderen</th>
+                    <th className="px-4 py-3">Son Mesaj</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {designerMessages.map((d) => (
+                    <tr key={d.designerId} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-900">{d.designerName}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex items-center justify-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700">
+                          {d.unreadCount}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-600">{d.uniqueSenders}</td>
+                      <td className="px-4 py-3 text-slate-700">{d.lastSenderName}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400">
+                        {new Date(d.lastMessageAt).toLocaleString("tr-TR")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </section>

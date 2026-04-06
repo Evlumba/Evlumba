@@ -159,11 +159,7 @@ function ListRow({ d }: { d: Designer }) {
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_circle_at_20%_10%,rgba(255,255,255,0.16),transparent_55%)]" />
             <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/10 via-transparent to-transparent" />
 
-            <div className="absolute left-3 top-3">
-              {d.verified ? (
-                <OverlayBadge icon={<ShieldCheck className="h-3.5 w-3.5" />} label="Doğrulanmış" />
-              ) : null}
-            </div>
+            <div className="absolute left-3 top-3" />
             <div className="absolute right-3 top-3">
               {d.response ? <OverlayBadge icon={<Timer className="h-3.5 w-3.5" />} label={d.response} /> : null}
             </div>
