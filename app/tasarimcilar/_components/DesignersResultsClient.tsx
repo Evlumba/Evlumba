@@ -208,7 +208,7 @@ function ListRow({ d }: { d: Designer }) {
                   </span>
                 ) : null}
 
-                {typeof d.portfolioCount === "number" ? (
+                {typeof d.portfolioCount === "number" && d.portfolioCount > 0 ? (
                   <span
                     className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
                     style={{
