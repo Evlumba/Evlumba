@@ -22,6 +22,7 @@ type ProfileDraft = {
   phone: string;
   contactEmail: string;
   address: string;
+  konum: string;
   website: string;
   instagram: string;
   facebook: string;
@@ -36,6 +37,7 @@ const DEFAULT_DRAFT: ProfileDraft = {
   phone: "",
   contactEmail: "",
   address: "",
+  konum: "",
   website: "",
   instagram: "",
   facebook: "",
@@ -239,7 +241,7 @@ function ProfilePageContent() {
             supabase
               .from("profiles")
               .select(
-                "full_name, role, avatar_url, city, phone, contact_email, address, website, instagram, facebook, linkedin, cover_photo_url"
+                "full_name, role, avatar_url, city, phone, contact_email, address, konum, website, instagram, facebook, linkedin, cover_photo_url"
               )
               .eq("id", data.user.id)
               .maybeSingle(),
@@ -271,6 +273,7 @@ function ProfilePageContent() {
               phone: profile?.phone || baseDraft.phone,
               contactEmail: mergedContactEmail,
               address: profile?.address || baseDraft.address,
+              konum: profile?.konum || baseDraft.konum,
               website: profile?.website || baseDraft.website,
               instagram: profile?.instagram || baseDraft.instagram,
               facebook: profile?.facebook || baseDraft.facebook,
@@ -396,6 +399,7 @@ function ProfilePageContent() {
         phone: draft.phone || null,
         contact_email: normalizedContactEmail,
         address: draft.address || null,
+        konum: draft.konum || null,
         website: draft.website || null,
         instagram: draft.instagram || null,
         facebook: draft.facebook || null,
@@ -689,6 +693,7 @@ function ProfilePageContent() {
               />
               <input className={inputCls} value={draft.phone} onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))} placeholder="Telefon" />
               <input className={inputCls} value={draft.address} onChange={(e) => setDraft((p) => ({ ...p, address: e.target.value }))} placeholder="Adres" />
+              <input className={inputCls} value={draft.konum} onChange={(e) => setDraft((p) => ({ ...p, konum: e.target.value }))} placeholder="Google Maps Konum URL'si" />
               <input className={inputCls} value={draft.website} onChange={(e) => setDraft((p) => ({ ...p, website: e.target.value }))} placeholder="Website" />
               <input className={inputCls} value={draft.instagram} onChange={(e) => setDraft((p) => ({ ...p, instagram: e.target.value }))} placeholder="Instagram" />
               <input className={inputCls} value={draft.facebook} onChange={(e) => setDraft((p) => ({ ...p, facebook: e.target.value }))} placeholder="Facebook" />
