@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState, type CSSProperties, type ReactNode, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -144,17 +143,16 @@ function ListRow({ d }: { d: Designer }) {
         >
           <div className="relative h-48 w-full md:h-42.5">
             {d.coverUrl ? (
-              <Image
+              <img
                 src={d.coverUrl}
                 alt={`${d.name} görsel`}
-                fill
-                sizes="(max-width: 768px) 100vw, 320px"
-                className="object-cover"
+                className="absolute inset-0 block h-full w-full object-cover"
                 loading="lazy"
+                decoding="async"
               />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-white">
-                <Image src="/web_icon2.png" alt="Evlumba" width={40} height={40} className="opacity-90" />
+                <img src="/web_icon2.png" alt="Evlumba" className="h-10 w-auto opacity-90" />
                 <span className="mt-2 text-[10px] font-medium tracking-widest text-slate-400 uppercase">Yaşam alanınızı birlikte tasarlayalım</span>
               </div>
             )}
@@ -170,7 +168,7 @@ function ListRow({ d }: { d: Designer }) {
             <div className="absolute bottom-3 left-3">
               <div className="h-12 w-12 overflow-hidden rounded-full ring-2 ring-white shadow-md bg-slate-100">
                 {d.avatarUrl ? (
-                  <Image src={d.avatarUrl} alt={d.name} fill sizes="48px" className="object-cover" />
+                  <img src={d.avatarUrl} alt={d.name} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-slate-500">
                     {(d.name || "P").charAt(0).toUpperCase()}
