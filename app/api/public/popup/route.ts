@@ -18,7 +18,10 @@ export async function GET() {
     .limit(1)
     .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message, popup: null });
+  }
+  if (!data) {
     return NextResponse.json({ ok: true, popup: null });
   }
 
