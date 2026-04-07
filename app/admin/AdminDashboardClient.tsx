@@ -345,6 +345,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     maxImpressionsPerUser: 3,
     startDate: new Date().toISOString().slice(0, 16),
     endDate: "",
+    pages: "",
   });
 
   // Messages state
@@ -665,12 +666,13 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
           maxImpressionsPerUser: popupForm.maxImpressionsPerUser,
           startDate: popupForm.startDate ? new Date(popupForm.startDate).toISOString() : undefined,
           endDate: popupForm.endDate ? new Date(popupForm.endDate).toISOString() : null,
+          pages: popupForm.pages.split("\n").map((p: string) => p.trim()).filter(Boolean),
         }),
       });
       const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
       if (data.ok) {
         setSuccessMessage(data.message ?? "Kaydedildi.");
-        setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "" });
+        setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "", pages: "" });
         await loadPopups();
       } else {
         setErrorMessage(data.error ?? "Hata.");
@@ -703,6 +705,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       maxImpressionsPerUser: p.max_impressions_per_user,
       startDate: p.start_date ? new Date(p.start_date).toISOString().slice(0, 16) : "",
       endDate: p.end_date ? new Date(p.end_date).toISOString().slice(0, 16) : "",
+      pages: (p as unknown as { pages?: string[] }).pages?.join("\n") ?? "",
     });
   }
 
@@ -2603,6 +2606,16 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                 value={popupForm.linkUrl}
                 onChange={(e) => setPopupForm((p) => ({ ...p, linkUrl: e.target.value }))}
               />
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Görüneceği sayfalar (her satıra bir URL, boş = her yerde)</label>
+                <textarea
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                  rows={3}
+                  placeholder={"/\n/tasarimcilar\n/kesfet"}
+                  value={popupForm.pages}
+                  onChange={(e) => setPopupForm((p) => ({ ...p, pages: e.target.value }))}
+                />
+              </div>
               <div className="flex flex-wrap gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Başlangıç</label>
@@ -2655,7 +2668,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                 {popupForm.id ? (
                   <button
                     type="button"
-                    onClick={() => setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "" })}
+                    onClick={() => setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "", pages: "" })}
                     className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600"
                   >
                     İptal

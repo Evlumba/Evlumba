@@ -3,7 +3,6 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
-import PopupBanner from "./components/PopupBanner";
 import {
   DEFAULT_OG_IMAGE,
   SITE_NAME,
@@ -1018,7 +1017,6 @@ export default async function HomePage() {
 
   return (
     <>
-      <PopupBanner />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: structuredDataJson }}

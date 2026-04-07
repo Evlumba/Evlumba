@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type PopupData = {
   id: string;
@@ -8,6 +9,7 @@ type PopupData = {
   image_url: string;
   link_url: string | null;
   max_impressions_per_user: number;
+  pages: string[];
 };
 
 function getImpressionCount(popupId: string): number {
@@ -26,6 +28,7 @@ function incrementImpression(popupId: string) {
 }
 
 export default function PopupBanner() {
+  const pathname = usePathname();
   const [popup, setPopup] = useState<PopupData | null>(null);
   const [visible, setVisible] = useState(false);
 
@@ -36,17 +39,20 @@ export default function PopupBanner() {
         const data = (await res.json()) as { ok?: boolean; popup?: PopupData | null };
         if (!data.ok || !data.popup) return;
 
+        // Check page filter - empty array means show everywhere
+        const pages = data.popup.pages ?? [];
+        if (pages.length > 0 && !pages.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
+
         const impressions = getImpressionCount(data.popup.id);
         if (impressions >= data.popup.max_impressions_per_user) return;
 
         setPopup(data.popup);
-        // Slight delay for smoother entrance
         setTimeout(() => setVisible(true), 300);
         incrementImpression(data.popup.id);
       } catch {}
     };
     void load();
-  }, []);
+  }, [pathname]);
 
   if (!popup || !visible) return null;
 

@@ -41,6 +41,7 @@ export async function POST(req: Request) {
     maxImpressionsPerUser?: number;
     startDate?: string;
     endDate?: string | null;
+    pages?: string[];
   };
 
   const supabaseAdmin = getSupabaseAdminClient();
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
         max_impressions_per_user: body.maxImpressionsPerUser ?? 3,
         start_date: body.startDate || new Date().toISOString(),
         end_date: body.endDate || null,
+        pages: body.pages ?? [],
         updated_at: new Date().toISOString(),
       })
       .eq("id", body.id);
@@ -83,6 +85,7 @@ export async function POST(req: Request) {
     max_impressions_per_user: body.maxImpressionsPerUser ?? 3,
     start_date: body.startDate || new Date().toISOString(),
     end_date: body.endDate || null,
+    pages: body.pages ?? [],
     created_by: admin.userId,
   });
 

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import SiteHeader from "./SiteHeader";
 import SiteFooter from "./SiteFooter";
+import PopupBanner from "./PopupBanner";
 import ToastHost from "../../lib/ToastHost";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
@@ -21,6 +22,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   // Normal sayfalar - header ve footer ile
   return (
     <>
+      <PopupBanner />
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 pb-12 pt-4 sm:px-6">
         {children}
