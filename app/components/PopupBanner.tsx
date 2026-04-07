@@ -52,7 +52,18 @@ export default function PopupBanner() {
 
   const close = () => setVisible(false);
 
-  const content = (
+  const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(popup.image_url);
+
+  const content = isVideo ? (
+    <video
+      src={popup.image_url}
+      autoPlay
+      loop
+      muted
+      playsInline
+      className="max-h-[80vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl md:max-w-lg"
+    />
+  ) : (
     <img
       src={popup.image_url}
       alt={popup.title}

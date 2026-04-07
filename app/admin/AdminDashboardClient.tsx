@@ -2553,7 +2553,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
               </button>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Önerilen görsel boyutu: <strong>800 × 600px</strong> (dikey veya kare, 4:3 oran). Maks. 5 MB. PNG veya JPG.
+              Önerilen boyut: <strong>800 × 600px</strong> (4:3 oran). Maks. 5 MB. PNG, JPG, GIF veya MP4/WebM video.
             </p>
 
             {/* Form */}
@@ -2578,7 +2578,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                   <span className="text-xs text-slate-500">veya bilgisayardan seç:</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/mp4,video/webm,video/quicktime,.gif"
                     disabled={popupUploading}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
@@ -2591,7 +2591,11 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                 {popupUploading ? <span className="text-xs text-slate-500">Yükleniyor...</span> : null}
               </div>
               {popupForm.imageUrl ? (
-                <img src={popupForm.imageUrl} alt="Önizleme" className="h-32 rounded-xl object-contain border border-slate-200" />
+                /\.(mp4|webm|mov)(\?|$)/i.test(popupForm.imageUrl) ? (
+                  <video src={popupForm.imageUrl} autoPlay loop muted playsInline className="h-32 rounded-xl object-contain border border-slate-200" />
+                ) : (
+                  <img src={popupForm.imageUrl} alt="Önizleme" className="h-32 rounded-xl object-contain border border-slate-200" />
+                )
               ) : null}
               <input
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
