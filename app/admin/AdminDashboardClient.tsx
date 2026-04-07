@@ -335,6 +335,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   const [popups, setPopups] = useState<PopupBanner[]>([]);
   const [popupsLoading, setPopupsLoading] = useState(false);
   const [popupSaving, setPopupSaving] = useState(false);
+  const [popupUploading, setPopupUploading] = useState(false);
   const [popupForm, setPopupForm] = useState({
     id: "",
     title: "",
@@ -611,6 +612,31 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       }
     });
   }, []);
+
+  async function uploadPopupImage(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage("Dosya boyutu 5 MB'dan büyük olamaz.");
+      return;
+    }
+    setPopupUploading(true);
+    setErrorMessage(null);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `popup-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("app-banners")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("app-banners").getPublicUrl(path);
+      setPopupForm((p) => ({ ...p, imageUrl: urlData.publicUrl }));
+      setSuccessMessage("Görsel yüklendi.");
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Görsel yüklenemedi.");
+    } finally {
+      setPopupUploading(false);
+    }
+  }
 
   async function loadPopups() {
     setPopupsLoading(true);
@@ -2547,6 +2573,23 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                 value={popupForm.imageUrl}
                 onChange={(e) => setPopupForm((p) => ({ ...p, imageUrl: e.target.value }))}
               />
+              <div className="flex items-center gap-3">
+                <label className="block">
+                  <span className="text-xs text-slate-500">veya bilgisayardan seç:</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={popupUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void uploadPopupImage(file);
+                      e.target.value = "";
+                    }}
+                    className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-xl file:border file:border-black/10 file:bg-white file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 disabled:opacity-60"
+                  />
+                </label>
+                {popupUploading ? <span className="text-xs text-slate-500">Yükleniyor...</span> : null}
+              </div>
               {popupForm.imageUrl ? (
                 <img src={popupForm.imageUrl} alt="Önizleme" className="h-32 rounded-xl object-contain border border-slate-200" />
               ) : null}
