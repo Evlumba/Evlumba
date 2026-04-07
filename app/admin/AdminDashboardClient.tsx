@@ -320,6 +320,32 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   const [bannerUploading, setBannerUploading] = useState<number | null>(null);
   const [bannerError, setBannerError] = useState<string | null>(null);
 
+  // Popup state
+  type PopupBanner = {
+    id: string;
+    title: string;
+    image_url: string;
+    link_url: string | null;
+    is_active: boolean;
+    max_impressions_per_user: number;
+    start_date: string;
+    end_date: string | null;
+    created_at: string;
+  };
+  const [popups, setPopups] = useState<PopupBanner[]>([]);
+  const [popupsLoading, setPopupsLoading] = useState(false);
+  const [popupSaving, setPopupSaving] = useState(false);
+  const [popupForm, setPopupForm] = useState({
+    id: "",
+    title: "",
+    imageUrl: "",
+    linkUrl: "",
+    isActive: false,
+    maxImpressionsPerUser: 3,
+    startDate: new Date().toISOString().slice(0, 16),
+    endDate: "",
+  });
+
   // Messages state
   type DesignerMessages = {
     designerId: string;
@@ -585,6 +611,74 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       }
     });
   }, []);
+
+  async function loadPopups() {
+    setPopupsLoading(true);
+    try {
+      const res = await fetch("/api/admin/popups", { credentials: "include" });
+      const data = (await res.json()) as { ok?: boolean; popups?: PopupBanner[] };
+      if (data.ok && data.popups) setPopups(data.popups);
+    } catch { setErrorMessage("Popup'lar yüklenemedi."); }
+    finally { setPopupsLoading(false); }
+  }
+
+  async function savePopup() {
+    setPopupSaving(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch("/api/admin/popups", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: popupForm.id || undefined,
+          title: popupForm.title,
+          imageUrl: popupForm.imageUrl,
+          linkUrl: popupForm.linkUrl || null,
+          isActive: popupForm.isActive,
+          maxImpressionsPerUser: popupForm.maxImpressionsPerUser,
+          startDate: popupForm.startDate ? new Date(popupForm.startDate).toISOString() : undefined,
+          endDate: popupForm.endDate ? new Date(popupForm.endDate).toISOString() : null,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+      if (data.ok) {
+        setSuccessMessage(data.message ?? "Kaydedildi.");
+        setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "" });
+        await loadPopups();
+      } else {
+        setErrorMessage(data.error ?? "Hata.");
+      }
+    } catch { setErrorMessage("Popup kaydedilemedi."); }
+    finally { setPopupSaving(false); }
+  }
+
+  async function deletePopup(id: string) {
+    if (!window.confirm("Bu popup'ı silmek istediğine emin misin?")) return;
+    try {
+      const res = await fetch("/api/admin/popups", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = (await res.json()) as { ok?: boolean };
+      if (data.ok) { setSuccessMessage("Popup silindi."); await loadPopups(); }
+    } catch { setErrorMessage("Popup silinemedi."); }
+  }
+
+  function editPopup(p: PopupBanner) {
+    setPopupForm({
+      id: p.id,
+      title: p.title,
+      imageUrl: p.image_url,
+      linkUrl: p.link_url ?? "",
+      isActive: p.is_active,
+      maxImpressionsPerUser: p.max_impressions_per_user,
+      startDate: p.start_date ? new Date(p.start_date).toISOString().slice(0, 16) : "",
+      endDate: p.end_date ? new Date(p.end_date).toISOString().slice(0, 16) : "",
+    });
+  }
 
   async function loadDesignerMessages() {
     setMessagesLoading(true);
@@ -2419,6 +2513,144 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
               </div>
             );
           })}
+
+          {/* ── Popup Yönetimi ──────────────────────────────── */}
+          <div className="mt-8 border-t border-slate-200 pt-6">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold">Pop-up Yönetimi</h2>
+              <button
+                type="button"
+                onClick={() => void loadPopups()}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Yükle / Yenile
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Önerilen görsel boyutu: <strong>800 × 600px</strong> (dikey veya kare, 4:3 oran). Maks. 5 MB. PNG veya JPG.
+            </p>
+
+            {/* Form */}
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div className="text-sm font-semibold text-slate-700">
+                {popupForm.id ? "Popup Düzenle" : "Yeni Popup Oluştur"}
+              </div>
+              <input
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                placeholder="Başlık (admin referansı)"
+                value={popupForm.title}
+                onChange={(e) => setPopupForm((p) => ({ ...p, title: e.target.value }))}
+              />
+              <input
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                placeholder="Görsel URL (https://...)"
+                value={popupForm.imageUrl}
+                onChange={(e) => setPopupForm((p) => ({ ...p, imageUrl: e.target.value }))}
+              />
+              {popupForm.imageUrl ? (
+                <img src={popupForm.imageUrl} alt="Önizleme" className="h-32 rounded-xl object-contain border border-slate-200" />
+              ) : null}
+              <input
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                placeholder="Link URL (opsiyonel - tıklanınca gidilecek sayfa)"
+                value={popupForm.linkUrl}
+                onChange={(e) => setPopupForm((p) => ({ ...p, linkUrl: e.target.value }))}
+              />
+              <div className="flex flex-wrap gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Başlangıç</label>
+                  <input
+                    type="datetime-local"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                    value={popupForm.startDate}
+                    onChange={(e) => setPopupForm((p) => ({ ...p, startDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Bitiş (opsiyonel)</label>
+                  <input
+                    type="datetime-local"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                    value={popupForm.endDate}
+                    onChange={(e) => setPopupForm((p) => ({ ...p, endDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Kullanıcı başı gösterim</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    className="w-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                    value={popupForm.maxImpressionsPerUser}
+                    onChange={(e) => setPopupForm((p) => ({ ...p, maxImpressionsPerUser: Number(e.target.value) || 3 }))}
+                  />
+                </div>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={popupForm.isActive}
+                  onChange={(e) => setPopupForm((p) => ({ ...p, isActive: e.target.checked }))}
+                  className="h-4 w-4 rounded accent-emerald-600"
+                />
+                Aktif (hemen yayına al)
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void savePopup()}
+                  disabled={popupSaving}
+                  className="cursor-pointer rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {popupSaving ? "Kaydediliyor..." : popupForm.id ? "Güncelle" : "Oluştur"}
+                </button>
+                {popupForm.id ? (
+                  <button
+                    type="button"
+                    onClick={() => setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "" })}
+                    className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600"
+                  >
+                    İptal
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Mevcut popup listesi */}
+            {popupsLoading ? (
+              <p className="mt-4 text-sm text-slate-500">Yükleniyor...</p>
+            ) : popups.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {popups.map((p) => (
+                  <div key={p.id} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-3">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt={p.title} className="h-16 w-16 rounded-xl object-cover border border-slate-100" />
+                    ) : (
+                      <div className="h-16 w-16 rounded-xl bg-slate-100 flex items-center justify-center text-xs text-slate-400">Yok</div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-900 truncate">{p.title}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${p.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                          {p.is_active ? "Aktif" : "Pasif"}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {new Date(p.start_date).toLocaleDateString("tr-TR")}
+                        {p.end_date ? ` — ${new Date(p.end_date).toLocaleDateString("tr-TR")}` : " — Süresiz"}
+                        {" · "}Maks {p.max_impressions_per_user}x gösterim
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button type="button" onClick={() => editPopup(p)} className="cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Düzenle</button>
+                      <button type="button" onClick={() => void deletePopup(p.id)} className="cursor-pointer rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">Sil</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </section>
       ) : null}
     </main>
