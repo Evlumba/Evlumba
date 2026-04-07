@@ -2587,8 +2587,8 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                     disabled={popupUploading}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (file) void uploadPopupImage(file);
-                      e.target.value = "";
+                      const input = e.target;
+                      if (file) void uploadPopupImage(file).finally(() => { try { input.value = ""; } catch {} });
                     }}
                     className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-xl file:border file:border-black/10 file:bg-white file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 disabled:opacity-60"
                   />
