@@ -615,8 +615,10 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   }, []);
 
   async function uploadPopupImage(file: File) {
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage("Dosya boyutu 5 MB'dan büyük olamaz.");
+    const isVideo = file.type.startsWith("video/");
+    const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setErrorMessage(isVideo ? "Video 50 MB'dan büyük olamaz." : "Görsel 5 MB'dan büyük olamaz.");
       return;
     }
     setPopupUploading(true);
@@ -2581,7 +2583,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                   <span className="text-xs text-slate-500">veya bilgisayardan seç:</span>
                   <input
                     type="file"
-                    accept="image/*,video/mp4,video/webm,video/quicktime,.gif"
+                    accept="image/*,video/*,.gif,.mp4,.webm,.mov"
                     disabled={popupUploading}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
