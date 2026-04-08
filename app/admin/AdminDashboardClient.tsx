@@ -2611,8 +2611,10 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                 {popupUploading ? <span className="text-xs text-slate-500">Yükleniyor...</span> : null}
               </div>
               {popupForm.imageUrl ? (
-                /\.(mp4|webm|mov)(\?|$)/i.test(popupForm.imageUrl) ? (
+                popupForm.mediaType === "video" ? (
                   <video src={popupForm.imageUrl} autoPlay loop muted playsInline className="h-32 rounded-xl object-contain border border-slate-200" />
+                ) : popupForm.mediaType === "embed" ? (
+                  <iframe src={popupForm.imageUrl} className="h-32 w-56 rounded-xl border border-slate-200" allow="autoplay" />
                 ) : (
                   <img src={popupForm.imageUrl} alt="Önizleme" className="h-32 rounded-xl object-contain border border-slate-200" />
                 )
