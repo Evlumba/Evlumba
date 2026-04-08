@@ -349,6 +349,16 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     mediaType: "image",
   });
 
+  // Onboarding state
+  type OnboardingStep = { id: string; step_order: number; title: string; body: string; image_url: string | null };
+  type OnboardingFlow = { id: string; title: string; target_role: string; is_active: boolean; max_impressions_per_user: number; onboarding_steps: OnboardingStep[] };
+  const [obFlows, setObFlows] = useState<OnboardingFlow[]>([]);
+  const [obLoading, setObLoading] = useState(false);
+  const [obSaving, setObSaving] = useState(false);
+  const [obEditFlowId, setObEditFlowId] = useState<string | null>(null);
+  const [obFlowForm, setObFlowForm] = useState({ title: "", targetRole: "homeowner", isActive: false, maxImpressions: 1 });
+  const [obStepForm, setObStepForm] = useState({ stepId: "", title: "", body: "", imageUrl: "", order: 0 });
+
   // Messages state
   type DesignerMessages = {
     designerId: string;
@@ -614,6 +624,56 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       }
     });
   }, []);
+
+  async function loadOnboarding() {
+    setObLoading(true);
+    try {
+      const res = await fetch("/api/admin/onboarding", { credentials: "include" });
+      const data = (await res.json()) as { ok?: boolean; flows?: OnboardingFlow[] };
+      if (data.ok && data.flows) setObFlows(data.flows);
+    } catch { setErrorMessage("Onboarding yüklenemedi."); }
+    finally { setObLoading(false); }
+  }
+
+  async function saveObFlow() {
+    setObSaving(true);
+    try {
+      const res = await fetch("/api/admin/onboarding", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upsert_flow", flowId: obEditFlowId || undefined, title: obFlowForm.title, targetRole: obFlowForm.targetRole, isActive: obFlowForm.isActive, maxImpressionsPerUser: obFlowForm.maxImpressions }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+      if (data.ok) { setSuccessMessage(data.message ?? "Kaydedildi."); setObEditFlowId(null); setObFlowForm({ title: "", targetRole: "homeowner", isActive: false, maxImpressions: 1 }); await loadOnboarding(); }
+      else setErrorMessage(data.error ?? "Hata.");
+    } catch { setErrorMessage("Kayıt başarısız."); }
+    finally { setObSaving(false); }
+  }
+
+  async function saveObStep(flowId: string) {
+    setObSaving(true);
+    try {
+      const res = await fetch("/api/admin/onboarding", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upsert_step", flowId, stepId: obStepForm.stepId || undefined, stepTitle: obStepForm.title, stepBody: obStepForm.body, stepImageUrl: obStepForm.imageUrl || null, stepOrder: obStepForm.order }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+      if (data.ok) { setSuccessMessage(data.message ?? "Kaydedildi."); setObStepForm({ stepId: "", title: "", body: "", imageUrl: "", order: 0 }); await loadOnboarding(); }
+      else setErrorMessage(data.error ?? "Hata.");
+    } catch { setErrorMessage("Kayıt başarısız."); }
+    finally { setObSaving(false); }
+  }
+
+  async function deleteObStep(stepId: string) {
+    if (!window.confirm("Bu adımı silmek istediğine emin misin?")) return;
+    const res = await fetch("/api/admin/onboarding", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_step", stepId }) });
+    const data = (await res.json()) as { ok?: boolean };
+    if (data.ok) { setSuccessMessage("Adım silindi."); await loadOnboarding(); }
+  }
+
+  async function deleteObFlow(flowId: string) {
+    if (!window.confirm("Bu akışı ve tüm adımlarını silmek istediğine emin misin?")) return;
+    const res = await fetch("/api/admin/onboarding", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_flow", flowId }) });
+    const data = (await res.json()) as { ok?: boolean };
+    if (data.ok) { setSuccessMessage("Akış silindi."); await loadOnboarding(); }
+  }
 
   async function uploadPopupImage(file: File) {
     const isVideo = file.type.startsWith("video/");
@@ -2504,8 +2564,8 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
           {([1, 2] as const).map((slot) => {
             const banner = banners.find((b) => b.slot === slot);
             const slotLabel = slot === 1
-              ? "Banner 1 — Kategorilerden Sonra"
-              : "Banner 2 — Profesyonellerden Sonra";
+              ? "App — Banner 1 (Kategorilerden Sonra)"
+              : "App — Banner 2 (Profesyonellerden Sonra)";
             const dimInfo = "Önerilen boyut: 1080 × 400px (yatay, 2.7:1 oran). Maks. 5 MB.";
             return (
               <div key={slot} className="rounded-2xl border border-black/10 bg-white p-4">
@@ -2551,7 +2611,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
           {/* ── Popup Yönetimi ──────────────────────────────── */}
           <div className="mt-8 border-t border-slate-200 pt-6">
             <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold">Pop-up Yönetimi</h2>
+              <h2 className="text-lg font-semibold">Web — Pop-up Yönetimi</h2>
               <button
                 type="button"
                 onClick={() => void loadPopups()}
@@ -2724,6 +2784,99 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                     <div className="flex gap-2 shrink-0">
                       <button type="button" onClick={() => editPopup(p)} className="cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Düzenle</button>
                       <button type="button" onClick={() => void deletePopup(p.id)} className="cursor-pointer rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">Sil</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {/* ── Web — Onboarding Yönetimi ─────────────────── */}
+          <div className="mt-8 border-t border-slate-200 pt-6">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold">Web — Onboarding Akışları</h2>
+              <button type="button" onClick={() => void loadOnboarding()} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer">Yükle / Yenile</button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">Login sonrası kullanıcıya gösterilecek adım adım tanıtım akışları. Rol bazlı hedefleme destekler.</p>
+
+            {/* Flow form */}
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div className="text-sm font-semibold text-slate-700">{obEditFlowId ? "Akışı Düzenle" : "Yeni Onboarding Akışı"}</div>
+              <input className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" placeholder="Akış başlığı (ör: Ev Sahibi Tanıtım)" value={obFlowForm.title} onChange={(e) => setObFlowForm((p) => ({ ...p, title: e.target.value }))} />
+              <div className="flex flex-wrap gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Hedef Rol</label>
+                  <select className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none cursor-pointer" value={obFlowForm.targetRole} onChange={(e) => setObFlowForm((p) => ({ ...p, targetRole: e.target.value }))}>
+                    <option value="homeowner">Ev Sahibi (homeowner)</option>
+                    <option value="designer">Tasarımcı (designer)</option>
+                    <option value="all">Herkes</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Kullanıcı başı gösterim</label>
+                  <input type="number" min={1} max={99} className="w-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" value={obFlowForm.maxImpressions} onChange={(e) => setObFlowForm((p) => ({ ...p, maxImpressions: Number(e.target.value) || 1 }))} />
+                </div>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" checked={obFlowForm.isActive} onChange={(e) => setObFlowForm((p) => ({ ...p, isActive: e.target.checked }))} className="h-4 w-4 rounded accent-emerald-600" />
+                Aktif
+              </label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => void saveObFlow()} disabled={obSaving} className="cursor-pointer rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{obSaving ? "Kaydediliyor..." : obEditFlowId ? "Güncelle" : "Akış Oluştur"}</button>
+                {obEditFlowId ? <button type="button" onClick={() => { setObEditFlowId(null); setObFlowForm({ title: "", targetRole: "homeowner", isActive: false, maxImpressions: 1 }); }} className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600">İptal</button> : null}
+              </div>
+            </div>
+
+            {/* Flow list */}
+            {obLoading ? <p className="mt-4 text-sm text-slate-500">Yükleniyor...</p> : obFlows.length > 0 ? (
+              <div className="mt-4 space-y-4">
+                {obFlows.map((flow) => (
+                  <div key={flow.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-sm font-semibold text-slate-900">{flow.title}</span>
+                        <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold ${flow.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{flow.is_active ? "Aktif" : "Pasif"}</span>
+                        <span className="ml-2 text-xs text-slate-500">Rol: {flow.target_role} · Maks {flow.max_impressions_per_user}x</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => { setObEditFlowId(flow.id); setObFlowForm({ title: flow.title, targetRole: flow.target_role, isActive: flow.is_active, maxImpressions: flow.max_impressions_per_user }); }} className="cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Düzenle</button>
+                        <button type="button" onClick={() => void deleteObFlow(flow.id)} className="cursor-pointer rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">Sil</button>
+                      </div>
+                    </div>
+
+                    {/* Steps */}
+                    <div className="mt-3 space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Adımlar ({flow.onboarding_steps.length})</div>
+                      {flow.onboarding_steps.map((step) => (
+                        <div key={step.id} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">{step.step_order + 1}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold text-slate-800">{step.title}</div>
+                            <div className="mt-0.5 text-xs text-slate-500 line-clamp-2">{step.body}</div>
+                            {step.image_url ? <img src={step.image_url} alt="" className="mt-1 h-12 rounded-lg object-cover" /> : null}
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <button type="button" onClick={() => setObStepForm({ stepId: step.id, title: step.title, body: step.body, imageUrl: step.image_url ?? "", order: step.step_order })} className="cursor-pointer rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-white">Düzenle</button>
+                            <button type="button" onClick={() => void deleteObStep(step.id)} className="cursor-pointer rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-600 hover:bg-rose-50">Sil</button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Add/edit step form */}
+                      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-3 space-y-2">
+                        <div className="text-xs font-semibold text-slate-600">{obStepForm.stepId ? "Adım Düzenle" : "Yeni Adım Ekle"}</div>
+                        <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none" placeholder="Adım başlığı" value={obStepForm.title} onChange={(e) => setObStepForm((p) => ({ ...p, title: e.target.value }))} />
+                        <textarea className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none" rows={3} placeholder="Adım içeriği (açıklama metni)" value={obStepForm.body} onChange={(e) => setObStepForm((p) => ({ ...p, body: e.target.value }))} />
+                        <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none" placeholder="Görsel URL (opsiyonel)" value={obStepForm.imageUrl} onChange={(e) => setObStepForm((p) => ({ ...p, imageUrl: e.target.value }))} />
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <label className="text-xs text-slate-500">Sıra no:</label>
+                            <input type="number" min={0} className="ml-1 w-14 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none" value={obStepForm.order} onChange={(e) => setObStepForm((p) => ({ ...p, order: Number(e.target.value) || 0 }))} />
+                          </div>
+                          <button type="button" onClick={() => void saveObStep(flow.id)} disabled={obSaving} className="cursor-pointer rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">{obSaving ? "..." : obStepForm.stepId ? "Güncelle" : "Ekle"}</button>
+                          {obStepForm.stepId ? <button type="button" onClick={() => setObStepForm({ stepId: "", title: "", body: "", imageUrl: "", order: 0 })} className="cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">İptal</button> : null}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
