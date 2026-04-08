@@ -616,9 +616,9 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
 
   async function uploadPopupImage(file: File) {
     const isVideo = file.type.startsWith("video/");
-    const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+    const maxSize = isVideo ? 70 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > maxSize) {
-      setErrorMessage(isVideo ? "Video 50 MB'dan büyük olamaz." : "Görsel 5 MB'dan büyük olamaz.");
+      setErrorMessage(isVideo ? "Video 70 MB'dan büyük olamaz." : "Görsel 5 MB'dan büyük olamaz.");
       return;
     }
     setPopupUploading(true);
