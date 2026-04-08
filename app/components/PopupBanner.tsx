@@ -11,20 +11,27 @@ type PopupData = {
   max_impressions_per_user: number;
   pages: string[];
   media_type: string;
+  updated_at?: string | null;
 };
 
-function getImpressionCount(popupId: string): number {
+function getImpressionStorageKey(popup: Pick<PopupData, "id" | "updated_at" | "image_url">) {
+  const version = String(popup.updated_at ?? popup.image_url ?? "").trim() || "v1";
+  return `evlumba:popup:${popup.id}:${version}`;
+}
+
+function getImpressionCount(popup: Pick<PopupData, "id" | "updated_at" | "image_url">): number {
   try {
-    return Number(localStorage.getItem(`evlumba:popup:${popupId}`) || "0");
+    return Number(localStorage.getItem(getImpressionStorageKey(popup)) || "0");
   } catch {
     return 0;
   }
 }
 
-function incrementImpression(popupId: string) {
+function incrementImpression(popup: Pick<PopupData, "id" | "updated_at" | "image_url">) {
   try {
-    const current = getImpressionCount(popupId);
-    localStorage.setItem(`evlumba:popup:${popupId}`, String(current + 1));
+    const key = getImpressionStorageKey(popup);
+    const current = getImpressionCount(popup);
+    localStorage.setItem(key, String(current + 1));
   } catch {}
 }
 
@@ -36,20 +43,18 @@ export default function PopupBanner() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch("/api/public/popup");
+        const res = await fetch(`/api/public/popup?path=${encodeURIComponent(pathname || "/")}`, {
+          cache: "no-store",
+        });
         const data = (await res.json()) as { ok?: boolean; popup?: PopupData | null };
         if (!data.ok || !data.popup) return;
 
-        // Check page filter - empty array means show everywhere
-        const pages = data.popup.pages ?? [];
-        if (pages.length > 0 && !pages.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
-
-        const impressions = getImpressionCount(data.popup.id);
+        const impressions = getImpressionCount(data.popup);
         if (impressions >= data.popup.max_impressions_per_user) return;
 
         setPopup(data.popup);
         setTimeout(() => setVisible(true), 300);
-        incrementImpression(data.popup.id);
+        incrementImpression(data.popup);
       } catch {}
     };
     void load();
