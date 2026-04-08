@@ -10,6 +10,7 @@ type PopupData = {
   link_url: string | null;
   max_impressions_per_user: number;
   pages: string[];
+  media_type: string;
 };
 
 function getImpressionCount(popupId: string): number {
@@ -58,9 +59,17 @@ export default function PopupBanner() {
 
   const close = () => setVisible(false);
 
-  const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(popup.image_url);
+  const isVideo = popup.media_type === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(popup.image_url);
+  const isEmbed = popup.media_type === "embed";
 
-  const content = isVideo ? (
+  const content = isEmbed ? (
+    <iframe
+      src={popup.image_url}
+      className="max-h-[80vh] max-w-[90vw] rounded-2xl shadow-2xl md:max-w-lg aspect-video w-[90vw] md:w-[560px]"
+      allow="autoplay; fullscreen"
+      allowFullScreen
+    />
+  ) : isVideo ? (
     <video
       src={popup.image_url}
       autoPlay

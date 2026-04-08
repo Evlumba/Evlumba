@@ -10,7 +10,7 @@ export async function GET() {
 
   const { data, error } = await admin
     .from("popup_banners")
-    .select("id, title, image_url, link_url, max_impressions_per_user, start_date, end_date, pages")
+    .select("id, title, image_url, link_url, max_impressions_per_user, start_date, end_date, pages, media_type")
     .eq("is_active", true)
     .lte("start_date", now)
     .or(`end_date.is.null,end_date.gte.${now}`)

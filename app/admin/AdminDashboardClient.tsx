@@ -346,6 +346,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     startDate: new Date().toISOString().slice(0, 16),
     endDate: "",
     pages: "",
+    mediaType: "image",
   });
 
   // Messages state
@@ -669,12 +670,13 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
           startDate: popupForm.startDate ? new Date(popupForm.startDate).toISOString() : undefined,
           endDate: popupForm.endDate ? new Date(popupForm.endDate).toISOString() : null,
           pages: popupForm.pages.split("\n").map((p: string) => p.trim()).filter(Boolean),
+          mediaType: popupForm.mediaType,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
       if (data.ok) {
         setSuccessMessage(data.message ?? "Kaydedildi.");
-        setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "", pages: "" });
+        setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "", pages: "", mediaType: "image" });
         await loadPopups();
       } else {
         setErrorMessage(data.error ?? "Hata.");
@@ -708,6 +710,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
       startDate: p.start_date ? new Date(p.start_date).toISOString().slice(0, 16) : "",
       endDate: p.end_date ? new Date(p.end_date).toISOString().slice(0, 16) : "",
       pages: (p as unknown as { pages?: string[] }).pages?.join("\n") ?? "",
+      mediaType: (p as unknown as { media_type?: string }).media_type ?? "image",
     });
   }
 
@@ -2572,9 +2575,21 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                 value={popupForm.title}
                 onChange={(e) => setPopupForm((p) => ({ ...p, title: e.target.value }))}
               />
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Medya Tipi</label>
+                <select
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none cursor-pointer"
+                  value={popupForm.mediaType}
+                  onChange={(e) => setPopupForm((p) => ({ ...p, mediaType: e.target.value }))}
+                >
+                  <option value="image">Görsel (PNG, JPG, GIF)</option>
+                  <option value="video">Video (MP4, WebM)</option>
+                  <option value="embed">Embed (YouTube, Synthesia vb.)</option>
+                </select>
+              </div>
               <input
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                placeholder="Görsel URL (https://...)"
+                placeholder={popupForm.mediaType === "embed" ? "Embed URL (YouTube embed linki)" : "Görsel/Video URL (https://...)"}
                 value={popupForm.imageUrl}
                 onChange={(e) => setPopupForm((p) => ({ ...p, imageUrl: e.target.value }))}
               />
@@ -2670,7 +2685,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                 {popupForm.id ? (
                   <button
                     type="button"
-                    onClick={() => setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "", pages: "" })}
+                    onClick={() => setPopupForm({ id: "", title: "", imageUrl: "", linkUrl: "", isActive: false, maxImpressionsPerUser: 3, startDate: new Date().toISOString().slice(0, 16), endDate: "", pages: "", mediaType: "image" })}
                     className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600"
                   >
                     İptal

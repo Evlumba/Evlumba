@@ -42,6 +42,7 @@ export async function POST(req: Request) {
     startDate?: string;
     endDate?: string | null;
     pages?: string[];
+    mediaType?: string;
   };
 
   const supabaseAdmin = getSupabaseAdminClient();
@@ -59,6 +60,7 @@ export async function POST(req: Request) {
         start_date: body.startDate || new Date().toISOString(),
         end_date: body.endDate || null,
         pages: body.pages ?? [],
+        media_type: body.mediaType ?? "image",
         updated_at: new Date().toISOString(),
       })
       .eq("id", body.id);
@@ -86,6 +88,7 @@ export async function POST(req: Request) {
     start_date: body.startDate || new Date().toISOString(),
     end_date: body.endDate || null,
     pages: body.pages ?? [],
+    media_type: body.mediaType ?? "image",
     created_by: admin.userId,
   });
 
