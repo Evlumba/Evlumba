@@ -64,9 +64,9 @@ export default function PopupBanner() {
 
   const content = isEmbed ? (
     <iframe
-      src={popup.image_url}
+      src={popup.image_url + (popup.image_url.includes("?") ? "&autoplay=1&muted=1" : "?autoplay=1&muted=1")}
       className="max-h-[80vh] max-w-[90vw] rounded-2xl shadow-2xl md:max-w-lg aspect-video w-[90vw] md:w-[560px]"
-      allow="autoplay; fullscreen"
+      allow="autoplay; encrypted-media; fullscreen"
       allowFullScreen
     />
   ) : isVideo ? (
