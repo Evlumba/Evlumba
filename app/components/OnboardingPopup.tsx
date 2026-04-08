@@ -66,7 +66,7 @@ export default function OnboardingPopup() {
         if (impressions >= data.flow.max_impressions_per_user) return;
 
         setFlow(data.flow);
-        setTimeout(() => setVisible(true), 800);
+        setTimeout(() => setVisible(true), 1500);
         incrementImpression(data.flow.id);
       } catch (err) {
         console.error("OnboardingPopup:", err);
@@ -89,13 +89,13 @@ export default function OnboardingPopup() {
 
   return (
     <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={close}>
-      <div className="relative mx-4 w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative mx-4 w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <button type="button" onClick={close} className="absolute right-4 top-4 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/5 text-slate-500 hover:bg-black/10 transition">
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
 
         {step.image_url ? (
-          <div className="relative h-48 w-full bg-gradient-to-br from-emerald-50 to-sky-50">
+          <div className="relative h-64 md:h-80 w-full bg-gradient-to-br from-emerald-50 to-sky-50">
             <img src={step.image_url} alt={step.title} className="h-full w-full object-cover" />
           </div>
         ) : (
