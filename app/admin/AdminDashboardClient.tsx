@@ -2868,6 +2868,28 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
                         <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none" placeholder="Adım başlığı" value={obStepForm.title} onChange={(e) => setObStepForm((p) => ({ ...p, title: e.target.value }))} />
                         <textarea className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none" rows={3} placeholder="Adım içeriği (açıklama metni)" value={obStepForm.body} onChange={(e) => setObStepForm((p) => ({ ...p, body: e.target.value }))} />
                         <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none" placeholder="Görsel URL (opsiyonel)" value={obStepForm.imageUrl} onChange={(e) => setObStepForm((p) => ({ ...p, imageUrl: e.target.value }))} />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const input = e.target;
+                            void (async () => {
+                              try {
+                                const supabase = getSupabaseBrowserClient();
+                                const ext = file.name.split(".").pop() ?? "jpg";
+                                const path = `onboarding-${Date.now()}.${ext}`;
+                                const { error } = await supabase.storage.from("app-banners").upload(path, file, { upsert: true, contentType: file.type });
+                                if (error) { setErrorMessage(error.message); return; }
+                                const { data } = supabase.storage.from("app-banners").getPublicUrl(path);
+                                setObStepForm((p) => ({ ...p, imageUrl: data.publicUrl }));
+                              } catch (err) { setErrorMessage(err instanceof Error ? err.message : "Yükleme başarısız."); }
+                              finally { try { input.value = ""; } catch {} }
+                            })();
+                          }}
+                          className="text-xs text-slate-500 file:mr-2 file:cursor-pointer file:rounded-lg file:border file:border-slate-200 file:bg-white file:px-2 file:py-1 file:text-xs file:font-semibold file:text-slate-600"
+                        />
                         <div className="flex items-center gap-3">
                           <div>
                             <label className="text-xs text-slate-500">Sıra no:</label>
