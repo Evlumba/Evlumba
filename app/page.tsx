@@ -10,6 +10,7 @@ import {
   trimForDescription,
 } from "@/lib/seo";
 import SiteTestimonials, { type SiteTestimonialItem } from "./components/SiteTestimonials";
+import HeroSection from "./components/NewHero";
 
 // export const dynamic = "force-dynamic"; // COST-FIX: removed
 export const revalidate = 3600; // COST-FIX: 1 hour ISR cache
@@ -908,15 +909,17 @@ function DesignerCard({ d }: { d: Designer }) {
 }
 
 export default async function HomePage() {
-  const [homeProjects, designers, testimonials, topBlogPosts, homeListings, authUser] = await Promise.all([
-    loadHomeProjects(3),
-    loadHomeDesigners(3),
+  const authUser = await loadHomeAuthUser();
+  const isLoggedIn = Boolean(authUser);
+  const cardCount = isLoggedIn ? 4 : 3;
+
+  const [homeProjects, designers, testimonials, topBlogPosts, homeListings] = await Promise.all([
+    loadHomeProjects(cardCount),
+    loadHomeDesigners(cardCount),
     loadHomeTestimonials(9),
     loadTopBlogPosts(3),
     loadHomeListings(3),
-    loadHomeAuthUser(),
   ]);
-  const isLoggedIn = Boolean(authUser);
   const structuredDataJson = JSON.stringify(
     [
       {
@@ -1022,357 +1025,12 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: structuredDataJson }}
       />
       <div className="relative">
-        {/* HERO */}
-        <section className="mt-6 md:mt-8">
-        <div className="relative">
-          <div
-            className="pointer-events-none absolute -inset-x-6 -inset-y-6 rounded-[44px] bg-white/55 backdrop-blur-2xl"
-            aria-hidden="true"
-          />
+                {/* HERO — Sadece login olmamış kullanıcılara göster */}
+        {!isLoggedIn && <HeroSection />}
 
-          <div className="relative overflow-hidden rounded-4xl border border-black/5 bg-white/45 backdrop-blur-xl shadow-[0_35px_90px_-70px_rgba(0,0,0,0.45)]">
-            <div className="p-5 md:p-7">
-              <div className="grid gap-6 md:grid-cols-12 items-start">
-                {/* LEFT */}
-                <div className="md:col-span-7">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/75 px-3 py-1.5 text-xs text-slate-800 backdrop-blur shadow-[0_10px_30px_-22px_rgba(0,0,0,0.25)]">
-                    <span
-                      className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.18)]"
-                      aria-hidden="true"
-                    />
-                    <span className="font-semibold">Yeni nesil keşif</span>
-                    <span className="h-3 w-px bg-black/10" aria-hidden="true" />
-                    <span className="text-slate-600">Tarzını 3 dakikada netleştir</span>
-                  </div>
-
-                  <h1 className="mt-6 text-[clamp(2.25rem,4.6vw,4.25rem)] font-semibold tracking-[-0.035em] leading-[1.06] text-slate-950">
-                    Evinin{" "}
-                    <span className="relative inline-block">
-                      <span className="absolute inset-x-0 -bottom-1 h-3 rounded-full bg-emerald-200/60 blur-[0.5px]" />
-                      <span className="relative">tarzını</span>
-                    </span>{" "}
-                    bul.
-                    <span className="block mt-2 text-slate-600 font-medium tracking-[-0.02em]">
-                      İlhamı keşfet, doğru tasarımcıyla{" "}
-                      <span className="text-slate-950 font-semibold">eşleş.</span>
-                    </span>
-                  </h1>
-
-                  <p className="mt-4 max-w-[56ch] text-[15px] md:text-[16px] text-slate-600 leading-7">
-                    Evlumba; binlerce iç mekân örneğini “beğen / geç” gibi basit
-                    oynanabilir bir keşif deneyimine dönüştürür. Sonra, zevkine en
-                    yakın tasarımcıları ve uygulanabilir paketleri önüne getirir.
-                  </p>
-
-                  <div className="mt-6 flex flex-wrap items-center gap-2">
-                    <div className="group inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3.5 py-2 backdrop-blur shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] transition hover:bg-white/85 hover:-translate-y-px">
-                      <div className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/15">
-                        <MiniIcon
-                          path="M12 20l9-8-9-8-9 8 9 8z"
-                          className="h-4 w-4 text-emerald-700"
-                        />
-                      </div>
-                      <div className="text-xs font-semibold tracking-tight text-slate-900">
-                        Tarz profili
-                      </div>
-                    </div>
-
-                    <div className="group inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3.5 py-2 backdrop-blur shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] transition hover:bg-white/85 hover:-translate-y-px">
-                      <div className="grid h-7 w-7 place-items-center rounded-full bg-indigo-500/10 ring-1 ring-indigo-500/15">
-                        <MiniIcon
-                          path="M20 6L9 17l-5-5"
-                          className="h-4 w-4 text-indigo-700"
-                        />
-                      </div>
-                      <div className="text-xs font-semibold tracking-tight text-slate-900">
-                        AI uyum skoru
-                      </div>
-                    </div>
-
-                    <div className="group inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3.5 py-2 backdrop-blur shadow-[0_12px_30px_-24px_rgba(0,0,0,0.35)] transition hover:bg-white/85 hover:-translate-y-px">
-                      <div className="grid h-7 w-7 place-items-center rounded-full bg-violet-500/10 ring-1 ring-violet-500/15">
-                        <MiniIcon
-                          path="M12 1v22M1 12h22"
-                          className="h-4 w-4 text-violet-700"
-                        />
-                      </div>
-                      <div className="text-xs font-semibold tracking-tight text-slate-900">
-                        Paket &amp; bütçe uyumu
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* HIZLI ARAMA */}
-                  <Card className="mt-6 p-5 md:p-6">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">
-                          Hızlı Arama
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Bir şey yaz, direkt keşfe git.
-                        </div>
-                      </div>
-
-                      <div className="hidden sm:inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/60 px-3 py-1.5 text-xs text-slate-600">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-                        Hazır
-                      </div>
-                    </div>
-
-                    <form action="/kesfet" method="GET" className="mt-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                        <div className="relative flex-1">
-                          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                            ⌕
-                          </span>
-                          <input
-                            name="q"
-                            placeholder="Örn: japandi küçük salon, minimal mutfak, ferah banyo…"
-                            className="w-full rounded-2xl border border-black/10 bg-white/80 pl-11 pr-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-black/10"
-                            autoComplete="off"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_40px_-28px_rgba(15,23,42,0.55)] hover:bg-slate-800"
-                        >
-                          Ara
-                        </button>
-                      </div>
-
-                      <div className="mt-5 border-t border-black/5 pt-4">
-                        <div className="text-xs font-semibold text-slate-500">Öneriler</div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {[
-                            "Modern salon",
-                            "Bohem yatak odası",
-                            "Küçük banyo",
-                            "Minimal mutfak",
-                            "Japandi",
-                            "TV ünitesi",
-                            "Aydınlatma",
-                            "Çocuk odası",
-                          ].map((s) => (
-                            <Link
-                              key={s}
-                              href={`/kesfet?q=${encodeURIComponent(s)}`}
-                              className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition"
-                            >
-                              {s}
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    </form>
-                  </Card>
-                </div>
-
-                {/* RIGHT */}
-                <div className="md:col-span-5">
-                  <Card className="p-3 evl-float-soft">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-3xl overflow-hidden aspect-3/4 bg-black/5">
-                        <img
-                          src="https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=900&q=70"
-                          alt="Yatak odası"
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
-
-                      <div className="grid gap-3">
-                        <div className="rounded-3xl overflow-hidden aspect-4/3 bg-black/5">
-                          <img
-                            src="https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=900&q=70"
-                            alt="Mutfak"
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
-                        </div>
-
-                        <div className="rounded-3xl overflow-hidden aspect-4/3 bg-black/5">
-                          <img
-                            src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=70"
-                            alt="Salon"
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 rounded-3xl border border-black/10 bg-white/70 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="grid h-9 w-9 place-items-center rounded-2xl bg-emerald-500/10 ring-1 ring-emerald-500/15">
-                              <span className="text-emerald-700 text-sm" aria-hidden="true">
-                                ✨
-                              </span>
-                            </div>
-
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold tracking-tight text-slate-900 leading-tight">
-                                Tarz Uyum Skoru
-                              </div>
-                              <div className="mt-0.5 text-xs text-slate-600">
-                                Japandi <span className="text-slate-300">•</span> sıcak minimal
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 text-right">
-                          <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-900 tabular-nums">
-                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
-                            92%
-                          </div>
-                          <div className="mt-1 text-[11px] text-slate-500">AI hesapladı</div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <div className="h-2.5 rounded-full bg-black/10 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-linear-to-r from-emerald-500 via-indigo-500 to-violet-500"
-                            style={{ width: "92%" }}
-                          />
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                          <span>Benzer zevk</span>
-                          <span>Yüksek uyum</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Keşfetme Oyunu (Swipe hissi) */}
-                  <div className="mt-4">
-                    <Link href="/oyun" className="group block">
-                      <Card className="relative overflow-hidden p-4 md:p-5">
-                        <div className="pointer-events-none absolute -left-12 -bottom-12 h-44 w-44 rounded-full bg-rose-500/10 blur-2xl" />
-                        <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-emerald-500/10 blur-2xl" />
-
-                        <div className="relative flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-                              <div className="text-sm font-semibold text-slate-900">
-                                Keşfetme Oyunu
-                              </div>
-                            </div>
-
-                            <div className="mt-1 text-xs text-slate-600">
-                              Swipe hissiyle hızlı karar ver — zevkin netleşsin.
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                              <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/75 px-3 py-1.5 text-[11px] font-semibold text-rose-600">
-                                <span className="grid h-6 w-6 place-items-center rounded-full bg-rose-500/10 text-rose-700">
-                                  ✕
-                                </span>
-
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="evl-swipe-left inline-flex items-center" aria-hidden="true">
-                                    <span className="text-rose-400">‹</span>
-                                    <span className="text-rose-400 -ml-0.5">‹</span>
-                                  </span>
-                                  <span>Geç</span>
-                                </span>
-
-                                <span className="text-rose-400/80" aria-hidden="true">
-                                  sol
-                                </span>
-                              </span>
-
-                              <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/75 px-3 py-1.5 text-[11px] font-semibold text-emerald-700">
-                                <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500/10 text-emerald-800">
-                                  ♥
-                                </span>
-
-                                <span className="inline-flex items-center gap-1">
-                                  <span>Beğen</span>
-                                  <span className="evl-swipe-right inline-flex items-center" aria-hidden="true">
-                                    <span className="text-emerald-400">›</span>
-                                    <span className="text-emerald-400 -ml-0.5">›</span>
-                                  </span>
-                                </span>
-
-                                <span className="text-emerald-400/80" aria-hidden="true">
-                                  sağ
-                                </span>
-                              </span>
-
-                              <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500">
-                                <span className="text-slate-400" aria-hidden="true">
-                                  •
-                                </span>
-                                koleksiyona ekle
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="relative shrink-0">
-                            <div className="relative h-20 w-28 md:h-24 md:w-32">
-                              <div className="absolute inset-0 rounded-2xl border border-black/10 bg-white/55 shadow-sm rotate-[-8deg]" />
-                              <div className="absolute inset-0 rounded-2xl border border-black/10 bg-white/65 shadow-sm rotate-6 translate-x-1 translate-y-1" />
-
-                              <div className="absolute inset-0 overflow-hidden rounded-2xl border border-black/10 bg-white shadow-md evl-swipe-nudge">
-                                <img
-                                  src="https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=700&q=70"
-                                  alt="Swipe preview"
-                                  className="h-full w-full object-cover"
-                                  loading="lazy"
-                                />
-
-                                <div
-                                  className="absolute inset-x-0 bottom-0 px-2 py-1 text-[10px] font-semibold text-white"
-                                  style={{
-                                    background:
-                                      "linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))",
-                                  }}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="inline-flex items-center gap-1">
-                                      <span className="text-rose-300">←</span> Geç
-                                    </span>
-                                    <span className="inline-flex items-center gap-1">
-                                      Beğen <span className="text-emerald-300">→</span>
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="relative mt-4 flex items-center justify-between gap-3">
-                          <div className="text-xs text-slate-600">
-                            30 saniye oyna → AI daha iyi önerir
-                          </div>
-
-                          <span className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition group-hover:bg-slate-800">
-                            Dene
-                            <span className="transition-transform group-hover:translate-x-0.5">
-                              →
-                            </span>
-                          </span>
-                        </div>
-                      </Card>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* PROJECTS */}
-      <section className="mt-12">
+      <section className={isLoggedIn ? "mt-6" : "mt-12"}>
         <div className="flex items-end justify-between gap-4">
           <SectionTitle
             eyebrow="İLHAM"
@@ -1387,7 +1045,7 @@ export default async function HomePage() {
         </div>
 
         {homeProjects.length > 0 ? (
-          <div className="mt-6 grid gap-5 md:grid-cols-3">
+          <div className={`mt-6 grid gap-5 ${isLoggedIn ? "md:grid-cols-2 lg:grid-cols-2" : "md:grid-cols-3"}`}>
             {homeProjects.map((p) => (
               <ProjectCard key={p.id} p={p} />
             ))}
@@ -1406,7 +1064,7 @@ export default async function HomePage() {
       </section>
 
       {/* DESIGNERS ✅ */}
-      <section className="mt-12">
+      <section className={isLoggedIn ? "mt-8" : "mt-12"}>
         <div className="flex items-end justify-between gap-4">
           <SectionTitle
             eyebrow="PROFESYONELLER"
@@ -1422,7 +1080,7 @@ export default async function HomePage() {
         </div>
 
         {designers.length > 0 ? (
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className={`mt-6 grid gap-4 ${isLoggedIn ? "md:grid-cols-2 lg:grid-cols-2" : "md:grid-cols-3"}`}>
             {designers.map((d) => (
               <DesignerCard key={d.id} d={d} />
             ))}

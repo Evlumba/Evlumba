@@ -718,17 +718,22 @@ export default function SiteHeader() {
       ),
     },
     {
-      id: "oyun",
-      href: "/oyun",
-      label: (
-        <>
-          <span className="hidden xl:inline">Keşfetme Oyunu</span>
-          <span className="xl:hidden">Oyun</span>
-        </>
-      ),
+      id: "ilanlar",
+      href: "/ilanlar",
+      label: "İlan Ver",
       icon: (
         <GlassOrb tone="violet">
-          <SwipeCardsIcon />
+          <ForumIcon />
+        </GlassOrb>
+      ),
+    },
+    {
+      id: "blog",
+      href: "/blog",
+      label: "Blog",
+      icon: (
+        <GlassOrb tone="indigo">
+          <BlogIcon />
         </GlassOrb>
       ),
     },
@@ -739,17 +744,6 @@ export default function SiteHeader() {
       icon: (
         <GlassOrb tone="indigo">
           <ForumIcon />
-        </GlassOrb>
-      ),
-    },
-    {
-      id: "ai-evini-tasarla",
-      href: "#",
-      label: "AI ile Evini Tasarla",
-      disabled: true,
-      icon: (
-        <GlassOrb tone="violet">
-          <AiHomeIcon />
         </GlassOrb>
       ),
     },
