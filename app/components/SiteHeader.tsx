@@ -844,9 +844,9 @@ export default function SiteHeader() {
                     label={n.label}
                     icon={n.icon}
                     active={pathname === n.href}
-                    disabled={Boolean(n.disabled)}
-                    aiAccent={n.id === "ai-evini-tasarla"}
-                    hideIcon={n.id === "ai-evini-tasarla"}
+                    disabled={false}
+                    aiAccent={false}
+                    hideIcon={false}
                   />
                 ))}
               </div>
@@ -934,9 +934,9 @@ export default function SiteHeader() {
                     label={n.label}
                     icon={n.icon}
                     active={pathname === n.href}
-                    disabled={Boolean(n.disabled)}
-                    aiAccent={n.id === "ai-evini-tasarla"}
-                    hideIcon={n.id === "ai-evini-tasarla"}
+                    disabled={false}
+                    aiAccent={false}
+                    hideIcon={false}
                   />
                 ))}
               </nav>
