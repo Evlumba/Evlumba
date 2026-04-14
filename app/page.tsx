@@ -1090,6 +1090,12 @@ export default async function HomePage() {
             Henüz aktif profesyonel görünmüyor. Profesyoneller eklendikçe burada listelenecek.
           </div>
         )}
+
+        <div className="mt-4 md:hidden">
+          <ButtonLink href="/tasarimcilar" variant="secondary" className="w-full py-3">
+            Tüm tasarımcılar
+          </ButtonLink>
+        </div>
       </section>
 
       {!isLoggedIn ? (
