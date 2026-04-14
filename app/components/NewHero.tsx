@@ -27,7 +27,7 @@ export default function NewHero() {
 
   return (
     <section
-      className="relative w-full overflow-hidden h-[340px] md:h-[420px] lg:h-[560px]"
+      className="relative w-full overflow-hidden h-auto aspect-video md:h-[420px] md:aspect-auto lg:h-[560px]"
       aria-label="Hero bölümü"
     >
       {/* Video */}

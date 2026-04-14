@@ -856,7 +856,7 @@ export default function SiteHeader() {
             <div className="px-3.5 pt-3 pb-3.5">
               <div className="flex items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {!isLoggedIn && (
-                  <>
+                  <div className="hidden lg:contents">
                     <Link
                       href="/ilanlar"
                       className="shrink-0 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-white/95 transition backdrop-blur shadow-[0_8px_25px_-20px_rgba(0,0,0,0.2)]"
@@ -885,7 +885,7 @@ export default function SiteHeader() {
                         Çok yakında
                       </span>
                     </div>
-                  </>
+                  </div>
                 )}
                 <form action="/kesfet" method="GET" className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="relative flex-1 min-w-0">
