@@ -257,8 +257,8 @@ async function loadSupabaseDesigners(): Promise<Designer[]> {
 
     const ids = validProfiles.map((p) => p.id);
 
-    // Fetch projects and reviews in parallel
-    const [projectsResult, reviewsResult] = await Promise.all([
+    // Fetch projects, reviews, and ranking scores in parallel
+    const [projectsResult, reviewsResult, rankingResult] = await Promise.all([
       admin
         .from("designer_projects")
         .select("designer_id, title, project_type, tags, budget_level, cover_image_url, created_at")
@@ -269,7 +269,15 @@ async function loadSupabaseDesigners(): Promise<Designer[]> {
         .from("designer_reviews")
         .select("designer_id, rating")
         .in("designer_id", ids),
+      admin.rpc("get_ranked_designers", { p_limit: 10000, p_offset: 0 }),
     ]);
+
+    const scoreByDesigner = new Map<string, number>();
+    if (!rankingResult.error && Array.isArray(rankingResult.data)) {
+      for (const row of rankingResult.data as Array<{ designer_id: string; score: number }>) {
+        scoreByDesigner.set(row.designer_id, Number(row.score) || 0);
+      }
+    }
 
     const projectRows = !projectsResult.error && projectsResult.data ? (projectsResult.data as ProjectRow[]) : [];
     const reviews = reviewsResult.data;
@@ -402,6 +410,12 @@ async function loadSupabaseDesigners(): Promise<Designer[]> {
         },
       });
     }
+
+    dynamicDesigners.sort((a, b) => {
+      const scoreA = scoreByDesigner.get(a.liveDesignerId ?? "") ?? 0;
+      const scoreB = scoreByDesigner.get(b.liveDesignerId ?? "") ?? 0;
+      return scoreB - scoreA;
+    });
 
     return dynamicDesigners;
   } catch {
