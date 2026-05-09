@@ -75,6 +75,7 @@ type ProfileRow = {
   id: string;
   full_name: string | null;
   business_name: string | null;
+  slug: string | null;
   specialty: string | null;
   city: string | null;
   contact_email: string | null;
@@ -102,11 +103,11 @@ type ReviewAggRow = {
 };
 
 const PROFILE_SELECT =
-  "id, full_name, business_name, specialty, city, contact_email, tags, starting_from, about_details, business_details, cover_photo_url, avatar_url";
+  "id, full_name, business_name, slug, specialty, city, contact_email, tags, starting_from, about_details, business_details, cover_photo_url, avatar_url";
 
 const PROFILE_SEARCH_COLUMNS = ["full_name", "business_name", "specialty", "city", "starting_from"];
-const DESIGNER_PAGE_LIMIT = 240;
-const DESIGNER_PROJECT_LIMIT = 900;
+const SUPABASE_FETCH_PAGE_SIZE = 1000;
+const RELATION_ID_CHUNK_SIZE = 450;
 
 type DesignersReadClient =
   | ReturnType<typeof getSupabaseAdminClient>
@@ -167,38 +168,105 @@ function uniqueProfiles(rows: ProfileRow[]) {
   return result;
 }
 
+function chunkArray<T>(items: T[], chunkSize: number) {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+async function fetchDesignerProfiles(db: DesignersReadClient, searchFilter = "") {
+  const rows: ProfileRow[] = [];
+  let from = 0;
+
+  while (true) {
+    let query = db
+      .from("profiles")
+      .select(PROFILE_SELECT)
+      .in("role", ["designer", "designer_pending"])
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + SUPABASE_FETCH_PAGE_SIZE - 1);
+
+    if (searchFilter) query = query.or(searchFilter);
+
+    const { data, error } = await query;
+    if (error) return { data: rows, error };
+
+    const page = (data ?? []) as ProfileRow[];
+    rows.push(...page);
+    if (page.length < SUPABASE_FETCH_PAGE_SIZE) break;
+    from += SUPABASE_FETCH_PAGE_SIZE;
+  }
+
+  return { data: rows, error: null };
+}
+
+async function fetchPublishedProjects(db: DesignersReadClient, ids: string[]) {
+  const rows: ProjectRow[] = [];
+
+  for (const chunk of chunkArray(ids, RELATION_ID_CHUNK_SIZE)) {
+    let from = 0;
+    while (true) {
+      const { data, error } = await db
+        .from("designer_projects")
+        .select("designer_id, title, project_type, tags, budget_level, cover_image_url, created_at")
+        .in("designer_id", chunk)
+        .eq("is_published", true)
+        .order("created_at", { ascending: false })
+        .range(from, from + SUPABASE_FETCH_PAGE_SIZE - 1);
+
+      if (error) break;
+
+      const page = (data ?? []) as ProjectRow[];
+      rows.push(...page);
+      if (page.length < SUPABASE_FETCH_PAGE_SIZE) break;
+      from += SUPABASE_FETCH_PAGE_SIZE;
+    }
+  }
+
+  return rows;
+}
+
+async function fetchDesignerReviews(db: DesignersReadClient, ids: string[]) {
+  const rows: ReviewAggRow[] = [];
+
+  for (const chunk of chunkArray(ids, RELATION_ID_CHUNK_SIZE)) {
+    let from = 0;
+    while (true) {
+      const { data, error } = await db
+        .from("designer_reviews")
+        .select("designer_id, rating")
+        .in("designer_id", chunk)
+        .range(from, from + SUPABASE_FETCH_PAGE_SIZE - 1);
+
+      if (error) break;
+
+      const page = (data ?? []) as ReviewAggRow[];
+      rows.push(...page);
+      if (page.length < SUPABASE_FETCH_PAGE_SIZE) break;
+      from += SUPABASE_FETCH_PAGE_SIZE;
+    }
+  }
+
+  return rows;
+}
+
 async function loadSupabaseDesigners(searchQuery = ""): Promise<Designer[]> {
   try {
     const db = await getDesignersReadClient();
     const searchFilter = buildProfileSearchFilter(searchQuery);
-    const baseProfilesQuery = () =>
-      db
-        .from("profiles")
-        .select(PROFILE_SELECT)
-        .in("role", ["designer", "designer_pending"])
-        .order("created_at", { ascending: true })
-        .order("id", { ascending: true })
-        .range(0, DESIGNER_PAGE_LIMIT - 1);
 
-    const searchedProfilesQuery = () =>
-      db
-        .from("profiles")
-        .select(PROFILE_SELECT)
-        .in("role", ["designer", "designer_pending"])
-        .or(searchFilter)
-        .order("created_at", { ascending: true })
-        .order("id", { ascending: true })
-        .range(0, DESIGNER_PAGE_LIMIT - 1);
-
-    const primaryProfilesResult = searchFilter ? await searchedProfilesQuery() : await baseProfilesQuery();
+    const primaryProfilesResult = await fetchDesignerProfiles(db, searchFilter);
     const shouldFallbackToBase =
       Boolean(searchFilter) &&
       (!primaryProfilesResult.data?.length || Boolean(primaryProfilesResult.error));
-    const fallbackProfilesResult = shouldFallbackToBase ? await baseProfilesQuery() : null;
+    const fallbackProfilesResult = shouldFallbackToBase ? await fetchDesignerProfiles(db) : null;
     const profilesError = primaryProfilesResult.error && !fallbackProfilesResult?.data?.length;
     const profiles = uniqueProfiles([
-      ...(((primaryProfilesResult.data ?? []) as ProfileRow[])),
-      ...(((fallbackProfilesResult?.data ?? []) as ProfileRow[])),
+      ...(primaryProfilesResult.data ?? []),
+      ...(fallbackProfilesResult?.data ?? []),
     ]);
 
     if (profilesError || !profiles.length) return [];
@@ -208,22 +276,10 @@ async function loadSupabaseDesigners(searchQuery = ""): Promise<Designer[]> {
 
     const ids = validProfiles.map((p) => p.id);
 
-    const [projectsResult, reviewsResult] = await Promise.all([
-      db
-        .from("designer_projects")
-        .select("designer_id, title, project_type, tags, budget_level, cover_image_url, created_at")
-        .in("designer_id", ids)
-        .eq("is_published", true)
-        .order("created_at", { ascending: false })
-        .limit(DESIGNER_PROJECT_LIMIT),
-      db
-        .from("designer_reviews")
-        .select("designer_id, rating")
-        .in("designer_id", ids),
+    const [projectRows, reviews] = await Promise.all([
+      fetchPublishedProjects(db, ids),
+      fetchDesignerReviews(db, ids),
     ]);
-
-    const projectRows = !projectsResult.error && projectsResult.data ? (projectsResult.data as ProjectRow[]) : [];
-    const reviews = reviewsResult.data;
 
     const reviewStats = new Map<string, { count: number; total: number }>();
     for (const row of ((reviews ?? []) as ReviewAggRow[])) {
@@ -291,7 +347,7 @@ async function loadSupabaseDesigners(searchQuery = ""): Promise<Designer[]> {
         .filter(Boolean)
         .join(" ");
       dynamicDesigners.push({
-        slug: slugById.get(profile.id) || `mimar${dynamicDesigners.length + 1}`,
+        slug: profile.slug?.trim() || slugById.get(profile.id) || `mimar${dynamicDesigners.length + 1}`,
         liveDesignerId: profile.id,
         name: displayName,
         title: professionalTitle(professionalTypes),

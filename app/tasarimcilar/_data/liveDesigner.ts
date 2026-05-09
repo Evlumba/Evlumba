@@ -20,6 +20,8 @@ import {
 } from "./profileGeneralMapping";
 import { buildUniqueDesignerSlugs } from "./slugs";
 
+const SUPABASE_FETCH_PAGE_SIZE = 1000;
+
 type ProfileRow = {
   id: string;
   full_name: string | null;
@@ -167,6 +169,30 @@ function toYearMonth(dateString: string) {
   return `${date.getFullYear()}-${m}`;
 }
 
+async function fetchAllSlugProfiles(db: SupabaseReadClient) {
+  const rows: Array<{ id: string; full_name: string | null; business_name: string | null }> = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await db
+      .from("profiles")
+      .select("id, full_name, business_name")
+      .in("role", ["designer", "designer_pending"])
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + SUPABASE_FETCH_PAGE_SIZE - 1);
+
+    if (error) return rows;
+
+    const page = (data ?? []) as Array<{ id: string; full_name: string | null; business_name: string | null }>;
+    rows.push(...page);
+    if (page.length < SUPABASE_FETCH_PAGE_SIZE) break;
+    from += SUPABASE_FETCH_PAGE_SIZE;
+  }
+
+  return rows;
+}
+
 async function computeResponseLabel(designerId: string, db: SupabaseReadClient) {
   const { data: conversations, error: conversationsError } = await db
     .from("conversations")
@@ -230,16 +256,21 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
   }
 
   if (!designerId) {
-    const { data: slugProfiles } = await db
+    const { data: profileBySlug } = await db
       .from("profiles")
-      .select("id, full_name, business_name")
+      .select("id")
+      .eq("slug", slug)
       .in("role", ["designer", "designer_pending"])
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true });
+      .maybeSingle();
 
+    if (profileBySlug?.id) designerId = profileBySlug.id;
+  }
+
+  if (!designerId) {
+    const slugProfiles = await fetchAllSlugProfiles(db);
     if (!slugProfiles || slugProfiles.length === 0) return null;
     const slugMap = buildUniqueDesignerSlugs(
-      slugProfiles as Array<{ id: string; full_name: string | null; business_name: string | null }>,
+      slugProfiles,
       FEATURED_DESIGNERS.map((d) => d.slug)
     );
     for (const [id, s] of slugMap.entries()) {
