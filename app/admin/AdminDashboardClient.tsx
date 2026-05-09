@@ -316,6 +316,9 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   const [banners, setBanners] = useState<{ slot: number; image_url: string | null }[]>([
     { slot: 1, image_url: null },
     { slot: 2, image_url: null },
+    { slot: 3, image_url: null },
+    { slot: 4, image_url: null },
+    { slot: 5, image_url: null },
   ]);
   const [bannerUploading, setBannerUploading] = useState<number | null>(null);
   const [bannerError, setBannerError] = useState<string | null>(null);
@@ -2561,11 +2564,11 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
           {bannerError ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{bannerError}</div>
           ) : null}
-          {([1, 2] as const).map((slot) => {
+          {([1, 2, 3, 4, 5] as const).map((slot) => {
             const banner = banners.find((b) => b.slot === slot);
-            const slotLabel = slot === 1
-              ? "App — Banner 1 (Kategorilerden Sonra)"
-              : "App — Banner 2 (Profesyonellerden Sonra)";
+            const slotLabel = slot <= 4
+              ? `App — Üst Banner ${slot} (Ana sayfa carousel)`
+              : "App — Alt Banner (Profesyonellerden Sonra)";
             const dimInfo = "Önerilen boyut: 1080 × 400px (yatay, 2.7:1 oran). Maks. 5 MB.";
             return (
               <div key={slot} className="rounded-2xl border border-black/10 bg-white p-4">
