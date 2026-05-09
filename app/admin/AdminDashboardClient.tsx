@@ -204,6 +204,25 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "admins", label: "Admin Yetkileri" },
 ];
 
+type BannerSlotConfig = {
+  slot: number;
+  labelNo: number;
+};
+
+const TOP_BANNER_SLOTS: BannerSlotConfig[] = [
+  { slot: 1, labelNo: 1 },
+  { slot: 3, labelNo: 2 },
+  { slot: 4, labelNo: 3 },
+];
+
+const LOWER_BANNER_SLOTS: BannerSlotConfig[] = [
+  { slot: 2, labelNo: 1 },
+  { slot: 5, labelNo: 2 },
+  { slot: 6, labelNo: 3 },
+];
+
+const APP_BANNER_SLOTS = [...TOP_BANNER_SLOTS, ...LOWER_BANNER_SLOTS];
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "-";
   const date = new Date(value);
@@ -314,11 +333,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
 
   const [banners, setBanners] = useState<{ slot: number; image_url: string | null }[]>([
-    { slot: 1, image_url: null },
-    { slot: 2, image_url: null },
-    { slot: 3, image_url: null },
-    { slot: 4, image_url: null },
-    { slot: 5, image_url: null },
+    ...APP_BANNER_SLOTS.map(({ slot }) => ({ slot, image_url: null })),
   ]);
   const [bannerUploading, setBannerUploading] = useState<number | null>(null);
   const [bannerError, setBannerError] = useState<string | null>(null);
@@ -1008,7 +1023,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
     }
   }
 
-  async function uploadBanner(slot: number, file: File) {
+  async function uploadBanner(slot: number, file: File, label = `Banner ${slot}`) {
     if (file.size > 5 * 1024 * 1024) {
       setBannerError("Dosya boyutu 5 MB'dan büyük olamaz.");
       return;
@@ -1030,7 +1045,7 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
         .upsert({ slot, image_url: imageUrl, updated_at: new Date().toISOString() }, { onConflict: "slot" });
       if (dbError) throw dbError;
       setBanners(prev => prev.map(b => b.slot === slot ? { ...b, image_url: imageUrl } : b));
-      setSuccessMessage(`Banner ${slot} başarıyla yüklendi.`);
+      setSuccessMessage(`${label} başarıyla yüklendi.`);
     } catch (err) {
       const msg =
         err instanceof Error
@@ -2564,52 +2579,73 @@ export default function AdminDashboardClient({ currentRole, currentUserId }: Das
           {bannerError ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{bannerError}</div>
           ) : null}
-          {([1, 2, 3, 4, 5] as const).map((slot) => {
-            const banner = banners.find((b) => b.slot === slot);
-            const slotLabel = slot <= 4
-              ? `App — Üst Banner ${slot} (Ana sayfa carousel)`
-              : "App — Alt Banner (Profesyonellerden Sonra)";
-            const dimInfo = "Önerilen boyut: 1080 × 400px (yatay, 2.7:1 oran). Maks. 5 MB.";
-            return (
-              <div key={slot} className="rounded-2xl border border-black/10 bg-white p-4">
-                <h2 className="text-base font-semibold text-slate-900">{slotLabel}</h2>
-                <p className="mt-1 text-xs text-slate-500">{dimInfo}</p>
-                {banner?.image_url ? (
-                  <div className="mt-3">
-                    <img
-                      src={banner.image_url}
-                      alt={`Banner ${slot}`}
-                      className="w-full rounded-xl object-cover"
-                      style={{ aspectRatio: "2.7 / 1" }}
-                    />
-                  </div>
-                ) : (
-                  <div className="mt-3 flex h-24 items-center justify-center rounded-xl border-2 border-dashed border-black/10 bg-slate-50 text-sm text-slate-400">
-                    Henüz banner yüklenmedi
-                  </div>
-                )}
-                <div className="mt-3">
-                  <label className="block">
-                    <span className="sr-only">Banner seç</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={bannerUploading !== null}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) void uploadBanner(slot, file);
-                        e.target.value = "";
-                      }}
-                      className="block w-full text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-xl file:border file:border-black/10 file:bg-white file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 disabled:opacity-60"
-                    />
-                  </label>
-                  {bannerUploading === slot ? (
-                    <p className="mt-2 text-xs text-slate-500">Yükleniyor...</p>
-                  ) : null}
-                </div>
+          {[
+            {
+              title: "App — Üst Bannerlar",
+              description: "Ana sayfanın en üstündeki kayan carousel. Sadece bu 3 banner loop'a girer.",
+              slots: TOP_BANNER_SLOTS,
+              labelPrefix: "Üst Banner",
+            },
+            {
+              title: "App — Alt Bannerlar",
+              description: "Profesyoneller bölümünden sonra görünen ayrı alt banner alanı. Üst carousel'e dahil edilmez.",
+              slots: LOWER_BANNER_SLOTS,
+              labelPrefix: "Alt Banner",
+            },
+          ].map((section) => (
+            <div key={section.title} className="rounded-2xl border border-black/10 bg-white p-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
+                <p className="mt-1 text-sm text-slate-500">{section.description}</p>
               </div>
-            );
-          })}
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                {section.slots.map(({ slot, labelNo }) => {
+                  const banner = banners.find((b) => b.slot === slot);
+                  const slotLabel = `App — ${section.labelPrefix} ${labelNo}`;
+                  const dimInfo = "Önerilen boyut: 1080 × 400px (yatay, 2.7:1 oran). Maks. 5 MB.";
+                  return (
+                    <div key={slot} className="rounded-2xl border border-black/10 bg-slate-50 p-4">
+                      <h3 className="text-base font-semibold text-slate-900">{slotLabel}</h3>
+                      <p className="mt-1 text-xs text-slate-500">{dimInfo}</p>
+                      {banner?.image_url ? (
+                        <div className="mt-3">
+                          <img
+                            src={banner.image_url}
+                            alt={slotLabel}
+                            className="w-full rounded-xl object-cover"
+                            style={{ aspectRatio: "2.7 / 1" }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="mt-3 flex h-24 items-center justify-center rounded-xl border-2 border-dashed border-black/10 bg-white text-sm text-slate-400">
+                          Henüz banner yüklenmedi
+                        </div>
+                      )}
+                      <div className="mt-3">
+                        <label className="block">
+                          <span className="sr-only">Banner seç</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={bannerUploading !== null}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) void uploadBanner(slot, file, slotLabel);
+                              e.target.value = "";
+                            }}
+                            className="block w-full text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-xl file:border file:border-black/10 file:bg-white file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-50 disabled:opacity-60"
+                          />
+                        </label>
+                        {bannerUploading === slot ? (
+                          <p className="mt-2 text-xs text-slate-500">Yükleniyor...</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
           {/* ── Popup Yönetimi ──────────────────────────────── */}
           <div className="mt-8 border-t border-slate-200 pt-6">
