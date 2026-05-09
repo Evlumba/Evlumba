@@ -4,6 +4,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { toast } from "@/lib/toast";
+import {
+  DEFAULT_GENERAL_DRAFT,
+  GeneralProfileForm,
+  PROFESSIONAL_TYPE_OPTIONS,
+  buildProfileGeneralPayload,
+  normalizeProfileGeneralInput,
+  validateProfileGeneralDraft,
+  type GeneralErrors,
+  type ProfileGeneralDraft,
+} from "./profile-general";
 
 const tabs = [
   { id: "general", label: "Genel" },
@@ -21,23 +31,10 @@ const COVER_MAX_BYTES = COVER_MAX_MB * 1024 * 1024;
 
 type TabId = (typeof tabs)[number]["id"];
 
-type DesignerProfileDraft = {
-  fullName: string;
-  businessName: string;
-  specialty: string;
-  projectTypesText: string;
-  servicesText: string;
-  city: string;
-  tagsText: string;
-  startingFrom: string;
-
+type DesignerProfileDraft = ProfileGeneralDraft & {
   aboutHeadline: string;
   aboutBio: string;
-  aboutSpecialtiesText: string;
-  aboutServiceAreasText: string;
   aboutLanguagesText: string;
-  aboutTeamSize: string;
-  aboutAvailability: string;
 
   phone: string;
   contactEmail: string;
@@ -56,26 +53,14 @@ type DesignerProfileDraft = {
   workingSunday: string;
 
   coverPhotoUrl: string;
-  avatarUrl: string;
 };
 
 const DEFAULT_DRAFT: DesignerProfileDraft = {
-  fullName: "",
-  businessName: "",
-  specialty: "",
-  projectTypesText: "",
-  servicesText: "",
-  city: "",
-  tagsText: "",
-  startingFrom: "",
+  ...DEFAULT_GENERAL_DRAFT,
 
   aboutHeadline: "",
   aboutBio: "",
-  aboutSpecialtiesText: "",
-  aboutServiceAreasText: "",
   aboutLanguagesText: "",
-  aboutTeamSize: "",
-  aboutAvailability: "",
 
   phone: "",
   contactEmail: "",
@@ -336,6 +321,7 @@ export default function DesignerProfileEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [generalErrors, setGeneralErrors] = useState<GeneralErrors>({});
   const [authEmail, setAuthEmail] = useState("");
   const [securityLoading, setSecurityLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -413,6 +399,7 @@ export default function DesignerProfileEditPage() {
 
           if (!cancelled) {
             setAboutDetailsBase({ ...aboutDetails });
+            const profileGeneral = (aboutDetails.profileGeneral ?? {}) as Record<string, unknown>;
             const resolvedFullName = firstNonEmpty(
               profile?.full_name,
               googleAccount ? googleName : "",
@@ -428,13 +415,42 @@ export default function DesignerProfileEditPage() {
             setDraft({
               ...DEFAULT_DRAFT,
               ...local,
+              ...normalizeProfileGeneralInput({
+                ...profileGeneral,
+                fullName: resolvedFullName,
+                businessName: profile?.business_name ?? local.businessName ?? "",
+                avatarUrl: profile?.avatar_url ?? local.avatarUrl ?? "",
+                city: profileGeneral.city ?? profile?.city ?? local.city ?? "",
+                cities: profileGeneral.cities ?? profileGeneral.city ?? profile?.city ?? local.cities ?? local.city ?? "",
+                tags: profileGeneral.tags ?? profile?.tags ?? local.tags,
+                startingBudget:
+                  profileGeneral.startingBudget ??
+                  profile?.starting_from ??
+                  local.startingBudget,
+                legacySpecialty: profile?.specialty ?? "",
+                professionalTypes:
+                  profileGeneral.professionalTypes ?? local.professionalTypes ?? profile?.specialty,
+                services:
+                  profileGeneral.services ??
+                  local.services ??
+                  (aboutDetails.services as string[] | undefined),
+                projectTypes:
+                  profileGeneral.projectTypes ??
+                  local.projectTypes ??
+                  (aboutDetails.projectTypes as string[] | undefined),
+                serviceAreas:
+                  profileGeneral.serviceAreas ??
+                  local.serviceAreas ??
+                  (aboutDetails.serviceAreas as string[] | undefined),
+                styleExpertise:
+                  profileGeneral.styleExpertise ?? local.styleExpertise,
+                district: profileGeneral.district ?? local.district,
+                serviceRegions:
+                  profileGeneral.serviceRegions ?? local.serviceRegions,
+                workingModels:
+                  profileGeneral.workingModels ?? local.workingModels,
+              }),
               fullName: resolvedFullName,
-              avatarUrl: profile?.avatar_url ?? local.avatarUrl ?? "",
-              businessName: profile?.business_name ?? local.businessName ?? "",
-              specialty: profile?.specialty ?? local.specialty ?? "",
-              projectTypesText: toCsv(aboutDetails.projectTypes as string[] | undefined),
-              servicesText: toCsv(aboutDetails.services as string[] | undefined),
-              city: profile?.city ?? local.city ?? "",
               phone: profile?.phone ?? local.phone ?? "",
               contactEmail: resolvedContactEmail,
               address: profile?.address ?? local.address ?? "",
@@ -444,15 +460,9 @@ export default function DesignerProfileEditPage() {
               facebook: profile?.facebook ?? local.facebook ?? "",
               linkedin: profile?.linkedin ?? local.linkedin ?? "",
               coverPhotoUrl: profile?.cover_photo_url ?? local.coverPhotoUrl ?? "",
-              tagsText: toCsv(profile?.tags as string[] | undefined),
-              startingFrom: profile?.starting_from ?? local.startingFrom ?? "",
               aboutHeadline: (aboutDetails.headline as string | undefined) ?? local.aboutHeadline ?? "",
               aboutBio: (aboutDetails.bio as string | undefined) ?? local.aboutBio ?? "",
-              aboutSpecialtiesText: toCsv(aboutDetails.specialties as string[] | undefined),
-              aboutServiceAreasText: toCsv(aboutDetails.serviceAreas as string[] | undefined),
               aboutLanguagesText: toCsv(aboutDetails.languages as string[] | undefined),
-              aboutTeamSize: (aboutDetails.teamSize as string | undefined) ?? local.aboutTeamSize ?? "",
-              aboutAvailability: (aboutDetails.availability as string | undefined) ?? local.aboutAvailability ?? "",
               employees: (businessDetails.employees as string | undefined) ?? local.employees ?? "",
               founded: (businessDetails.founded as string | undefined) ?? local.founded ?? "",
               license: (businessDetails.license as string | undefined) ?? local.license ?? "",
@@ -483,6 +493,11 @@ export default function DesignerProfileEditPage() {
 
 async function onPickAvatar(file: File | null) {
   if (!file) return;
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowedTypes.includes(file.type)) {
+    toast("Sadece jpg, jpeg, png veya webp yükleyebilirsin.");
+    return;
+  }
   try {
       const url = await fileToDataUrl(file);
       setDraft((prev) => ({ ...prev, avatarUrl: url }));
@@ -524,21 +539,22 @@ async function onPickCover(file: File | null) {
 
   async function saveProfile() {
     if (!userId) return;
-    const normalizedFullName = draft.fullName.trim();
+    const normalizedGeneralDraft = normalizeProfileGeneralInput(draft);
+    const nextGeneralErrors = validateProfileGeneralDraft(normalizedGeneralDraft);
+    if (Object.keys(nextGeneralErrors).length > 0) {
+      setGeneralErrors(nextGeneralErrors);
+      setActiveTab("general");
+      setMessage("Genel bilgilerde eksik veya hatalı alanlar var.");
+      return;
+    }
+    setGeneralErrors({});
+
+    const profileGeneral = buildProfileGeneralPayload(normalizedGeneralDraft);
+    const normalizedFullName = profileGeneral.displayName;
     const normalizedContactEmail = draft.contactEmail.trim();
     const normalizedInstagram = normalizeInstagramHandle(draft.instagram);
 
-    if (!normalizedFullName) {
-      setMessage("Tam ad zorunlu.");
-      setActiveTab("general");
-      return;
-    }
-    if (!draft.city.trim()) {
-      setMessage("Şehir zorunlu.");
-      setActiveTab("general");
-      return;
-    }
-    if (!normalizedContactEmail || !isValidEmail(normalizedContactEmail)) {
+    if (activeTab === "contact" && (!normalizedContactEmail || !isValidEmail(normalizedContactEmail))) {
       setMessage("Geçerli bir iletişim e-postası zorunlu.");
       setActiveTab("contact");
       return;
@@ -549,15 +565,10 @@ async function onPickCover(file: File | null) {
       const supabase = getSupabaseBrowserClient();
       const aboutDetails: Record<string, unknown> = {
         ...aboutDetailsBase,
+        profileGeneral,
         headline: draft.aboutHeadline || null,
         bio: draft.aboutBio || null,
-        projectTypes: splitCsv(draft.projectTypesText),
-        services: splitCsv(draft.servicesText),
-        specialties: splitCsv(draft.aboutSpecialtiesText),
-        serviceAreas: splitCsv(draft.aboutServiceAreasText),
         languages: splitCsv(draft.aboutLanguagesText),
-        teamSize: draft.aboutTeamSize || null,
-        availability: draft.aboutAvailability || null,
       };
       const businessDetails = {
         employees: draft.employees || null,
@@ -574,15 +585,17 @@ async function onPickCover(file: File | null) {
         id: userId,
         role: "designer",
         full_name: normalizedFullName,
-        business_name: draft.businessName || null,
-        specialty: draft.specialty || null,
-        city: draft.city.trim(),
-        tags: splitCsv(draft.tagsText),
-        starting_from: draft.startingFrom || null,
-        avatar_url: draft.avatarUrl || null,
+        business_name: profileGeneral.businessName || null,
+        specialty: profileGeneral.professionalTypes.length === PROFESSIONAL_TYPE_OPTIONS.length
+          ? "Profesyonel"
+          : profileGeneral.professionalTypes.join(" · "),
+        city: profileGeneral.city,
+        tags: profileGeneral.tags,
+        starting_from: profileGeneral.startingBudget || null,
+        avatar_url: profileGeneral.profileImageUrl || null,
         cover_photo_url: draft.coverPhotoUrl || null,
         phone: draft.phone || null,
-        contact_email: normalizedContactEmail,
+        contact_email: normalizedContactEmail && isValidEmail(normalizedContactEmail) ? normalizedContactEmail : null,
         address: draft.address || null,
         konum: draft.konum || null,
         website: draft.website || null,
@@ -601,6 +614,7 @@ async function onPickCover(file: File | null) {
 
       const draftToPersist = {
         ...draft,
+        ...normalizedGeneralDraft,
         fullName: normalizedFullName,
         contactEmail: normalizedContactEmail,
         instagram: normalizedInstagram,
@@ -608,8 +622,13 @@ async function onPickCover(file: File | null) {
       setAboutDetailsBase(aboutDetails);
       setDraft(draftToPersist);
       saveLocalDraft(userId, draftToPersist);
-      setMessage("Profil kaydedildi.");
-      toast("Profil kaydedildi");
+      const successMessage = activeTab === "general" ? "Genel bilgiler kaydedildi." : "Profil kaydedildi.";
+      setMessage(successMessage);
+      toast(successMessage);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Bilgiler kaydedilemedi. Lütfen tekrar deneyin.";
+      setMessage(message);
+      toast(activeTab === "general" ? "Bilgiler kaydedilemedi. Lütfen tekrar deneyin." : message);
     } finally {
       setSaving(false);
     }
@@ -732,49 +751,23 @@ async function onPickCover(file: File | null) {
           {loading ? <div className="text-sm text-slate-600">Yükleniyor...</div> : null}
 
           {!loading && activeTab === "general" ? (
-            <div className="space-y-3">
-              <h2 className="text-xl font-semibold">Genel Bilgiler</h2>
-              <div className="grid gap-5 md:grid-cols-[220px_1fr]">
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
-                  <div className="text-sm text-slate-600">Profil Fotoğrafı</div>
-                  <div className="mt-3 flex justify-center">
-                    {draft.avatarUrl ? (
-                      <img src={draft.avatarUrl} alt="Profil" className="h-24 w-24 rounded-full border object-cover" />
-                    ) : (
-                      <div className="flex h-24 w-24 items-center justify-center rounded-full border bg-white text-xs text-slate-400">Yok</div>
-                    )}
-                  </div>
-                  <input type="file" accept="image/*" className="mt-3 w-full text-xs" onChange={(e) => void onPickAvatar(e.target.files?.[0] ?? null)} />
-                </div>
-                <div className="space-y-3">
-                  <input
-                    className={inputCls}
-                    value={draft.fullName}
-                    onChange={(e) => setDraft((p) => ({ ...p, fullName: e.target.value }))}
-                    placeholder="Tam Ad (zorunlu)"
-                    readOnly={false}
-                    aria-readonly={false}
-                  />
-                  <input className={inputCls} value={draft.specialty} onChange={(e) => setDraft((p) => ({ ...p, specialty: e.target.value }))} placeholder="İş Türü (zorunlu önerilir)" />
-                  <input
-                    className={inputCls}
-                    value={draft.projectTypesText}
-                    onChange={(e) => setDraft((p) => ({ ...p, projectTypesText: e.target.value }))}
-                    placeholder="Proje türleri (virgülle: Komple yenileme, Planlama)"
-                  />
-                  <input
-                    className={inputCls}
-                    value={draft.servicesText}
-                    onChange={(e) => setDraft((p) => ({ ...p, servicesText: e.target.value }))}
-                    placeholder="Hizmetler (virgülle: Danışmanlık, Uygulama)"
-                  />
-                  <input className={inputCls} value={draft.city} onChange={(e) => setDraft((p) => ({ ...p, city: e.target.value }))} placeholder="Şehir (zorunlu)" />
-                  <input className={inputCls} value={draft.businessName} onChange={(e) => setDraft((p) => ({ ...p, businessName: e.target.value }))} placeholder="İşletme Adı" />
-                  <input className={inputCls} value={draft.tagsText} onChange={(e) => setDraft((p) => ({ ...p, tagsText: e.target.value }))} placeholder="Etiketler (virgülle)" />
-                  <input className={inputCls} value={draft.startingFrom} onChange={(e) => setDraft((p) => ({ ...p, startingFrom: e.target.value }))} placeholder="Başlangıç fiyatı (örn: ₺15K+)" />
-                </div>
-              </div>
-            </div>
+            <GeneralProfileForm
+              draft={draft}
+              errors={generalErrors}
+              saving={saving}
+              onChange={(patch) => {
+                setDraft((prev) => ({ ...prev, ...patch }));
+                setGeneralErrors((prev) => {
+                  const next = { ...prev };
+                  for (const key of Object.keys(patch) as Array<keyof ProfileGeneralDraft>) {
+                    delete next[key];
+                  }
+                  return next;
+                });
+              }}
+              onPickAvatar={(file) => void onPickAvatar(file)}
+              onSave={() => void saveProfile()}
+            />
           ) : null}
 
           {!loading && activeTab === "about" ? (
@@ -782,11 +775,7 @@ async function onPickCover(file: File | null) {
               <h2 className="text-xl font-semibold">Hakkında</h2>
               <input className={inputCls} value={draft.aboutHeadline} onChange={(e) => setDraft((p) => ({ ...p, aboutHeadline: e.target.value }))} placeholder="Başlık" />
               <textarea className={inputCls} rows={6} value={draft.aboutBio} onChange={(e) => setDraft((p) => ({ ...p, aboutBio: e.target.value }))} placeholder="Biyografi" />
-              <input className={inputCls} value={draft.aboutSpecialtiesText} onChange={(e) => setDraft((p) => ({ ...p, aboutSpecialtiesText: e.target.value }))} placeholder="Uzmanlıklar (virgülle)" />
-              <input className={inputCls} value={draft.aboutServiceAreasText} onChange={(e) => setDraft((p) => ({ ...p, aboutServiceAreasText: e.target.value }))} placeholder="Hizmet Bölgeleri (virgülle)" />
               <input className={inputCls} value={draft.aboutLanguagesText} onChange={(e) => setDraft((p) => ({ ...p, aboutLanguagesText: e.target.value }))} placeholder="Diller (virgülle)" />
-              <input className={inputCls} value={draft.aboutTeamSize} onChange={(e) => setDraft((p) => ({ ...p, aboutTeamSize: e.target.value }))} placeholder="Ekip büyüklüğü" />
-              <input className={inputCls} value={draft.aboutAvailability} onChange={(e) => setDraft((p) => ({ ...p, aboutAvailability: e.target.value }))} placeholder="Müsaitlik" />
             </div>
           ) : null}
 
@@ -920,12 +909,16 @@ async function onPickCover(file: File | null) {
             </div>
           ) : null}
 
-          <div className="mt-6">
-            <button type="button" onClick={() => void saveProfile()} disabled={loading || saving} className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">
-              {saving ? "Kaydediliyor..." : "Kaydet"}
-            </button>
-            {message ? <p className="mt-3 text-sm text-slate-600">{message}</p> : null}
-          </div>
+          {activeTab !== "general" ? (
+            <div className="mt-6">
+              <button type="button" onClick={() => void saveProfile()} disabled={loading || saving} className="rounded-xl bg-[#0E5A3A] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                {saving ? "Kaydediliyor..." : "Kaydet"}
+              </button>
+              {message ? <p className="mt-3 text-sm text-slate-600">{message}</p> : null}
+            </div>
+          ) : message ? (
+            <p className="mt-4 text-sm text-slate-600">{message}</p>
+          ) : null}
         </section>
       </div>
     </main>

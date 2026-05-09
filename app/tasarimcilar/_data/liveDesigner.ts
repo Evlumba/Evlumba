@@ -1,5 +1,23 @@
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import { FEATURED_DESIGNERS, type Designer, type PortfolioItem, type ReviewItem } from "./designers";
+import {
+  PROFESSIONAL_TYPE_ALIASES,
+  PROFESSIONAL_TYPE_OPTIONS,
+  PROJECT_TYPE_ALIASES,
+  PROJECT_TYPE_OPTIONS,
+  SERVICE_ALIASES,
+  SERVICE_AREA_OPTIONS,
+  SERVICE_OPTIONS,
+  SERVICE_REGION_OPTIONS,
+  STARTING_BUDGET_OPTIONS,
+  STYLE_OPTIONS,
+  TAG_OPTIONS,
+  WORKING_MODEL_OPTIONS,
+  profileGeneralArray,
+  profileGeneralString,
+  professionalTitle,
+  uniqueAllowedValues,
+} from "./profileGeneralMapping";
 import { buildUniqueDesignerSlugs } from "./slugs";
 
 type ProfileRow = {
@@ -67,6 +85,18 @@ type ReviewRow = {
 };
 
 type AdminRole = "admin" | "super_admin";
+
+type SupabaseReadClient =
+  | ReturnType<typeof getSupabaseAdminClient>
+  | Awaited<ReturnType<typeof getSupabaseServerClient>>;
+
+async function getLiveDesignerReadClient(): Promise<SupabaseReadClient> {
+  try {
+    return getSupabaseAdminClient();
+  } catch {
+    return await getSupabaseServerClient();
+  }
+}
 
 function firstNameOnly(fullName: string | null | undefined) {
   const normalized = (fullName || "").trim().replace(/\s+/g, " ");
@@ -137,24 +167,23 @@ function toYearMonth(dateString: string) {
   return `${date.getFullYear()}-${m}`;
 }
 
-async function computeResponseLabel(designerId: string) {
-  const admin = getSupabaseAdminClient();
-  const { data: conversations } = await admin
+async function computeResponseLabel(designerId: string, db: SupabaseReadClient) {
+  const { data: conversations, error: conversationsError } = await db
     .from("conversations")
     .select("id, homeowner_id, designer_id")
     .eq("designer_id", designerId);
 
-  if (!conversations || conversations.length === 0) return "24 saat içinde dönüş";
+  if (conversationsError || !conversations || conversations.length === 0) return "24 saat içinde dönüş";
 
   const conversationIds = conversations.map((c) => c.id);
   const convById = new Map(conversations.map((c) => [c.id, c]));
-  const { data: messages } = await admin
+  const { data: messages, error: messagesError } = await db
     .from("messages")
     .select("conversation_id, sender_id, created_at")
     .in("conversation_id", conversationIds)
     .order("created_at", { ascending: true });
 
-  if (!messages || messages.length === 0) return "24 saat içinde dönüş";
+  if (messagesError || !messages || messages.length === 0) return "24 saat içinde dönüş";
 
   const grouped = new Map<string, Array<{ sender_id: string; created_at: string }>>();
   for (const row of messages) {
@@ -191,7 +220,7 @@ async function computeResponseLabel(designerId: string) {
 }
 
 export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | null> {
-  const admin = getSupabaseAdminClient();
+  const db = await getLiveDesignerReadClient();
   let designerId: string | null = null;
 
   // Backward compatibility for older supa_<uuid> urls.
@@ -201,7 +230,7 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
   }
 
   if (!designerId) {
-    const { data: slugProfiles } = await admin
+    const { data: slugProfiles } = await db
       .from("profiles")
       .select("id, full_name, business_name")
       .in("role", ["designer", "designer_pending"])
@@ -223,7 +252,7 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
 
   if (!designerId) return null;
 
-  const { data: profile, error: profileError } = await admin
+  const { data: profile, error: profileError } = await db
     .from("profiles")
     .select(
       "id, full_name, role, avatar_url, business_name, specialty, city, about, phone, contact_email, konum, address, website, instagram, facebook, linkedin, cover_photo_url, tags, starting_from, about_details"
@@ -234,7 +263,7 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
 
   if (profileError || !profile) return null;
 
-  const projectsWithShopLinks = await admin
+  const projectsWithShopLinks = await db
     .from("designer_projects")
     .select(
       "id, title, project_type, location, description, tags, budget_level, cover_image_url, created_at, designer_project_images(image_url, sort_order), designer_project_shop_links(id, image_url, pos_x, pos_y, product_url, product_title, product_image_url, product_price)"
@@ -245,7 +274,7 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
 
   let projectRows = (projectsWithShopLinks.data ?? []) as ProjectRow[];
   if (projectsWithShopLinks.error && isMissingShopLinksTableError(projectsWithShopLinks.error.message)) {
-    const projectsWithoutShopLinks = await admin
+    const projectsWithoutShopLinks = await db
       .from("designer_projects")
       .select(
         "id, title, project_type, location, description, tags, budget_level, cover_image_url, created_at, designer_project_images(image_url, sort_order)"
@@ -260,7 +289,7 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
   }
   const projectById = new Map(projectRows.map((p) => [p.id, p]));
 
-  const { data: reviewRows } = await admin
+  const { data: reviewRows } = await db
     .from("designer_reviews")
     .select("id, homeowner_id, project_id, rating, work_quality_rating, communication_rating, value_rating, review_text, reply_text, helpful_count, is_pinned, created_at")
     .eq("designer_id", designerId)
@@ -277,8 +306,8 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
   let reviewerMap = new Map<string, string>();
   let reviewerAdminRoleMap = new Map<string, AdminRole>();
   if (reviewerIds.length > 0) {
-    const { data: reviewers } = await admin.from("profiles").select("id, full_name").in("id", reviewerIds);
-    const { data: reviewerAdminRoles } = await admin
+    const { data: reviewers } = await db.from("profiles").select("id, full_name").in("id", reviewerIds);
+    const { data: reviewerAdminRoles } = await db
       .from("admin_users")
       .select("user_id, role")
       .in("user_id", reviewerIds)
@@ -292,8 +321,8 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
     );
   }
 
-  const response = await computeResponseLabel(designerId);
-  const blogPostsResult = await admin
+  const response = await computeResponseLabel(designerId, db);
+  const blogPostsResult = await db
     .from("blog_posts")
     .select("id", { count: "exact", head: true })
     .eq("author_id", designerId)
@@ -366,42 +395,67 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
 
   const pinned = reviewsList.find((r) => r.pinned);
   const aboutDetails = (profile as ProfileRow).about_details ?? {};
-  const profileTags = (profile as ProfileRow).tags ?? [];
-  const projectTags = portfolio.flatMap((p) => p.tags ?? []);
-  const tags = Array.from(new Set([...profileTags, ...projectTags])).slice(0, 4);
-  const projectTypes = Array.from(new Set(portfolio.map((p) => p.room).filter(Boolean) as string[])).slice(0, 4);
-
+  const profileGeneral = (aboutDetails.profileGeneral ?? {}) as Record<string, unknown>;
   const p = profile as ProfileRow;
   const instagramHandle = normalizeInstagramHandle(p.instagram);
-  const aboutProjectTypes = Array.isArray(aboutDetails.projectTypes)
-    ? (aboutDetails.projectTypes as string[]).map((x) => x.trim()).filter(Boolean)
+  const generalProfessionalTypes = profileGeneralArray(profileGeneral, "professionalTypes", PROFESSIONAL_TYPE_OPTIONS);
+  const fallbackProfessionalTypes = uniqueAllowedValues(
+    p.specialty?.replace(/\s*-\s*/g, ",").replace(/\s*\/\s*/g, ",") ?? "",
+    PROFESSIONAL_TYPE_OPTIONS,
+    PROFESSIONAL_TYPE_ALIASES
+  );
+  const professionalTypes = generalProfessionalTypes.length ? generalProfessionalTypes : fallbackProfessionalTypes;
+  const generalProjectTypes = profileGeneralArray(profileGeneral, "projectTypes", PROJECT_TYPE_OPTIONS);
+  const legacyProjectTypes = uniqueAllowedValues(aboutDetails.projectTypes, PROJECT_TYPE_OPTIONS, PROJECT_TYPE_ALIASES);
+  const generalServices = profileGeneralArray(profileGeneral, "services", SERVICE_OPTIONS);
+  const legacyServices = uniqueAllowedValues(aboutDetails.services, SERVICE_OPTIONS, SERVICE_ALIASES);
+  const generalServiceAreas = profileGeneralArray(profileGeneral, "serviceAreas", SERVICE_AREA_OPTIONS);
+  const generalStyleExpertise = profileGeneralArray(profileGeneral, "styleExpertise", STYLE_OPTIONS);
+  const generalServiceRegions = profileGeneralArray(profileGeneral, "serviceRegions", SERVICE_REGION_OPTIONS);
+  const generalTags = profileGeneralArray(profileGeneral, "tags", TAG_OPTIONS);
+  const generalWorkingModels = profileGeneralArray(profileGeneral, "workingModels", WORKING_MODEL_OPTIONS);
+  const legacyTags = uniqueAllowedValues(p.tags, TAG_OPTIONS);
+  const generalCities = Array.isArray(profileGeneral.cities)
+    ? (profileGeneral.cities as string[]).map((x) => x.trim()).filter(Boolean)
     : [];
-  const aboutServices = Array.isArray(aboutDetails.services)
-    ? (aboutDetails.services as string[]).map((x) => x.trim()).filter(Boolean)
-    : [];
+  const primaryCity = generalCities[0] || profileGeneralString(profileGeneral, "city") || "Türkiye";
+  const displayName = profileGeneralString(profileGeneral, "displayName") || p.full_name?.trim() || p.business_name?.trim() || "Yeni Tasarımcı";
+  const displayBio = typeof aboutDetails.bio === "string" ? aboutDetails.bio.trim() : "";
+  const startingBudget = profileGeneralString(profileGeneral, "startingBudget", STARTING_BUDGET_OPTIONS);
+
   return {
     slug,
     liveDesignerId: p.id,
     blogPostCount,
-    name: p.full_name?.trim() || p.business_name?.trim() || "Yeni Tasarımcı",
-    title: p.specialty?.trim() || "İç Mimar",
-    city: p.city?.trim() || "Türkiye",
+    name: displayName,
+    title: professionalTitle(professionalTypes),
+    city: primaryCity,
+    cities: generalCities.length ? generalCities : primaryCity !== "Türkiye" ? [primaryCity] : [],
+    district: profileGeneralString(profileGeneral, "district") || undefined,
     rating,
     reviews: reviewCount,
     verified: true,
     pinnedReview: pinned?.text,
     pinnedBy: pinned?.author,
-    tags: tags.length > 0 ? tags : ["Yeni Profesyonel"],
+    tags: (generalTags.length ? generalTags : legacyTags).length
+      ? (generalTags.length ? generalTags : legacyTags).slice(0, 10)
+      : ["Yeni Profesyonel"],
     coverUrl: p.cover_photo_url || portfolio[0]?.coverUrl || "",
     response,
-    startingFrom: p.starting_from || budgetLabel(projectRows[0]?.budget_level ?? null),
+    startingFrom: startingBudget || budgetLabel(projectRows[0]?.budget_level ?? null),
+    startingBudget: startingBudget || undefined,
     portfolioCount: portfolio.length,
-    projectTypes: Array.from(new Set([...projectTypes, ...aboutProjectTypes])).slice(0, 4),
-    services: aboutServices.length ? aboutServices : p.specialty ? [p.specialty] : [],
+    projectTypes: generalProjectTypes.length ? generalProjectTypes : legacyProjectTypes,
+    services: generalServices.length ? generalServices : legacyServices,
+    professionalTypes,
+    serviceAreas: generalServiceAreas,
+    styleExpertise: generalStyleExpertise,
+    serviceRegions: generalServiceRegions,
+    workingModels: generalWorkingModels,
     avatarUrl: p.avatar_url || undefined,
     about: {
       headline: typeof aboutDetails.headline === "string" ? aboutDetails.headline : undefined,
-      bio: p.about || (typeof aboutDetails.bio === "string" ? aboutDetails.bio : undefined),
+      bio: displayBio || undefined,
       blogHeaderTitle:
         typeof aboutDetails.blogHeaderTitle === "string"
           ? aboutDetails.blogHeaderTitle
@@ -418,6 +472,7 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
     portfolio,
     reviewsList,
     business: {
+      name: profileGeneralString(profileGeneral, "businessName") || p.business_name?.trim() || undefined,
       phone: p.phone || undefined,
       email: p.contact_email || undefined,
       website: p.website || undefined,
@@ -425,7 +480,8 @@ export async function loadLiveDesignerBySlug(slug: string): Promise<Designer | n
       address: p.address
         ? {
             street: p.address,
-            city: p.city || undefined,
+            city: primaryCity !== "Türkiye" ? primaryCity : undefined,
+            district: profileGeneralString(profileGeneral, "district") || undefined,
           }
         : undefined,
       socials: {

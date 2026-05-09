@@ -46,7 +46,13 @@ function matchesCurrentPath(pages: string[] | null | undefined, currentPath: str
 
 // GET - aktif popup'i getir (public, cache'li)
 export async function GET(req: Request) {
-  const admin = getSupabaseAdminClient();
+  let admin: ReturnType<typeof getSupabaseAdminClient>;
+  try {
+    admin = getSupabaseAdminClient();
+  } catch {
+    return NextResponse.json({ ok: true, popup: null });
+  }
+
   const now = new Date().toISOString();
   const requestUrl = new URL(req.url);
   const currentPath = normalizePath(requestUrl.searchParams.get("path"));

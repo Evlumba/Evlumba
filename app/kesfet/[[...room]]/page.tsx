@@ -11,12 +11,18 @@ import {
   type ExploreIdea,
   type ExploreRoomId,
 } from "../../../lib/data";
+import { isProjectQuery, normalizeSearchText, queryTokens } from "@/lib/searchIntent";
+import { semanticSearch } from "@/lib/semanticSearch";
 
 
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
+
+const TOUCH_SCROLL_STYLE: React.CSSProperties & { WebkitOverflowScrolling?: "touch" } = {
+  WebkitOverflowScrolling: "touch",
+};
 
 /** -------------------- filters -------------------- **/
 type Filters = {
@@ -28,6 +34,12 @@ type Filters = {
   budgets: Array<(typeof exploreFilterOptions.budgets)[number]>;
   cities: string[];
 };
+
+type ExploreBudget = Filters["budgets"][number];
+
+function isExploreBudget(value: string): value is ExploreBudget {
+  return (exploreFilterOptions.budgets as readonly string[]).includes(value);
+}
 
 function hasAnyFilter(f: Filters) {
   return Boolean(
@@ -106,7 +118,7 @@ function parseKesfetFromUrl(roomSlug: string | undefined, sp: URLSearchParams) {
     q,
     styles: style ? [style] : [],
     colors: color ? [color] : [],
-    budgets: budgets as any,
+    budgets: budgets.filter(isExploreBudget),
     cities: city ? [city] : [],
   };
 
@@ -130,6 +142,18 @@ function buildKesfetUrl(filters: Filters, page: number, tasteOn: boolean) {
 
   const qs = params.toString();
   return qs ? `${base}?${qs}` : base;
+}
+
+function budgetToSemanticLevel(value?: string) {
+  if (value === "Uygun") return "low";
+  if (value === "Orta") return "medium";
+  if (value === "Premium") return "high";
+  if (value === "Lüks") return "pro";
+  return undefined;
+}
+
+function ideaProjectId(idea: ExploreIdea) {
+  return idea.id.startsWith("live-") ? idea.id.slice(5) : idea.id;
 }
 
 /** -------------------- mock auth -------------------- **/
@@ -584,7 +608,7 @@ function RoomScroller({
     el.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", update);
     return () => {
-      el.removeEventListener("scroll", onScroll as any);
+      el.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", update);
     };
   }, [update]);
@@ -623,7 +647,7 @@ function RoomScroller({
       <div
         ref={scrollerRef}
         className={cn("no-scrollbar flex gap-3 overflow-x-auto scroll-smooth", "py-2 pl-0 pr-2")}
-        style={{ WebkitOverflowScrolling: "touch" as any }}
+        style={TOUCH_SCROLL_STYLE}
       >
         <style jsx>{`
           .no-scrollbar::-webkit-scrollbar {
@@ -904,7 +928,7 @@ function AllFiltersModal({
   };
 
   const BudgetGrid = () => {
-    const items = exploreFilterOptions.budgets as unknown as string[];
+    const items = [...exploreFilterOptions.budgets];
     const icon = (b: string) => {
       if (b === "Uygun") return "₺";
       if (b === "Orta") return "₺₺";
@@ -914,15 +938,15 @@ function AllFiltersModal({
     return (
       <div className="mt-3 grid grid-cols-2 gap-2">
         {items.map((b) => {
-          const active = draft.budgets.includes(b as any);
+          const active = draft.budgets.includes(b);
           return (
             <button
               key={b}
               onClick={() => {
                 const next = active
                   ? draft.budgets.filter((x) => x !== b)
-                  : [...draft.budgets, b as any];
-                setDraft({ ...draft, budgets: next as any });
+                  : [...draft.budgets, b];
+                setDraft({ ...draft, budgets: next });
               }}
               className={cn(
                 "relative overflow-hidden rounded-[20px] border border-black/10 bg-white/75 px-4 py-3 text-left hover:bg-white/95 transition",
@@ -1503,6 +1527,8 @@ function KesfetPageContent() {
   const [tasteOn, setTasteOn] = React.useState(parsed.tasteOn);
   const [page, setPage] = React.useState(parsed.page);
   const [qInput, setQInput] = React.useState(parsed.filters.q);
+  const [semanticProjectIds, setSemanticProjectIds] = React.useState<string[] | null>(null);
+  const [semanticSearching, setSemanticSearching] = React.useState(false);
 
   React.useEffect(() => {
     // URL değiştiyse (back/forward, link paste, refresh) state’i URL’den çek
@@ -1510,7 +1536,7 @@ function KesfetPageContent() {
     setTasteOn(parsed.tasteOn);
     setPage(parsed.page);
     setQInput(parsed.filters.q);
-  }, [parsed.filters, parsed.page, parsed.tasteOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [parsed.filters, parsed.page, parsed.tasteOn]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1586,6 +1612,55 @@ function KesfetPageContent() {
     return s.filter((x) => x.toLowerCase() !== (roomLabel ?? "").toLowerCase());
   }, [filters.roomId, roomLabel]);
 
+  React.useEffect(() => {
+    const query = filters.q.trim();
+    const hasExploreContext = Boolean(
+      filters.roomId ||
+        filters.sub ||
+        filters.styles.length ||
+        filters.colors.length ||
+        filters.budgets.length ||
+        filters.cities.length
+    );
+    if (query.length >= 2 && !hasExploreContext && !isProjectQuery(query)) {
+      router.replace(`/tasarimcilar?q=${encodeURIComponent(query)}#liste`, { scroll: false });
+    }
+  }, [filters, router]);
+
+  React.useEffect(() => {
+    const query = filters.q.trim();
+    if (query.length < 2) {
+      setSemanticProjectIds(null);
+      setSemanticSearching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setSemanticSearching(true);
+      semanticSearch({
+        query,
+        mode: "projects",
+        limit: 120,
+        projectType: roomLabel || undefined,
+        budgetLevel:
+          filters.budgets.length === 1
+            ? budgetToSemanticLevel(filters.budgets[0])
+            : undefined,
+        city: filters.cities.length === 1 ? filters.cities[0] : undefined,
+        signal: controller.signal,
+      })
+        .then((result) => setSemanticProjectIds(result.projectIds))
+        .catch(() => setSemanticProjectIds(null))
+        .finally(() => setSemanticSearching(false));
+    }, 420);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [filters.q, filters.budgets, filters.cities, roomLabel]);
+
   const onSubmitSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const q = qInput.trim();
@@ -1596,9 +1671,15 @@ function KesfetPageContent() {
   };
 
   const filtered = React.useMemo(() => {
-    const q = filters.q.trim().toLowerCase();
+    const q = filters.q.trim();
+    const normalizedQuery = normalizeSearchText(q);
+    const tokens = queryTokens(q);
+    const semanticOrder =
+      semanticProjectIds && q.length >= 2
+        ? new Map(semanticProjectIds.map((id, index) => [id, index]))
+        : null;
 
-    let list = allIdeas.filter((i) => {
+    const list = allIdeas.filter((i) => {
       if (filters.roomId && i.roomId !== filters.roomId) return false;
       if (filters.sub && i.subLabel !== filters.sub) return false;
 
@@ -1608,46 +1689,59 @@ function KesfetPageContent() {
       if (filters.budgets.length && !filters.budgets.includes(i.budget)) return false;
 
       if (q) {
-        const hay = [
-          i.title,
-          i.description,
-          i.designerName,
-          i.roomLabel,
-          i.subLabel ?? "",
-          i.style,
-          i.color,
-          i.city,
-          i.tags.join(" "),
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!hay.includes(q)) return false;
+        const hay = normalizeSearchText(
+          [
+            i.title,
+            i.description,
+            i.designerName,
+            i.roomLabel,
+            i.subLabel ?? "",
+            i.style,
+            i.color,
+            i.city,
+            i.tags.join(" "),
+          ].join(" ")
+        );
+        const semanticMatch = semanticOrder?.has(ideaProjectId(i)) ?? false;
+        const exactTextMatch = normalizedQuery ? hay.includes(normalizedQuery) : false;
+        const tokenMatch = tokens.length ? tokens.every((token) => hay.includes(token)) : false;
+        if (!semanticMatch && !exactTextMatch && !tokenMatch) return false;
       }
       return true;
     });
 
-    if (!tasteOn) return list.slice().sort((a, b) => b.popularity - a.popularity);
+    const semanticSort = (a: ExploreIdea, b: ExploreIdea) => {
+      if (q && semanticOrder?.size) {
+        const aRank = semanticOrder.get(ideaProjectId(a)) ?? 100000;
+        const bRank = semanticOrder.get(ideaProjectId(b)) ?? 100000;
+        if (aRank !== bRank) return aRank - bRank;
+      }
+      return b.popularity - a.popularity;
+    };
+
+    if (!tasteOn) return list.slice().sort(semanticSort);
 
     const session = getSession();
-    if (!session) return list.slice().sort((a, b) => b.popularity - a.popularity);
+    if (!session) return list.slice().sort(semanticSort);
 
     const taste = getTasteTags();
-    if (!taste.length) return list.slice().sort((a, b) => b.popularity - a.popularity);
+    if (!taste.length) return list.slice().sort(semanticSort);
 
     const score = (it: ExploreIdea) =>
       it.tags.reduce((acc, t) => acc + (taste.includes(t) ? 3 : 0), 0);
 
     return list
       .slice()
-      .sort((a, b) => score(b) - score(a) || b.popularity - a.popularity);
-  }, [filters, tasteOn, allIdeas]);
+      .sort((a, b) => score(b) - score(a) || semanticSort(a, b));
+  }, [filters, tasteOn, allIdeas, semanticProjectIds]);
 
   const [saves, setSaves] = React.useState<string[]>([]);
   React.useEffect(() => setSaves(getSaves()), []);
 
   const toggleSave = (id: string) => {
     const current = new Set(getSaves());
-    current.has(id) ? current.delete(id) : current.add(id);
+    if (current.has(id)) current.delete(id);
+    else current.add(id);
     const next = Array.from(current);
     persistSaves(next);
     setSaves(next);
@@ -1848,11 +1942,11 @@ function KesfetPageContent() {
 
                 <QuickDropdown
                   label="Bütçe"
-                  value={filters.budgets[0] as any}
-                  options={exploreFilterOptions.budgets as unknown as string[]}
+                  value={filters.budgets[0]}
+                  options={[...exploreFilterOptions.budgets]}
                   variant="budget"
                   onChange={(v) => {
-                    const next = { ...filters, budgets: v ? ([v] as any) : [] };
+                    const next = { ...filters, budgets: v && isExploreBudget(v) ? [v] : [] };
                     setFilters(next);
                     setPage(1);
                     syncUrl(next, 1, tasteOn, "replace");
@@ -1931,8 +2025,13 @@ function KesfetPageContent() {
                 )}
                 {filters.budgets[0] && (
                   <Chip onRemove={() => removeChip("budget")}>
-                    {filters.budgets[0] as any}
+                    {filters.budgets[0]}
                   </Chip>
+                )}
+                {semanticSearching && (
+                  <span className="inline-flex items-center rounded-full border border-emerald-100 bg-emerald-50/80 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                    Akıllı arama çalışıyor
+                  </span>
                 )}
               </div>
             )}

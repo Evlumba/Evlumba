@@ -232,6 +232,54 @@ function InfoRow({
   );
 }
 
+function uniqueValues(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function ChipList({ values }: { values: string[] }) {
+  if (!values.length) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {values.map((value) => (
+        <span
+          key={value}
+          className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800"
+        >
+          {value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function DetailTextRow({ label, value }: { label: string; value?: string | null }) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  return (
+    <div className="grid gap-2 py-4 md:grid-cols-[180px_1fr]">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-sm font-medium text-gray-900">{text}</p>
+    </div>
+  );
+}
+
+function DetailChipRow({ label, values }: { label: string; values?: string[] }) {
+  const list = uniqueValues(values ?? []);
+  if (!list.length) return null;
+  return (
+    <div className="grid gap-2 py-4 md:grid-cols-[180px_1fr]">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+      <ChipList values={list} />
+    </div>
+  );
+}
+
 function normalizeInstagramHandle(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
@@ -253,9 +301,50 @@ function normalizeInstagramHandle(value: string | null | undefined) {
 }
 
 export default function BusinessSection({ designer }: { designer: Designer }) {
-  const business = designer.business;
+  const business = designer.business ?? {};
+  const cityValues = uniqueValues([...(designer.cities ?? []), designer.city]);
+  const locationText = [
+    cityValues.join(", "),
+    designer.district,
+  ].filter(Boolean).join(" / ");
+  const hasWorkingHours = Boolean(
+    business.workingHours?.weekdays ||
+      business.workingHours?.saturday ||
+      business.workingHours?.sunday
+  );
+  const hasBusinessInfo = Boolean(
+    business.name ||
+      business.phone ||
+      business.email ||
+      business.website ||
+      business.locationUrl ||
+      business.address ||
+      business.typicalJobCost?.min ||
+      business.typicalJobCost?.max ||
+      business.employees ||
+      business.founded ||
+      business.license ||
+      hasWorkingHours ||
+      business.followers ||
+      business.insurance
+  );
+  const hasGeneralInfo = Boolean(
+    designer.name ||
+      business.name ||
+      designer.professionalTypes?.length ||
+      designer.services?.length ||
+      designer.projectTypes?.length ||
+      designer.serviceAreas?.length ||
+      designer.styleExpertise?.length ||
+      locationText ||
+      designer.serviceRegions?.length ||
+      designer.startingBudget ||
+      designer.startingFrom ||
+      designer.workingModels?.length ||
+      designer.tags?.length
+  );
 
-  if (!business) {
+  if (!hasBusinessInfo && !hasGeneralInfo) {
     return (
       <section id="is" className="scroll-mt-16">
         <div className="mx-auto max-w-6xl px-4 mt-8">
@@ -446,6 +535,31 @@ export default function BusinessSection({ designer }: { designer: Designer }) {
                 </div>
               </div>
             </div>
+
+            {hasGeneralInfo && (
+              <div className="mt-8 border-t border-gray-100 pt-6">
+                <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-1">
+                  Profil Genel Bilgileri
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Profesyonelin arama ve filtreleme sisteminde kullanılan normalize profil bilgileri.
+                </p>
+                <div className="mt-3 divide-y divide-gray-100">
+                  <DetailTextRow label="Profil Adı" value={designer.name} />
+                  <DetailTextRow label="İşletme Adı" value={business.name} />
+                  <DetailChipRow label="Profesyonel Türü" values={designer.professionalTypes?.length ? designer.professionalTypes : [designer.title]} />
+                  <DetailChipRow label="Hizmetler" values={designer.services} />
+                  <DetailChipRow label="Proje Tipleri" values={designer.projectTypes} />
+                  <DetailChipRow label="Hizmet Alanları" values={designer.serviceAreas} />
+                  <DetailChipRow label="Stil Uzmanlıkları" values={designer.styleExpertise} />
+                  <DetailTextRow label="Şehir / İlçe" value={locationText} />
+                  <DetailChipRow label="Hizmet Bölgeleri" values={designer.serviceRegions} />
+                  <DetailTextRow label="Başlangıç Bütçesi" value={designer.startingBudget || designer.startingFrom} />
+                  <DetailChipRow label="Çalışma Modeli" values={designer.workingModels} />
+                  <DetailChipRow label="Etiketler" values={designer.tags} />
+                </div>
+              </div>
+            )}
 
             {/* Alt kısım - Sosyal Medya & Takipçi */}
             {(hasSocials || business.followers) && (

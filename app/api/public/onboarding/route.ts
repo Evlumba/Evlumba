@@ -8,7 +8,12 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const role = url.searchParams.get("role") || "homeowner";
 
-  const admin = getSupabaseAdminClient();
+  let admin: ReturnType<typeof getSupabaseAdminClient>;
+  try {
+    admin = getSupabaseAdminClient();
+  } catch {
+    return NextResponse.json({ ok: true, flow: null });
+  }
 
   const { data, error } = await admin
     .from("onboarding_flows")

@@ -32,7 +32,6 @@ function isMissingBlogPostsTableError(message?: string | null) {
 
 export default async function BlogSection({ designer }: { designer: Designer }) {
   const designerId = resolveDesignerId(designer);
-  const admin = getSupabaseAdminClient();
   const blogHeaderTitle = designer.about?.blogHeaderTitle?.trim() || "";
   const blogHeaderDescription = designer.about?.blogHeaderDescription?.trim() || "";
   const blogHeaderImageUrl = designer.about?.blogHeaderImageUrl?.trim() || "";
@@ -41,21 +40,26 @@ export default async function BlogSection({ designer }: { designer: Designer }) 
   let loadError: string | null = null;
 
   if (designerId) {
-    const { data, error } = await admin
-      .from("blog_posts")
-      .select("id, slug, title, excerpt, published_at, created_at")
-      .eq("author_id", designerId)
-      .eq("status", "published")
-      .order("published_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(12);
+    try {
+      const admin = getSupabaseAdminClient();
+      const { data, error } = await admin
+        .from("blog_posts")
+        .select("id, slug, title, excerpt, published_at, created_at")
+        .eq("author_id", designerId)
+        .eq("status", "published")
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(12);
 
-    if (error) {
-      if (!isMissingBlogPostsTableError(error.message)) {
-        loadError = error.message;
+      if (error) {
+        if (!isMissingBlogPostsTableError(error.message)) {
+          loadError = error.message;
+        }
+      } else {
+        posts = (data ?? []) as BlogPostRow[];
       }
-    } else {
-      posts = (data ?? []) as BlogPostRow[];
+    } catch {
+      posts = [];
     }
   }
 

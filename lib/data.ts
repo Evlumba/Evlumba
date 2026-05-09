@@ -246,7 +246,7 @@ function inferSubRoom(room: string, title: string) {
   return room;
 }
 
-function makeDesc(room: string, title: string) {
+function makeDesc(room: string) {
   // 1-2 satır, premium/temiz
   if (room === "Mutfak") return "Net hatlar, temiz tezgah dili ve doğru ışık dengesi.";
   if (room === "Banyo") return "Minimal detaylarla daha ferah ve ‘otel’ hissi veren kurgu.";
@@ -256,8 +256,11 @@ function makeDesc(room: string, title: string) {
   return "Uygulanabilir, karar odaklı ilham kurgusu.";
 }
 
-export const ideas: Idea[] = designers.flatMap((d: any) =>
-  (d.projects ?? []).map((p: any, idx: number) => {
+type SeedDesigner = (typeof designers)[number];
+type SeedProject = SeedDesigner["projects"][number];
+
+export const ideas: Idea[] = designers.flatMap((d: SeedDesigner) =>
+  (d.projects ?? []).map((p: SeedProject, idx: number) => {
     const id = `${d.id}-${p.pid}`;
     const room = p.room ?? "Salon";
     const subRoom = inferSubRoom(room, p.title ?? "");
@@ -284,7 +287,7 @@ export const ideas: Idea[] = designers.flatMap((d: any) =>
       designerCity: d.city,
       designerStyle: d.style,
       designerBudget: normalizedBudget,
-      desc: makeDesc(room, p.title),
+      desc: makeDesc(room),
       colors: pickColors(id),
       popularity,
       createdAt: Date.now() - idx * 1000 * 60 * 60 * 24,
@@ -396,7 +399,25 @@ export const exploreRooms: Array<{
 ];
 
 export const exploreFilterOptions = {
-  styles: ["Modern", "Akdeniz", "Endüstriyel", "İskandinav", "Japandi", "Klasik"],
+  styles: [
+    "Modern",
+    "Minimalist",
+    "Klasik",
+    "Lüks",
+    "İskandinav",
+    "Rustik",
+    "Endüstriyel",
+    "Bohem",
+    "Akdeniz",
+    "Japandi",
+    "Country",
+    "Retro",
+    "Eklektik",
+    "Çağdaş",
+    "Doğal / Organik",
+    "Sahil / Coastal",
+    "Geleneksel",
+  ],
   colors: ["Beyaz", "Bej", "Ahşap", "Gri", "Siyah", "Yeşil", "Mavi"],
   budgets: ["Uygun", "Orta", "Premium", "Lüks"] as const,
   cities: ["İstanbul", "İzmir", "Ankara"],

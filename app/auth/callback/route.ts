@@ -104,13 +104,17 @@ export async function GET(request: Request) {
   const { data: authData } = await supabase.auth.getUser();
   let needsContactConsent = false;
   if (authData.user) {
-    const admin = getSupabaseAdminClient();
-    const deleteFlow = await cancelSelfDeleteIfWithinGracePeriod(admin, authData.user.id);
-    if (deleteFlow.expired) {
-      await supabase.auth.signOut();
-      const expiredUrl = new URL("/giris", requestUrl.origin);
-      expiredUrl.searchParams.set("auth_error", "account_deletion_expired");
-      return NextResponse.redirect(expiredUrl);
+    try {
+      const admin = getSupabaseAdminClient();
+      const deleteFlow = await cancelSelfDeleteIfWithinGracePeriod(admin, authData.user.id);
+      if (deleteFlow.expired) {
+        await supabase.auth.signOut();
+        const expiredUrl = new URL("/giris", requestUrl.origin);
+        expiredUrl.searchParams.set("auth_error", "account_deletion_expired");
+        return NextResponse.redirect(expiredUrl);
+      }
+    } catch {
+      // Local dev may run without the service role key; keep OAuth login usable.
     }
 
     const metadata = authData.user.user_metadata || {};

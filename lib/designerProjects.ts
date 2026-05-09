@@ -191,6 +191,17 @@ async function getCurrentUserId() {
   return cached?.id ?? null;
 }
 
+async function syncProjectSearchEmbedding(projectId: string) {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    await supabase.functions.invoke("sync-search-embeddings", {
+      body: { projectId },
+    });
+  } catch {
+    // Search indexing should never block project publishing.
+  }
+}
+
 async function loadProjectImages(projectIds: string[]) {
   if (projectIds.length === 0) return new Map<string, string[]>();
 
@@ -542,6 +553,10 @@ export async function setDesignerProjectPublished(projectId: string, published: 
     throw new Error("Veritabanında is_published kolonu yok. Önce SQL migration çalıştırılmalı.");
   }
   if (error) throw new Error(error.message);
+
+  if (published) {
+    await syncProjectSearchEmbedding(projectId);
+  }
 }
 
 export async function deleteDesignerProject(projectId: string) {

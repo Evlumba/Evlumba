@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
+import { STYLE_OPTIONS } from "@/app/tasarimcilar/_data/profileGeneralMapping";
 import type { ExploreIdea, ExploreRoomId } from "@/lib/data";
 
 // export const dynamic = "force-dynamic"; // COST-FIX
@@ -35,6 +36,18 @@ type ReviewRow = {
   rating: number | null;
 };
 
+type ExploreReadClient =
+  | ReturnType<typeof getSupabaseAdminClient>
+  | Awaited<ReturnType<typeof getSupabaseServerClient>>;
+
+async function getExploreReadClient(): Promise<ExploreReadClient> {
+  try {
+    return getSupabaseAdminClient();
+  } catch {
+    return await getSupabaseServerClient();
+  }
+}
+
 const ROOM_MAP: Array<{ roomId: ExploreRoomId; label: string; patterns: string[] }> = [
   { roomId: "mutfak", label: "Mutfak", patterns: ["mutfak", "kitchen"] },
   { roomId: "banyo", label: "Banyo", patterns: ["banyo", "bath"] },
@@ -46,7 +59,6 @@ const ROOM_MAP: Array<{ roomId: ExploreRoomId; label: string; patterns: string[]
   { roomId: "antre", label: "Antre", patterns: ["antre", "giriş", "giris", "hol", "hall", "entry"] },
 ];
 
-const STYLE_OPTIONS = ["Modern", "Minimal", "Japandi", "İskandinav", "Klasik", "Endüstriyel"];
 const COLOR_OPTIONS = ["Beyaz", "Bej", "Ahşap", "Gri", "Siyah", "Yeşil", "Mavi"];
 const PLACEHOLDER_IMAGE =
   "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1600&q=70";
@@ -164,9 +176,9 @@ function toIdea(project: ProjectRow, profile: ProfileRow | null, rating: number,
 
 export async function GET() {
   try {
-    const admin = getSupabaseAdminClient();
+    const db = await getExploreReadClient();
 
-    const { data: projectsData, error: projectsError } = await admin
+    const { data: projectsData, error: projectsError } = await db
       .from("designer_projects")
       .select(
         "id, designer_id, title, project_type, location, description, tags, budget_level, cover_image_url, created_at, designer_project_images(image_url, sort_order)"
@@ -187,12 +199,12 @@ export async function GET() {
     const designerIds = Array.from(new Set(projects.map((p) => p.designer_id).filter(Boolean)));
 
     const [{ data: profilesData }, { data: reviewsData }] = await Promise.all([
-      admin
+      db
         .from("profiles")
         .select("id, full_name, business_name, city, avatar_url")
         .in("id", designerIds)
         .in("role", ["designer", "designer_pending"]),
-      admin
+      db
         .from("designer_reviews")
         .select("designer_id, rating")
         .in("designer_id", designerIds),

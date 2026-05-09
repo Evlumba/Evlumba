@@ -50,7 +50,19 @@ export async function DELETE() {
       return NextResponse.json({ ok: false, error: "Bu işlem için giriş yapmalısın." }, { status: 401 });
     }
 
-    const admin = getSupabaseAdminClient();
+    let admin: ReturnType<typeof getSupabaseAdminClient>;
+    try {
+      admin = getSupabaseAdminClient();
+    } catch {
+      return NextResponse.json({
+        ok: true,
+        hadPendingSelfDelete: false,
+        cancelled: false,
+        expired: false,
+        deleteAfter: null,
+      });
+    }
+
     const result = await cancelSelfDeleteIfWithinGracePeriod(admin, userId);
 
     return NextResponse.json({

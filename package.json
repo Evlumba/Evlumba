@@ -8,7 +8,8 @@
     "dev:turbo": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate:profile-general": "node scripts/migrate-profile-general.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

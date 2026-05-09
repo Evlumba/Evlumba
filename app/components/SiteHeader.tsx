@@ -4,11 +4,23 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isProjectQuery } from "@/lib/searchIntent";
 import { getSession, logout } from "@/lib/storage";
+import SearchFilterButton from "./SearchFilterButton";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
+
+const SEARCH_PLACEHOLDER_HINTS = [
+  "istanbul iç mimar...",
+  "ankara boya ustası...",
+  "elektrikçi...",
+  "antalya mimar...",
+  "mutfak yenileme...",
+  "banyo tadilat...",
+  "izmir peyzaj mimarı...",
+];
 
 /* ---------------- 3D / Glass Orb Icon ---------------- */
 function GlassOrb({
@@ -576,6 +588,52 @@ export default function SiteHeader() {
   const [role, setRole] = React.useState<"designer" | "homeowner" | null>(null);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const [animatedSearchPlaceholder, setAnimatedSearchPlaceholder] = React.useState("");
+
+  React.useEffect(() => {
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) {
+      setAnimatedSearchPlaceholder(SEARCH_PLACEHOLDER_HINTS[0]);
+      return;
+    }
+
+    let hintIndex = 0;
+    let characterIndex = 0;
+    let isDeleting = false;
+    let timeoutId: number | undefined;
+
+    const tick = () => {
+      const currentHint = SEARCH_PLACEHOLDER_HINTS[hintIndex];
+      setAnimatedSearchPlaceholder(currentHint.slice(0, characterIndex));
+
+      if (!isDeleting && characterIndex < currentHint.length) {
+        characterIndex += 1;
+        timeoutId = window.setTimeout(tick, 70);
+        return;
+      }
+
+      if (!isDeleting) {
+        isDeleting = true;
+        timeoutId = window.setTimeout(tick, 1200);
+        return;
+      }
+
+      if (characterIndex > 0) {
+        characterIndex -= 1;
+        timeoutId = window.setTimeout(tick, 34);
+        return;
+      }
+
+      isDeleting = false;
+      hintIndex = (hintIndex + 1) % SEARCH_PLACEHOLDER_HINTS.length;
+      timeoutId = window.setTimeout(tick, 260);
+    };
+
+    timeoutId = window.setTimeout(tick, 250);
+    return () => {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, []);
 
   React.useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -694,6 +752,23 @@ export default function SiteHeader() {
     } finally {
       setIsLoggingOut(false);
     }
+  };
+
+  const handleGlobalSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const query = String(formData.get("q") ?? "").trim();
+    if (!query) {
+      router.push("/kesfet");
+      return;
+    }
+
+    const encoded = encodeURIComponent(query);
+    router.push(
+      isProjectQuery(query)
+        ? `/kesfet?q=${encoded}`
+        : `/tasarimcilar?q=${encoded}#liste`
+    );
   };
 
   const nav = [
@@ -887,14 +962,15 @@ export default function SiteHeader() {
                     </div>
                   </div>
                 )}
-                <form action="/kesfet" method="GET" className="flex items-center gap-2 flex-1 min-w-0">
+                <form action="/kesfet" method="GET" onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="relative flex-1 min-w-0">
                     <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
                       <SearchIcon />
                     </span>
                     <input
                       name="q"
-                      placeholder="tarz, oda, şehir…"
+                      aria-label="Arama yap"
+                      placeholder={animatedSearchPlaceholder}
                       className={cn(
                         "w-full rounded-2xl border border-black/10 bg-white/75",
                         "pl-10 pr-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400",
@@ -906,14 +982,15 @@ export default function SiteHeader() {
                   <button
                     type="submit"
                     className={cn(
-                      "shrink-0 rounded-2xl border border-black/10 bg-white/70 text-slate-800 font-semibold",
+                      "h-11 shrink-0 rounded-2xl border border-black/10 bg-white/70 text-slate-800 font-semibold",
                       "backdrop-blur hover:bg-white/95 transition",
                       "shadow-[0_12px_35px_-28px_rgba(0,0,0,0.25)]",
-                      "px-4 py-2.5 text-sm"
+                      "px-4 py-0 text-sm"
                     )}
                   >
                     Ara
                   </button>
+                  <SearchFilterButton />
                 </form>
               </div>
             </div>
@@ -1016,14 +1093,15 @@ export default function SiteHeader() {
 
             {/* search row */}
             <div className="pt-3">
-              <form action="/kesfet" method="GET" className="flex items-center gap-3 w-full">
+              <form action="/kesfet" method="GET" onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-3 w-full">
                 <div className="relative flex-1 min-w-0">
                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                     <SearchIcon />
                   </span>
                   <input
                     name="q"
-                    placeholder="Tarz, oda, şehir veya profesyonel ara..."
+                    aria-label="Arama yap"
+                    placeholder={animatedSearchPlaceholder}
                     className={cn(
                       "w-full rounded-2xl border border-black/10 bg-white/80",
                       "pl-11 pr-4 py-3 text-base text-slate-900 placeholder:text-slate-400",
@@ -1036,15 +1114,16 @@ export default function SiteHeader() {
                 <button
                   type="submit"
                   className={cn(
-                    "shrink-0 rounded-2xl border border-black/10 bg-white text-slate-800 font-semibold",
+                    "h-[50px] shrink-0 rounded-2xl border border-black/10 bg-white text-slate-800 font-semibold",
                     "backdrop-blur hover:bg-white/95 transition",
                     "shadow-[0_12px_35px_-28px_rgba(0,0,0,0.25)]",
-                    "px-6 py-3 text-base"
+                    "px-6 py-0 text-base"
                   )}
                   title="Ara"
                 >
                   Ara
                 </button>
+                <SearchFilterButton />
               </form>
             </div>
           </div>

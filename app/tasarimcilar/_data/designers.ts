@@ -82,6 +82,15 @@ export type Designer = {
   portfolioCount?: number;
   projectTypes?: string[];
   services?: string[];
+  professionalTypes?: string[];
+  serviceAreas?: string[];
+  styleExpertise?: string[];
+  cities?: string[];
+  district?: string;
+  serviceRegions?: string[];
+  startingBudget?: string;
+  workingModels?: string[];
+  searchText?: string;
 
   // new (opsiyonel)
   avatarUrl?: string;

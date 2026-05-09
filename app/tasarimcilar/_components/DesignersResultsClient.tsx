@@ -5,21 +5,21 @@ import { useMemo, useState, type CSSProperties, type ReactNode, useEffect } from
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
-  ShieldCheck,
   Star,
   MapPin,
   Timer,
-  BadgeCheck,
   Briefcase,
   Bookmark,
   X,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import DesignerFilterDock from "./DesignerFilterDock";
+import { isProfessionalQuery, normalizeSearchText, queryTokens } from "@/lib/searchIntent";
+import { semanticSearch } from "@/lib/semanticSearch";
 
 type Designer = {
   slug: string;
+  liveDesignerId?: string;
   name: string;
   title: string;
   city: string;
@@ -36,6 +36,17 @@ type Designer = {
   portfolioCount?: number;
   projectTypes?: string[];
   services?: string[];
+  professionalTypes?: string[];
+  serviceAreas?: string[];
+  styleExpertise?: string[];
+  cities?: string[];
+  district?: string;
+  serviceRegions?: string[];
+  startingBudget?: string;
+  searchText?: string;
+  business?: {
+    name?: string;
+  };
 };
 
 const glass: CSSProperties = {
@@ -43,10 +54,6 @@ const glass: CSSProperties = {
   boxShadow: "0 0 0 1px rgba(15,23,42,0.06), 0 18px 55px rgba(15,23,42,0.08)",
   backdropFilter: "blur(16px)",
 };
-
-function uniq(arr: string[]) {
-  return Array.from(new Set(arr.filter(Boolean)));
-}
 
 function buildUrl(pathname: string, current: string, patch: Record<string, string>) {
   const params = new URLSearchParams(current);
@@ -60,7 +67,7 @@ function buildUrl(pathname: string, current: string, patch: Record<string, strin
 
 function clearAllUrl(pathname: string, current: string) {
   const params = new URLSearchParams(current);
-  ["q", "city", "project", "service", "verified", "page"].forEach((k) => params.delete(k));
+  ["q", "city", "district", "project", "service", "area", "style", "professionalType", "professional", "serviceRegion", "budget", "online", "nationwide", "hasProjects", "verified", "page"].forEach((k) => params.delete(k));
   const qs = params.toString();
   return `${pathname}${qs ? `?${qs}` : ""}#liste`;
 }
@@ -315,129 +322,6 @@ function ListRow({ d }: { d: Designer }) {
   );
 }
 
-/* ---------- compact filter bar ---------- */
-function FilterBar({
-  city, service, project, verified, options, hasAny, active, onPatch, onClear,
-}: {
-  city: string;
-  service: string;
-  project: string;
-  verified: string;
-  options: { cities: string[]; projects: string[]; services: string[] };
-  hasAny: boolean;
-  active: Array<{ key: string; label: string }>;
-  onPatch: (p: Record<string, string>) => void;
-  onClear: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  const selectStyle = {
-    background: "rgba(255,255,255,0.92)",
-    boxShadow: "0 0 0 1px rgba(15,23,42,0.08)",
-  };
-
-  return (
-    <div className="mt-5 rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50/60 via-white to-emerald-50/40 p-4">
-      {/* Main row: City + Service + More button */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Şehir */}
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={selectStyle}>
-          <MapPin className="h-4 w-4 shrink-0 text-emerald-600 opacity-70" />
-          <select
-            value={city}
-            onChange={(e) => onPatch({ city: e.target.value })}
-            className="cursor-pointer bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none"
-          >
-            <option value="">Şehir: Tümü</option>
-            {options.cities.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Hizmet */}
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={selectStyle}>
-          <Bookmark className="h-4 w-4 shrink-0 text-emerald-600 opacity-70" />
-          <select
-            value={service}
-            onChange={(e) => onPatch({ service: e.target.value })}
-            className="cursor-pointer bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none"
-          >
-            <option value="">Hizmet: Tümü</option>
-            {options.services.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Daha Fazla */}
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
-          style={selectStyle}
-        >
-          <svg viewBox="0 0 24 24" className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-          {expanded ? "Daha Az" : "Daha Fazla"}
-        </button>
-
-        {/* Temizle */}
-        {hasAny ? (
-          <button
-            type="button"
-            onClick={onClear}
-            className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 transition"
-          >
-            <X className="h-3.5 w-3.5" />
-            Temizle
-          </button>
-        ) : null}
-      </div>
-
-      {/* Expanded: Proje tipi + Doğrulanmış */}
-      {expanded ? (
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={selectStyle}>
-            <Briefcase className="h-4 w-4 shrink-0 text-emerald-600 opacity-70" />
-            <select
-              value={project}
-              onChange={(e) => onPatch({ project: e.target.value })}
-              className="cursor-pointer bg-transparent text-sm text-[rgba(15,23,42,0.82)] outline-none"
-            >
-              <option value="">Proje Tipi: Tümü</option>
-              {options.projects.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-
-          <label className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-[rgba(15,23,42,0.78)]" style={selectStyle}>
-            <input
-              type="checkbox"
-              checked={verified === "1"}
-              onChange={(e) => onPatch({ verified: e.target.checked ? "1" : "" })}
-              className="h-4 w-4 rounded accent-emerald-600"
-            />
-            <BadgeCheck className="h-4 w-4 text-emerald-600 opacity-70" />
-            Sadece doğrulanmış
-          </label>
-        </div>
-      ) : null}
-
-      {/* Active filter chips */}
-      {hasAny ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {active.map((a) => (
-            <Chip key={a.key} label={a.label} onRemove={() => onPatch({ [a.key]: "" })} />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 /* ---------- pagination UI ---------- */
 function PageButton({
   active,
@@ -474,47 +358,152 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
   const sp = useSearchParams();
   const qs = sp.toString();
 
-  const q = (sp.get("q") || "").toLowerCase();
+  const qRaw = sp.get("q") || "";
+  const q = qRaw.trim();
   const city = sp.get("city") || "";
+  const district = sp.get("district") || "";
   const project = sp.get("project") || "";
   const service = sp.get("service") || "";
+  const area = sp.get("area") || sp.get("room") || "";
+  const style = sp.get("style") || "";
+  const professionalType = sp.get("professionalType") || sp.get("professional") || "";
+  const serviceRegion = sp.get("serviceRegion") || "";
+  const budget = sp.get("budget") || "";
+  const online = sp.get("online") || "";
+  const nationwide = sp.get("nationwide") || "";
+  const hasProjects = sp.get("hasProjects") || "";
   const verified = sp.get("verified") || "";
+  const [semanticDesignerIds, setSemanticDesignerIds] = useState<string[] | null>(null);
+  const [semanticSearching, setSemanticSearching] = useState(false);
+
+  useEffect(() => {
+    const query = qRaw.trim();
+    if (query.length < 2 || isProfessionalQuery(query)) {
+      setSemanticDesignerIds(null);
+      setSemanticSearching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setSemanticSearching(true);
+      semanticSearch({
+        query,
+        mode: "designers",
+        limit: 100,
+        city: city || undefined,
+        signal: controller.signal,
+      })
+        .then((result) => setSemanticDesignerIds(result.designerIds))
+        .catch(() => setSemanticDesignerIds(null))
+        .finally(() => setSemanticSearching(false));
+    }, 420);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [qRaw, city]);
 
   // ✅ pagination
   const pageSize = 6;
   const page = Math.max(1, Number(sp.get("page") || "1") || 1);
 
-  const options = useMemo(() => {
-    return {
-      cities: uniq(designers.map((d) => d.city)),
-      projects: uniq(designers.flatMap((d) => d.projectTypes || [])),
-      services: uniq(designers.flatMap((d) => d.services || [])),
-    };
-  }, [designers]);
-
   const filtered = useMemo(() => {
-    return designers.filter((d) => {
-      if (city && d.city !== city) return false;
-      if (verified === "1" && !d.verified) return false;
-      if (project && !(d.projectTypes || []).includes(project)) return false;
-      if (service && !(d.services || []).includes(service)) return false;
+    const matches = (values: string[] | undefined, selected: string) => {
+      if (!selected) return true;
+      const list = values || [];
+      return list.includes(selected);
+    };
+    const tokens = queryTokens(q);
+    const normalizedQuery = normalizeSearchText(q);
+    const semanticOrder =
+      semanticDesignerIds && q.length >= 2
+        ? new Map(semanticDesignerIds.map((id, index) => [id, index]))
+        : null;
+    const hasSemantic = Boolean(semanticOrder?.size);
 
-      if (q) {
-        const hay = [
+    const profileText = (d: Designer) =>
+      normalizeSearchText(
+        [
           d.name,
+          d.business?.name || "",
+          d.searchText || "",
           d.title,
           d.city,
+          ...(d.cities || []),
+          d.district || "",
+          d.startingBudget || "",
           ...(d.tags || []),
+          ...(d.professionalTypes || []),
           ...(d.projectTypes || []),
           ...(d.services || []),
-        ]
-          .join(" ")
-          .toLocaleLowerCase("tr-TR");
-        if (!hay.includes(q.toLocaleLowerCase("tr-TR"))) return false;
+          ...(d.serviceAreas || []),
+          ...(d.styleExpertise || []),
+          ...(d.serviceRegions || []),
+        ].join(" ")
+      );
+
+    const textMatches = (d: Designer) => {
+      if (!q) return true;
+      const hay = profileText(d);
+      if (normalizedQuery && hay.includes(normalizedQuery)) return true;
+      if (!tokens.length) return true;
+      return tokens.every((token) => hay.includes(token));
+    };
+
+    const textScore = (d: Designer) => {
+      if (!tokens.length) return 0;
+      const cityText = normalizeSearchText([d.city, ...(d.cities || []), d.district || ""].join(" "));
+      const typeText = normalizeSearchText([d.title, ...(d.professionalTypes || [])].join(" "));
+      const nameText = normalizeSearchText([d.name, d.business?.name || ""].join(" "));
+      const hay = profileText(d);
+      return tokens.reduce((score, token) => {
+        let next = score;
+        if (cityText.includes(token)) next += 8;
+        if (typeText.includes(token)) next += 7;
+        if (nameText.includes(token)) next += 5;
+        if (hay.includes(token)) next += 2;
+        return next;
+      }, 0);
+    };
+
+    return designers.filter((d) => {
+      if (city && !(d.cities?.length ? d.cities : [d.city]).includes(city)) return false;
+      if (district && d.district !== district) return false;
+      if (verified === "1" && !d.verified) return false;
+      if (!matches(d.projectTypes, project)) return false;
+      if (!matches(d.services, service)) return false;
+      if (!matches(d.serviceAreas, area)) return false;
+      if (!matches(d.styleExpertise, style)) return false;
+      if (!matches(d.professionalTypes, professionalType)) return false;
+      if (budget && d.startingBudget !== budget) return false;
+      if (serviceRegion && !(d.serviceRegions || []).includes(serviceRegion)) return false;
+      if (online === "1" && !(d.serviceRegions || []).includes("Online hizmet veriyorum")) return false;
+      if (nationwide === "1" && !(d.serviceRegions || []).includes("Türkiye geneli")) return false;
+      if (hasProjects === "1" && Number(d.portfolioCount || 0) < 1) return false;
+
+      if (q) {
+        const semanticMatch = d.liveDesignerId ? semanticOrder?.has(d.liveDesignerId) : false;
+        if (!semanticMatch && !textMatches(d)) return false;
       }
       return true;
+    }).sort((a, b) => {
+      if (!q) return 0;
+      const scoreCompare = textScore(b) - textScore(a);
+      if (scoreCompare !== 0) return scoreCompare;
+
+      if (hasSemantic) {
+        const aOrder = a.liveDesignerId ? semanticOrder?.get(a.liveDesignerId) : undefined;
+        const bOrder = b.liveDesignerId ? semanticOrder?.get(b.liveDesignerId) : undefined;
+        const aRank = aOrder ?? 100000;
+        const bRank = bOrder ?? 100000;
+        if (aRank !== bRank) return aRank - bRank;
+      }
+
+      return Number(b.rating || 0) - Number(a.rating || 0);
     });
-  }, [designers, q, city, project, service, verified]);
+  }, [designers, q, city, district, project, service, area, style, professionalType, serviceRegion, budget, online, nationwide, hasProjects, verified, semanticDesignerIds]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -533,12 +522,21 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
   const active = useMemo(() => {
     const items: { key: string; label: string }[] = [];
     if (city) items.push({ key: "city", label: `Şehir: ${city}` });
+    if (district) items.push({ key: "district", label: `İlçe: ${district}` });
     if (project) items.push({ key: "project", label: `Proje: ${project}` });
     if (service) items.push({ key: "service", label: `Hizmet: ${service}` });
+    if (area) items.push({ key: "area", label: `Alan: ${area}` });
+    if (style) items.push({ key: "style", label: `Stil: ${style}` });
+    if (professionalType) items.push({ key: "professionalType", label: `Profesyonel: ${professionalType}` });
+    if (serviceRegion) items.push({ key: "serviceRegion", label: `Bölge: ${serviceRegion}` });
+    if (budget) items.push({ key: "budget", label: `Bütçe: ${budget}` });
+    if (online === "1") items.push({ key: "online", label: "Online hizmet" });
+    if (nationwide === "1") items.push({ key: "nationwide", label: "Türkiye geneli" });
+    if (hasProjects === "1") items.push({ key: "hasProjects", label: "Projeleri olanlar" });
     if (verified === "1") items.push({ key: "verified", label: "Doğrulanmış" });
     if (q) items.push({ key: "q", label: `Arama: ${sp.get("q") || ""}` });
     return items;
-  }, [q, city, project, service, verified, sp]);
+  }, [q, city, district, project, service, area, style, professionalType, serviceRegion, budget, online, nationwide, hasProjects, verified, sp]);
 
   const hasAny = active.length > 0;
 
@@ -562,10 +560,14 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
     if (city) parts.push(city);
     if (project) parts.push(project);
     if (service) parts.push(service);
+    if (area) parts.push(area);
+    if (professionalType) parts.push(professionalType);
+    if (serviceRegion) parts.push(serviceRegion);
+    if (hasProjects === "1") parts.push("Projeleri olanlar");
     if (verified === "1") parts.push("Doğrulanmış");
     if (q) parts.push(`"${sp.get("q") || ""}"`);
     return parts.join(" • ");
-  }, [city, project, service, verified, q, sp]);
+  }, [city, project, service, area, professionalType, serviceRegion, hasProjects, verified, q, sp]);
 
   return (
     <div className="mt-10">
@@ -601,6 +603,13 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
                 </span>
               </>
             ) : null}
+            {semanticSearching ? (
+              <>
+                {" "}
+                <span className="text-[rgba(15,23,42,0.28)]">•</span>{" "}
+                <span className="text-[rgba(15,23,42,0.50)]">Akıllı arama çalışıyor</span>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -621,9 +630,9 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
         ) : null}
       </div>
 
-      {/* Seçili filtreler — mobilde başlığın hemen altında, scroll gerektirmeden */}
+      {/* Seçili filtreler */}
       {hasAny && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 lg:hidden">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {active.map((a) => (
             <Chip key={a.key} label={a.label} onRemove={() => patchFilter({ [a.key]: "" })} />
           ))}
@@ -642,19 +651,6 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
           </button>
         </div>
       )}
-
-      {/* ── Compact inline filter bar ──────────────────────────────── */}
-      <FilterBar
-        city={city}
-        service={service}
-        project={project}
-        verified={verified}
-        options={options}
-        hasAny={hasAny}
-        active={active}
-        onPatch={patchFilter}
-        onClear={clearAll}
-      />
 
       <div className="mt-5">
 
@@ -740,9 +736,6 @@ export default function DesignersResultsClient({ designers }: { designers: Desig
           )}
         </div>
       </div>
-
-      {/* ✅ Filtre butonu artık sadece #liste görünürken çıkıyor */}
-      <DesignerFilterDock options={options} anchorId="liste" />
     </div>
   );
 }
