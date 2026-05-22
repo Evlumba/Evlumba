@@ -384,7 +384,7 @@ async function runRoomRender({
       content: [
         {
           type: "text" as const,
-          text: `Evlumba render kartı açılıyor. Görsel Evlumba kartında yüklenecek; tool argümanlarını veya JSON'u cevap olarak yazma. Render fallback nedeni: ${renderError}`,
+          text: "Evlumba render kartı açılıyor. Görsel Evlumba kartında yüklenecek; tool argümanlarını veya JSON'u cevap olarak yazma.",
         },
       ],
       structuredContent: {
