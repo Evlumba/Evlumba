@@ -40,6 +40,8 @@ const evlumbaReadOnlyAnnotations = {
 };
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
 const DEFAULT_RENDER_QUALITY: "low" | "medium" | "high" = "low";
+const RENDER_FUNCTION_URL = "https://vgtgcjnrsladdharzkwn.supabase.co/functions/v1/render-room-design";
+const RENDER_FUNCTION_ORIGIN = "https://vgtgcjnrsladdharzkwn.supabase.co";
 const roomRenderInputSchema = {
   prompt: z.string().min(3).describe("Kullanıcının tasarım isteği. Örn: Bu salonu japandi stilde tasarla ve görsel ver."),
   style: z.string().optional().describe("Varsa stil: Japandi, Modern, Minimalist, Akdeniz, vb."),
@@ -131,29 +133,24 @@ const evlumbaSearchOutputSchema = {
   appliedFilters: z.array(z.string()),
   designers: designerOutputSchema.designers,
   projects: projectOutputSchema.projects,
+  renderJob: z
+    .object({
+      endpoint: z.string(),
+      prompt: z.string(),
+      sourceImageUrl: z.string().optional(),
+      sourceImageBase64: z.string().optional(),
+      quality: z.enum(["low", "medium", "high"]),
+      size: z.enum(["1024x1024", "1024x1536", "1536x1024"]),
+      model: z.string(),
+      hasSourceImage: z.boolean(),
+    })
+    .optional(),
 };
 
 function textResult(text: string, structuredContent?: Record<string, unknown>) {
   return {
     content: [{ type: "text" as const, text }],
     ...(structuredContent ? { structuredContent } : {}),
-  };
-}
-
-function getOpenAiApiKey() {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY missing");
-  }
-  return apiKey;
-}
-
-function parseDataUrl(value?: string) {
-  const match = value?.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match?.[2]) return null;
-  return {
-    base64: match[2],
-    mimeType: match[1] || "image/png",
   };
 }
 
@@ -264,163 +261,6 @@ function normalizeRenderSize(size?: string): "1024x1024" | "1024x1536" | "1536x1
   return "1024x1024";
 }
 
-function normalizeBase64Image(value?: string) {
-  const parsed = parseDataUrl(value);
-  return parsed ?? (value ? { base64: value, mimeType: "image/png" } : null);
-}
-
-function publicSupabaseEnv() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) return null;
-  return { url, anonKey };
-}
-
-async function readImageReference({
-  sourceImageBase64,
-  sourceImageUrl,
-}: {
-  sourceImageBase64?: string;
-  sourceImageUrl?: string;
-}) {
-  const inlineImage = normalizeBase64Image(sourceImageBase64) || parseDataUrl(sourceImageUrl);
-  if (inlineImage) {
-    try {
-      return new Blob([Buffer.from(inlineImage.base64, "base64")], { type: inlineImage.mimeType });
-    } catch {
-      return null;
-    }
-  }
-
-  if (!sourceImageUrl) return null;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2500);
-  try {
-    const imageResponse = await fetch(sourceImageUrl, { signal: controller.signal });
-    if (!imageResponse.ok) return null;
-    const mimeType = imageResponse.headers.get("content-type") || "image/png";
-    return new Blob([await imageResponse.arrayBuffer()], { type: mimeType });
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function generateRoomImage({
-  prompt,
-  quality,
-  size,
-}: {
-  prompt: string;
-  quality?: "low" | "medium" | "high";
-  size?: string;
-}) {
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${getOpenAiApiKey()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: OPENAI_IMAGE_MODEL,
-      prompt,
-      quality: quality || DEFAULT_RENDER_QUALITY,
-      size: normalizeRenderSize(size),
-      output_format: "png",
-    }),
-  });
-  const result = (await response.json()) as { data?: Array<{ b64_json?: string }>; error?: { message?: string } };
-  if (!response.ok) {
-    throw new Error(result.error?.message || `OpenAI image generation failed (${response.status})`);
-  }
-  const imageBase64 = result.data?.[0]?.b64_json;
-  if (!imageBase64) throw new Error("OpenAI image generation returned no image");
-  return imageBase64;
-}
-
-async function editRoomImage({
-  prompt,
-  sourceImageBase64,
-  sourceImageUrl,
-  quality,
-  size,
-}: {
-  prompt: string;
-  sourceImageBase64?: string;
-  sourceImageUrl?: string;
-  quality?: "low" | "medium" | "high";
-  size?: string;
-}) {
-  const imageBlob = await readImageReference({ sourceImageBase64, sourceImageUrl });
-  if (!imageBlob) return generateRoomImage({ prompt, quality, size });
-
-  const form = new FormData();
-  form.append("model", OPENAI_IMAGE_MODEL);
-  form.append("prompt", prompt);
-  form.append("quality", quality || DEFAULT_RENDER_QUALITY);
-  form.append("size", normalizeRenderSize(size));
-  form.append("image[]", imageBlob, "evlumba-room-reference.png");
-
-  const response = await fetch("https://api.openai.com/v1/images/edits", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${getOpenAiApiKey()}` },
-    body: form,
-  });
-  const result = (await response.json()) as { data?: Array<{ b64_json?: string }>; error?: { message?: string } };
-  if (!response.ok) {
-    throw new Error(result.error?.message || `OpenAI image edit failed (${response.status})`);
-  }
-  const imageBase64 = result.data?.[0]?.b64_json;
-  if (!imageBase64) throw new Error("OpenAI image edit returned no image");
-  return imageBase64;
-}
-
-async function renderRoomImage({
-  prompt,
-  sourceImageBase64,
-  sourceImageUrl,
-  quality,
-  size,
-}: {
-  prompt: string;
-  sourceImageBase64?: string;
-  sourceImageUrl?: string;
-  quality?: "low" | "medium" | "high";
-  size?: string;
-}) {
-  const supabase = publicSupabaseEnv();
-  if (supabase) {
-    const response = await fetch(`${supabase.url}/functions/v1/render-room-design`, {
-      method: "POST",
-      headers: {
-        apikey: supabase.anonKey,
-        authorization: `Bearer ${supabase.anonKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt,
-        sourceImageBase64,
-        sourceImageUrl,
-        quality,
-        size,
-      }),
-    });
-    const result = (await response.json().catch(() => ({}))) as {
-      ok?: boolean;
-      imageBase64?: string;
-      message?: string;
-    };
-    if (response.ok && result.ok && result.imageBase64) return result.imageBase64;
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error(result.message || `Supabase render failed (${response.status})`);
-    }
-  }
-
-  return editRoomImage({ prompt, sourceImageBase64, sourceImageUrl, quality, size });
-}
-
 async function runRoomRender({
   prompt,
   style,
@@ -447,45 +287,22 @@ async function runRoomRender({
     roomContext,
   });
 
-  try {
-    const imageBase64 = await renderRoomImage({ prompt: renderPrompt, sourceImageBase64, sourceImageUrl, quality, size });
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: "Evlumba render hazır. Bu görsele uygun profesyonel/mimar bulmamı istersen Evlumba sonuçlarını da çıkarabilirim.",
-        },
-        { type: "image" as const, data: imageBase64, mimeType: "image/png" },
-      ],
-      structuredContent: {
-        query: prompt,
-        appliedFilters: [] as string[],
-        designers: [],
-        projects: [],
-        render: {
-          prompt: renderPrompt,
-          model: OPENAI_IMAGE_MODEL,
-          mimeType: "image/png",
-          hasSourceImage: Boolean(sourceImageBase64 || sourceImageUrl),
-        },
-      },
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Bilinmeyen render hatası";
-    return textResult(
-      message === "OPENAI_API_KEY missing"
-        ? "Evlumba render aracı hazır ama sunucuda OPENAI_API_KEY tanımlı değil. Supabase veya Vercel/Web deployment ortamına OPENAI_API_KEY eklenince oda render üretimi çalışır."
-        : `Evlumba render üretilemedi: ${message}`,
-      {
-        query: prompt,
-        appliedFilters: [] as string[],
-        designers: [],
-        projects: [],
-        error: true,
-        model: OPENAI_IMAGE_MODEL,
-      }
-    );
-  }
+  return textResult("Evlumba render hazırlanıyor. Görsel birkaç saniye içinde Evlumba kartında görünecek.", {
+    query: prompt,
+    appliedFilters: [] as string[],
+    designers: [],
+    projects: [],
+    renderJob: {
+      endpoint: RENDER_FUNCTION_URL,
+      prompt: renderPrompt,
+      sourceImageUrl,
+      sourceImageBase64,
+      quality: quality || DEFAULT_RENDER_QUALITY,
+      size: normalizeRenderSize(size),
+      model: OPENAI_IMAGE_MODEL,
+      hasSourceImage: Boolean(sourceImageBase64 || sourceImageUrl),
+    },
+  });
 }
 
 async function runGeneralEvlumbaSearch({
@@ -587,7 +404,7 @@ function createEvlumbaMcpServer() {
                   "https://images.unsplash.com",
                   "https://i.pravatar.cc",
                 ],
-                connectDomains: ["https://www.evlumba.com"],
+                connectDomains: ["https://www.evlumba.com", RENDER_FUNCTION_ORIGIN],
               },
             },
           },
@@ -610,7 +427,7 @@ function createEvlumbaMcpServer() {
         openWorldHint: false,
         idempotentHint: true,
       },
-      _meta: { ui: { visibility: ["model"] } },
+      _meta: { ui: { resourceUri: WIDGET_URI, visibility: ["model"] } },
     },
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
       return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });
@@ -631,7 +448,7 @@ function createEvlumbaMcpServer() {
         openWorldHint: false,
         idempotentHint: true,
       },
-      _meta: { ui: { visibility: ["model"] } },
+      _meta: { ui: { resourceUri: WIDGET_URI, visibility: ["model"] } },
     },
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
       return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });

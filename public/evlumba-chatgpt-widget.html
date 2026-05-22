@@ -260,6 +260,65 @@
         font-weight: 750;
         text-decoration: none;
       }
+      .render-panel {
+        padding: 18px;
+        border: 1px solid rgba(42, 71, 62, 0.1);
+        border-radius: 22px;
+        background:
+          radial-gradient(circle at 12% 10%, rgba(16, 185, 129, 0.1), transparent 34%),
+          linear-gradient(135deg, #ffffff 0%, #f8f4eb 100%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+      }
+      .render-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .render-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        height: 42px;
+        border-radius: 16px;
+        background: #e8f8ef;
+        color: #057a50;
+        font-size: 20px;
+        font-weight: 850;
+      }
+      .render-status {
+        margin: 8px 0 0;
+        color: #617167;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .render-image {
+        display: block;
+        width: 100%;
+        max-height: 620px;
+        margin-top: 16px;
+        border: 1px solid rgba(42, 71, 62, 0.1);
+        border-radius: 18px;
+        background: #eef3ef;
+        object-fit: contain;
+        box-shadow: 0 16px 42px rgba(15, 35, 29, 0.12);
+      }
+      .render-pulse {
+        position: relative;
+        min-height: 240px;
+        margin-top: 16px;
+        overflow: hidden;
+        border-radius: 18px;
+        background: linear-gradient(110deg, #edf3ee 8%, #f9fbf7 18%, #edf3ee 33%);
+        background-size: 200% 100%;
+        animation: shimmer 1.2s linear infinite;
+      }
+      @keyframes shimmer {
+        to {
+          background-position-x: -200%;
+        }
+      }
       @media (max-width: 520px) {
         body {
           padding: 10px;
@@ -474,8 +533,78 @@
           </a>
         `;
       }
+      async function renderAsyncJob(job) {
+        renderChips([]);
+        mapWrapEl.hidden = true;
+        emptyEl.hidden = true;
+        subtitleEl.textContent = "Evlumba render hazırlanıyor. Görsel birkaç saniye içinde burada görünecek.";
+        resultsEl.innerHTML = `
+          <div class="render-panel">
+            <div class="render-head">
+              <span class="render-icon">ev</span>
+              <div>
+                <p class="type">Evlumba Render</p>
+                <h2 class="title">Oda tasarımı hazırlanıyor</h2>
+                <p class="render-status">Fotogerçekçi görsel üretimi başladı. Bu işlem kısa bir süre alabilir.</p>
+              </div>
+            </div>
+            <div class="render-pulse" aria-label="Render hazırlanıyor"></div>
+          </div>
+        `;
+        try {
+          const response = await fetch(job.endpoint, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              prompt: job.prompt,
+              sourceImageUrl: job.sourceImageUrl,
+              sourceImageBase64: job.sourceImageBase64,
+              quality: job.quality || "low",
+              size: job.size || "1024x1024",
+            }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.ok || !data.imageBase64) {
+            throw new Error(data.message || "Render oluşturulamadı.");
+          }
+          const mimeType = data.mimeType || "image/png";
+          subtitleEl.textContent = "Fotogerçekçi Evlumba render hazır.";
+          resultsEl.innerHTML = `
+            <div class="render-panel">
+              <div class="render-head">
+                <span class="render-icon">ev</span>
+                <div>
+                  <p class="type">Evlumba Render</p>
+                  <h2 class="title">Oda tasarımı hazır</h2>
+                  <p class="render-status">Bu görsele uygun profesyonel veya proje aramak için sohbette devam edebilirsin.</p>
+                </div>
+              </div>
+              <img class="render-image" src="data:${escapeHtml(mimeType)};base64,${data.imageBase64}" alt="Evlumba oda renderı" />
+            </div>
+          `;
+        } catch (error) {
+          const message = error?.message || "Bilinmeyen hata";
+          subtitleEl.textContent = "Render tamamlanamadı.";
+          resultsEl.innerHTML = `
+            <div class="render-panel">
+              <div class="render-head">
+                <span class="render-icon">ev</span>
+                <div>
+                  <p class="type">Evlumba Render</p>
+                  <h2 class="title">Render oluşturulamadı</h2>
+                  <p class="render-status">${escapeHtml(message)} Tekrar denediğinde aynı tasarım isteğiyle yeniden oluşturabilirim.</p>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
       function updateFromResponse(response) {
         const structured = response?.structuredContent ?? response ?? {};
+        if (structured.renderJob?.endpoint && structured.renderJob?.prompt) {
+          void renderAsyncJob(structured.renderJob);
+          return;
+        }
         const designers = Array.isArray(structured.designers) ? structured.designers : [];
         const projects = Array.isArray(structured.projects) ? structured.projects : [];
         const filters = Array.isArray(structured.appliedFilters) ? structured.appliedFilters : [];
