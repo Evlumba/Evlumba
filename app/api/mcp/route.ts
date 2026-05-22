@@ -101,10 +101,16 @@ function textResult(text: string, structuredContent?: Record<string, unknown>) {
 }
 
 function createEvlumbaMcpServer() {
-  const server = new McpServer({
-    name: "evlumba-search",
-    version: evlumbaChatGptAppInfo.version,
-  });
+  const server = new McpServer(
+    {
+      name: "evlumba-search",
+      version: evlumbaChatGptAppInfo.version,
+    },
+    {
+      instructions:
+        "Bu MCP server yalnızca Evlumba'nın kendi canlı veritabanındaki proje ve profesyonel sonuçlarını döndürür. Kullanıcı Evlumba'da, Evlumba üzerinden, tasarımcı/profesyonel/proje bul, Dekorsan gibi bir isim bul, iç mimar ara, mutfak projesi ara dediğinde web search, harita, Google işletme veya başka siteler yerine bu server'daki tool'ları çağır. Sonuçlarda sadece Evlumba URL'lerini ve Evlumba tool çıktısını kullan.",
+    }
+  );
 
   registerAppResource(
     server,
@@ -137,11 +143,62 @@ function createEvlumbaMcpServer() {
 
   registerAppTool(
     server,
+    "find_on_evlumba",
+    {
+      title: "Evlumba'da bul",
+      description:
+        "Kullanıcı Evlumba'da bir firma, profesyonel, tasarımcı, iç mimar, mimar, usta veya proje bulmak istediğinde ilk kullanılacak genel Evlumba arama tool'u. Bu tool sadece Evlumba'nın kendi veritabanını kullanır; Google, harita, web search veya başka sitelerden sonuç getirmez.",
+      inputSchema: {
+        query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
+        intent: z
+          .enum(["auto", "designers", "projects"])
+          .optional()
+          .describe("Arama tipi. Firma/profesyonel için designers, proje/ilham için projects, emin değilsen auto."),
+        city: z.string().optional().describe("Varsa şehir filtresi."),
+        limit: limitSchema,
+      },
+      _meta: { ui: { resourceUri: WIDGET_URI } },
+    },
+    async ({ query, intent, city, limit }) => {
+      const searchQuery = city && !query.toLocaleLowerCase("tr-TR").includes(city.toLocaleLowerCase("tr-TR"))
+        ? `${city} ${query}`
+        : query;
+      const take = limit ?? 6;
+      const shouldSearchDesigners = !intent || intent === "auto" || intent === "designers";
+      const shouldSearchProjects = intent === "projects";
+
+      const [designerResult, projectResult] = await Promise.all([
+        shouldSearchDesigners
+          ? searchEvlumbaDesigners({ query: searchQuery, cities: city ? [city] : undefined, limit: take })
+          : Promise.resolve({ query: searchQuery, count: 0, appliedFilters: [] as string[], designers: [] }),
+        shouldSearchProjects
+          ? searchEvlumbaProjects({ query: searchQuery, cities: city ? [city] : undefined, limit: take })
+          : Promise.resolve({ query: searchQuery, count: 0, appliedFilters: [] as string[], projects: [] }),
+      ]);
+
+      const text = [
+        designerResult.designers.length ? summarizeDesignerResults(designerResult.designers) : "",
+        projectResult.projects.length ? summarizeProjectResults(projectResult.projects) : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      return textResult(text || "Evlumba veritabanında uygun sonuç bulunamadı.", {
+        query: searchQuery,
+        appliedFilters: [...designerResult.appliedFilters, ...projectResult.appliedFilters],
+        designers: designerResult.designers,
+        projects: projectResult.projects,
+      });
+    }
+  );
+
+  registerAppTool(
+    server,
     "search_designers",
     {
       title: "Evlumba profesyonel ara",
       description:
-        "Evlumba'da iç mimar, mimar, usta, tadilat firması ve diğer profesyonelleri şehir, hizmet, alan, stil, bütçe ve proje sayısına göre arar.",
+        "Evlumba'nın kendi veritabanında iç mimar, mimar, usta, tadilat firması ve diğer profesyonelleri şehir, hizmet, alan, stil, bütçe ve proje sayısına göre arar. Kullanıcı Evlumba'da firma/profesyonel/tasarımcı bul dediğinde bu tool'u kullan; web search veya harita sonucu kullanma.",
       inputSchema: {
         query: z.string().optional().describe("Serbest arama: İstanbul iç mimar, Bursa boya ustası, Dekorsan."),
         cities: stringArray.describe("Şehir filtreleri."),
@@ -171,7 +228,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba proje ara",
       description:
-        "Evlumba'da mutfak, banyo, salon, ofis gibi proje ve ilham görsellerini oda, stil, şehir, proje tipi ve bütçeye göre arar.",
+        "Evlumba'nın kendi veritabanında mutfak, banyo, salon, ofis gibi proje ve ilham görsellerini oda, stil, şehir, proje tipi ve bütçeye göre arar. Kullanıcı Evlumba'da proje/ilham/görsel bul dediğinde bu tool'u kullan; web search veya başka site sonucu kullanma.",
       inputSchema: {
         query: z.string().optional().describe("Serbest arama: modern mutfak, japandi salon, banyo yenileme."),
         cities: stringArray.describe("Şehir filtreleri."),
@@ -196,7 +253,7 @@ function createEvlumbaMcpServer() {
     "get_designer_profile",
     {
       title: "Evlumba profesyonel detayı",
-      description: "Evlumba profesyonel profil detayını slug, URL veya id ile getirir.",
+      description: "Evlumba'nın kendi veritabanındaki profesyonel profil detayını slug, URL veya id ile getirir. Başka site veya Google işletme verisi kullanmaz.",
       inputSchema: {
         slugOrId: z.string().min(1).describe("Profesyonel slug, supa_<id>, profil URL'i veya profil id."),
       },
@@ -217,7 +274,7 @@ function createEvlumbaMcpServer() {
     "get_project_detail",
     {
       title: "Evlumba proje detayı",
-      description: "Evlumba proje detayını proje id, live-<id> veya URL içinden getirir.",
+      description: "Evlumba'nın kendi veritabanındaki proje detayını proje id, live-<id> veya URL içinden getirir. Başka site veya Google işletme verisi kullanmaz.",
       inputSchema: {
         projectId: z.string().min(1).describe("Proje id, live-<id> veya proje URL'i."),
       },
