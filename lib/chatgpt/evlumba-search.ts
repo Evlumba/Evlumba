@@ -190,6 +190,16 @@ function inferCities(query: string, provided?: string[]) {
   return direct.length ? direct : optionMatches(query, TURKIYE_ILLERI);
 }
 
+function stripOptionsFromQuery(query: string, options: string[]) {
+  let next = ` ${query} `;
+  for (const option of options) {
+    const escaped = option.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    next = next.replace(new RegExp(`\\s+${escaped}\\s+`, "giu"), " ");
+  }
+  const cleaned = next.replace(/\s+/g, " ").trim();
+  return cleaned.length >= 2 ? cleaned : query;
+}
+
 function infer(query: string, provided: unknown, options: string[], aliases: Record<string, string | string[]> = {}) {
   const direct = uniqueAllowedValues(provided, options, aliases);
   if (direct.length) return direct;
@@ -497,18 +507,19 @@ export async function searchEvlumbaDesigners(input: SearchDesignersInput) {
   const q = clean(input.query);
   const take = limit(input.limit, 8, 20);
   const cityFilters = inferCities(q, input.cities);
-  const professionalFilters = infer(q, input.professionalTypes, PROFESSIONAL_TYPE_OPTIONS, PROFESSIONAL_TYPE_ALIASES);
-  const serviceFilters = infer(q, input.services, SERVICE_OPTIONS, SERVICE_ALIASES);
-  const projectTypeFilters = infer(q, input.projectTypes, PROJECT_TYPE_OPTIONS, PROJECT_TYPE_ALIASES);
-  const areaFilters = infer(q, input.serviceAreas, SERVICE_AREA_OPTIONS);
-  const styleFilters = infer(q, input.styleExpertise, STYLE_OPTIONS);
+  const searchQuery = stripOptionsFromQuery(q, cityFilters);
+  const professionalFilters = infer(searchQuery, input.professionalTypes, PROFESSIONAL_TYPE_OPTIONS, PROFESSIONAL_TYPE_ALIASES);
+  const serviceFilters = infer(searchQuery, input.services, SERVICE_OPTIONS, SERVICE_ALIASES);
+  const projectTypeFilters = infer(searchQuery, input.projectTypes, PROJECT_TYPE_OPTIONS, PROJECT_TYPE_ALIASES);
+  const areaFilters = infer(searchQuery, input.serviceAreas, SERVICE_AREA_OPTIONS);
+  const styleFilters = infer(searchQuery, input.styleExpertise, STYLE_OPTIONS);
   const regionFilters = uniqueAllowedValues(input.serviceRegions ?? [], SERVICE_REGION_OPTIONS);
   const startingBudget = uniqueAllowedValues(input.startingBudget ?? "", STARTING_BUDGET_OPTIONS)[0] ?? "";
-  const semantic = await semanticIds(q, "designers", Math.max(take * 2, 20));
+  const semantic = await semanticIds(searchQuery, "designers", Math.max(take * 2, 20));
   const order = new Map(semantic.designerIds.map((id, index) => [id, index]));
   const [bySemantic, byText] = await Promise.all([
     semantic.designerIds.length ? profilesByIds(client, semantic.designerIds) : Promise.resolve([]),
-    profiles(client, searchFilter(q, PROFILE_SEARCH_COLUMNS)),
+    profiles(client, searchFilter(searchQuery, PROFILE_SEARCH_COLUMNS)),
   ]);
   const profileMap = new Map([...bySemantic, ...byText].map((profile) => [profile.id, profile]));
   const projectRows = await projectsForDesigners(client, [...profileMap.keys()]);
@@ -516,7 +527,7 @@ export async function searchEvlumbaDesigners(input: SearchDesignersInput) {
   projectRows.forEach((project) => grouped.set(project.designer_id, [...(grouped.get(project.designer_id) ?? []), project]));
   const stats = reviewMap(await reviews(client, [...profileMap.keys()]));
   const designers = [...profileMap.values()]
-    .filter((profile) => !q || order.has(profile.id) || textMatch(designerText(profile, grouped.get(profile.id) ?? []), q))
+    .filter((profile) => !searchQuery || order.has(profile.id) || textMatch(designerText(profile, grouped.get(profile.id) ?? []), searchQuery))
     .map((profile) => mapDesigner(profile, grouped.get(profile.id) ?? [], stats))
     .filter((designer) => any(designer.cities.length ? designer.cities : [designer.city], cityFilters))
     .filter((designer) => any(designer.professionalTypes, professionalFilters))
@@ -531,7 +542,7 @@ export async function searchEvlumbaDesigners(input: SearchDesignersInput) {
   return {
     query: q,
     count: designers.length,
-    designers: sortDesigners(designers, input.sort, order, q).slice(0, take),
+    designers: sortDesigners(designers, input.sort, order, searchQuery).slice(0, take),
     appliedFilters: unique([
       cityFilters.map((item) => `Şehir: ${item}`),
       professionalFilters.map((item) => `Profesyonel: ${item}`),
@@ -572,21 +583,22 @@ export async function searchEvlumbaProjects(input: SearchProjectsInput) {
   const q = clean(input.query);
   const take = limit(input.limit, 8, 24);
   const cityFilters = inferCities(q, input.cities);
-  const roomFilters = infer(q, input.rooms, SERVICE_AREA_OPTIONS);
-  const styleFilters = infer(q, input.styles, STYLE_OPTIONS);
-  const typeFilters = infer(q, input.projectTypes, PROJECT_TYPE_OPTIONS, PROJECT_TYPE_ALIASES);
+  const searchQuery = stripOptionsFromQuery(q, cityFilters);
+  const roomFilters = infer(searchQuery, input.rooms, SERVICE_AREA_OPTIONS);
+  const styleFilters = infer(searchQuery, input.styles, STYLE_OPTIONS);
+  const typeFilters = infer(searchQuery, input.projectTypes, PROJECT_TYPE_OPTIONS, PROJECT_TYPE_ALIASES);
   const budget = clean(input.budget);
-  const semantic = await semanticIds(q, "projects", Math.max(take * 3, 30));
+  const semantic = await semanticIds(searchQuery, "projects", Math.max(take * 3, 30));
   const order = new Map(semantic.projectIds.map((id, index) => [id, index]));
   const [bySemantic, byText] = await Promise.all([
     semantic.projectIds.length ? projectsByIds(client, semantic.projectIds) : Promise.resolve([]),
-    projects(client, searchFilter(q, PROJECT_SEARCH_COLUMNS)),
+    projects(client, searchFilter(searchQuery, PROJECT_SEARCH_COLUMNS)),
   ]);
   const projectMap = new Map([...bySemantic, ...byText].map((project) => [project.id, project]));
   const profileMap = new Map((await profilesByIds(client, unique([...projectMap.values()].map((project) => project.designer_id)))).map((profile) => [profile.id, profile]));
   const mapped = [...projectMap.values()]
     .map((project) => mapProject(project, profileMap.get(project.designer_id)))
-    .filter((project) => !q || order.has(project.id) || textMatch([project.title, project.projectType, project.city, project.description, project.tags].join(" "), q))
+    .filter((project) => !searchQuery || order.has(project.id) || textMatch([project.title, project.projectType, project.city, project.description, project.tags].join(" "), searchQuery))
     .filter((project) => any(project.city ? [project.city] : [], cityFilters))
     .filter((project) => any(project.room ? [project.room] : [], roomFilters))
     .filter((project) => any(project.style ? [project.style] : [], styleFilters))
@@ -596,7 +608,7 @@ export async function searchEvlumbaProjects(input: SearchProjectsInput) {
   return {
     query: q,
     count: mapped.length,
-    projects: sortProjects(mapped, input.sort, order, q).slice(0, take),
+    projects: sortProjects(mapped, input.sort, order, searchQuery).slice(0, take),
     appliedFilters: unique([
       cityFilters.map((item) => `Şehir: ${item}`),
       roomFilters.map((item) => `Alan: ${item}`),
