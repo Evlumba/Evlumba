@@ -670,6 +670,6 @@ export function summarizeProjectResults(projects: EvlumbaProjectResult[]) {
 
 export const evlumbaChatGptAppInfo = {
   name: "Evlumba",
-  version: "0.1.0",
+  version: "0.1.1",
   siteUrl: SITE_URL,
 };

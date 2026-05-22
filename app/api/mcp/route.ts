@@ -39,6 +39,27 @@ const evlumbaReadOnlyAnnotations = {
   idempotentHint: true,
 };
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
+const roomRenderInputSchema = {
+  prompt: z.string().min(3).describe("Kullanıcının tasarım isteği. Örn: Bu salonu japandi stilde tasarla ve görsel ver."),
+  style: z.string().optional().describe("Varsa stil: Japandi, Modern, Minimalist, Akdeniz, vb."),
+  roomType: z.string().optional().describe("Varsa oda/mekan tipi: salon, mutfak, banyo, yatak odası, ofis, vb."),
+  roomContext: z
+    .string()
+    .optional()
+    .describe("Yüklenen/konuşulan görselden görülen oda özeti: mevcut durum, pencere, zemin, duvar, ölçü/oran ve korunacak layout."),
+  sourceImageUrl: z
+    .string()
+    .optional()
+    .describe("Varsa erişilebilir kaynak oda görsel URL'i veya data:image/...;base64 URL. Yoksa roomContext ile üret."),
+  sourceImageBase64: z
+    .string()
+    .optional()
+    .describe("Varsa kaynak oda görselinin base64 verisi. Data URL veya çıplak base64 kabul edilir. Yoksa roomContext ile üret."),
+  quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
+  size: roomRenderSizeSchema.describe(
+    "Render boyutu. 1024x1024, 1024x1536 veya 1536x1024 önerilir. 1792x1024 gibi farklı oranlar gelirse otomatik yakın formata çevrilir."
+  ),
+};
 
 const designerOutputSchema = {
   query: z.string(),
@@ -562,37 +583,42 @@ function createEvlumbaMcpServer() {
     })
   );
 
-  server.registerTool(
+  registerAppTool(
+    server,
     "evlumba_render_room_design",
     {
       title: "Evlumba oda tasarla",
       description:
-        "Use this when the Evlumba app is selected and the user asks to design/redesign/render/decorate a room or uploaded room photo and wants a visual image. Examples: 'bu salonu japandi tasarla ve görsel ver', 'odamı modern yap', 'mutfağı yeniden tasarla', 'fotogerçekçi render üret'. This tool generates an actual photorealistic interior render using Evlumba's rendering pipeline. Do not use a simple overlay, diagram, collage, HTML mockup, wireframe, or text-only answer for these prompts. If an uploaded image is visible but you cannot pass the file bytes/URL, summarize the room accurately in roomContext and still call this tool.",
-      inputSchema: {
-        prompt: z.string().min(3).describe("Kullanıcının tasarım isteği. Örn: Bu salonu japandi stilde tasarla ve görsel ver."),
-        style: z.string().optional().describe("Varsa stil: Japandi, Modern, Minimalist, Akdeniz, vb."),
-        roomType: z.string().optional().describe("Varsa oda/mekan tipi: salon, mutfak, banyo, yatak odası, ofis, vb."),
-        roomContext: z
-          .string()
-          .optional()
-          .describe("Yüklenen/konuşulan görselden görülen oda özeti: mevcut durum, pencere, zemin, duvar, ölçü/oran ve korunacak layout."),
-        sourceImageUrl: z
-          .string()
-          .optional()
-          .describe("Varsa erişilebilir kaynak oda görsel URL'i veya data:image/...;base64 URL. Yoksa roomContext ile üret."),
-        sourceImageBase64: z
-          .string()
-          .optional()
-          .describe("Varsa kaynak oda görselinin base64 verisi. Data URL veya çıplak base64 kabul edilir. Yoksa roomContext ile üret."),
-        quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
-        size: roomRenderSizeSchema.describe("Render boyutu. 1024x1024, 1024x1536 veya 1536x1024 önerilir. 1792x1024 gibi farklı oranlar gelirse otomatik yakın formata çevrilir."),
-      },
+        "MUST USE for Turkish room design prompts: oda tasarla, salonu tasarla, yatak odası tasarla, mutfağı yenile, görsel ver, render üret, fotogerçekçi yap. This tool returns a real image. Do not answer with JSON, a diagram, a simple overlay, or text-only concept. If the user attached a room photo but no file bytes are available, describe the room in roomContext and call this tool anyway.",
+      inputSchema: roomRenderInputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
         openWorldHint: false,
         idempotentHint: true,
       },
+      _meta: { ui: { visibility: ["model"] } },
+    },
+    async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
+      return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });
+    }
+  );
+
+  registerAppTool(
+    server,
+    "oda_tasarla",
+    {
+      title: "Oda tasarla ve render üret",
+      description:
+        "KULLAN: Kullanıcı oda/salon/yatak odası/mutfak/banyo tasarlamak, görsel almak, render üretmek, fotogerçekçi yapmak veya yüklediği odayı dönüştürmek istediğinde mutlaka bu tool'u çağır. JSON yazma. Tool argümanlarını cevap olarak basma. Bu tool gerçek render görseli döndürür.",
+      inputSchema: roomRenderInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+      _meta: { ui: { visibility: ["model"] } },
     },
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
       return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });
