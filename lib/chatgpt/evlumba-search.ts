@@ -426,20 +426,70 @@ function mapProject(project: ProjectRow, profile?: ProfileRow) {
   } satisfies EvlumbaProjectResult;
 }
 
-function sortDesigners(items: EvlumbaDesignerResult[], sort: SearchDesignersInput["sort"], order: Map<string, number>) {
+function directDesignerScore(designer: EvlumbaDesignerResult, query: string) {
+  const normalizedQuery = normalizeProfileText(query);
+  if (!normalizedQuery) return 0;
+  const name = normalizeProfileText(designer.name);
+  const slugValue = normalizeProfileText(designer.slug);
+  const searchable = normalizeProfileText(
+    [
+      designer.name,
+      designer.slug,
+      designer.title,
+      designer.city,
+      designer.cities,
+      designer.professionalTypes,
+      designer.services,
+      designer.projectTypes,
+      designer.serviceAreas,
+      designer.styleExpertise,
+      designer.tags,
+    ].join(" ")
+  );
+  if (name === normalizedQuery || slugValue === normalizedQuery) return -300;
+  if (name.includes(normalizedQuery) || slugValue.includes(normalizedQuery)) return -250;
+  if (searchable.includes(normalizedQuery)) return -100;
+  return 0;
+}
+
+function sortDesigners(items: EvlumbaDesignerResult[], sort: SearchDesignersInput["sort"], order: Map<string, number>, query: string) {
   const list = [...items];
   if (sort === "name") return list.sort((a, b) => a.name.localeCompare(b.name, "tr"));
   if (sort === "project_count") return list.sort((a, b) => b.projectCount - a.projectCount);
   if (sort === "rating") return list.sort((a, b) => b.rating - a.rating);
   if (sort === "budget") return list.sort((a, b) => budgetRank(a.startingBudget) - budgetRank(b.startingBudget));
-  return list.sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999) || b.projectCount - a.projectCount || b.rating - a.rating);
+  return list.sort(
+    (a, b) =>
+      directDesignerScore(a, query) - directDesignerScore(b, query) ||
+      (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999) ||
+      b.projectCount - a.projectCount ||
+      b.rating - a.rating
+  );
 }
 
-function sortProjects(items: EvlumbaProjectResult[], sort: SearchProjectsInput["sort"], order: Map<string, number>) {
+function directProjectScore(project: EvlumbaProjectResult, query: string) {
+  const normalizedQuery = normalizeProfileText(query);
+  if (!normalizedQuery) return 0;
+  const title = normalizeProfileText(project.title);
+  const searchable = normalizeProfileText(
+    [project.title, project.projectType, project.room, project.style, project.city, project.designer.name, project.tags].join(" ")
+  );
+  if (title === normalizedQuery) return -250;
+  if (title.includes(normalizedQuery)) return -180;
+  if (searchable.includes(normalizedQuery)) return -80;
+  return 0;
+}
+
+function sortProjects(items: EvlumbaProjectResult[], sort: SearchProjectsInput["sort"], order: Map<string, number>, query: string) {
   const list = [...items];
   if (sort === "budget") return list.sort((a, b) => projectBudgetRank(a.budget) - projectBudgetRank(b.budget));
   if (sort === "date") return list.sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? ""));
-  return list.sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999) || Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? ""));
+  return list.sort(
+    (a, b) =>
+      directProjectScore(a, query) - directProjectScore(b, query) ||
+      (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999) ||
+      Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? "")
+  );
 }
 
 export async function searchEvlumbaDesigners(input: SearchDesignersInput) {
@@ -481,7 +531,7 @@ export async function searchEvlumbaDesigners(input: SearchDesignersInput) {
   return {
     query: q,
     count: designers.length,
-    designers: sortDesigners(designers, input.sort, order).slice(0, take),
+    designers: sortDesigners(designers, input.sort, order, q).slice(0, take),
     appliedFilters: unique([
       cityFilters.map((item) => `Şehir: ${item}`),
       professionalFilters.map((item) => `Profesyonel: ${item}`),
@@ -546,7 +596,7 @@ export async function searchEvlumbaProjects(input: SearchProjectsInput) {
   return {
     query: q,
     count: mapped.length,
-    projects: sortProjects(mapped, input.sort, order).slice(0, take),
+    projects: sortProjects(mapped, input.sort, order, q).slice(0, take),
     appliedFilters: unique([
       cityFilters.map((item) => `Şehir: ${item}`),
       roomFilters.map((item) => `Alan: ${item}`),
