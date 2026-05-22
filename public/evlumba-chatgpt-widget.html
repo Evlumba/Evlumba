@@ -618,6 +618,14 @@
         resultsEl.innerHTML = cards.join("");
         emptyEl.hidden = cards.length > 0;
       }
+      function updateFromOpenAiGlobals() {
+        const openai = window.openai;
+        if (!openai?.toolOutput && !openai?.toolResponseMetadata) return;
+        updateFromResponse({
+          structuredContent: openai.toolOutput,
+          _meta: openai.toolResponseMetadata,
+        });
+      }
       window.addEventListener(
         "message",
         (event) => {
@@ -636,6 +644,7 @@
         },
         { passive: true }
       );
+      window.addEventListener("openai:set_globals", updateFromOpenAiGlobals, { passive: true });
       async function initializeBridge() {
         try {
           await rpcRequest("ui/initialize", {
@@ -648,6 +657,7 @@
           console.error("Evlumba widget bridge failed:", error);
         }
       }
+      updateFromOpenAiGlobals();
       void initializeBridge();
     </script>
   </body>

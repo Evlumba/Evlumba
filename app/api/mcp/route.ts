@@ -276,6 +276,46 @@ function shouldUseHighQuality(prompt: string, quality?: "low" | "medium" | "high
   return explicitlyHigh ? "high" : DEFAULT_RENDER_QUALITY;
 }
 
+async function renderImageViaEvlumbaFunction(renderJob: {
+  prompt: string;
+  sourceImageUrl?: string;
+  sourceImageBase64?: string;
+  quality: "low" | "medium" | "high";
+  size: "1024x1024" | "1024x1536" | "1536x1024";
+}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 22000);
+  try {
+    const response = await fetch(RENDER_FUNCTION_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        prompt: renderJob.prompt,
+        sourceImageUrl: renderJob.sourceImageUrl,
+        sourceImageBase64: renderJob.sourceImageBase64,
+        quality: renderJob.quality,
+        size: renderJob.size,
+      }),
+    });
+    const result = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      imageBase64?: string;
+      mimeType?: string;
+      message?: string;
+    };
+    if (!response.ok || !result.ok || !result.imageBase64) {
+      throw new Error(result.message || `Evlumba render failed (${response.status})`);
+    }
+    return {
+      imageBase64: result.imageBase64,
+      mimeType: result.mimeType || "image/png",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function runRoomRender({
   prompt,
   style,
@@ -313,23 +353,49 @@ async function runRoomRender({
     hasSourceImage: Boolean(sourceImageBase64 || sourceImageUrl),
   };
 
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: "Evlumba render kartı açılıyor. Görsel Evlumba kartında yüklenecek; tool argümanlarını veya JSON'u cevap olarak yazma.",
+  try {
+    const rendered = await renderImageViaEvlumbaFunction(renderJob);
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: "Evlumba render hazır. Görsel aşağıda gösteriliyor.",
+        },
+        {
+          type: "image" as const,
+          data: rendered.imageBase64,
+          mimeType: rendered.mimeType,
+        },
+      ],
+      structuredContent: {
+        query: prompt,
+        appliedFilters: [] as string[],
+        designers: [],
+        projects: [],
+        renderQueued: false,
+        renderJob,
       },
-    ],
-    structuredContent: {
-      query: prompt,
-      appliedFilters: [] as string[],
-      designers: [],
-      projects: [],
-      renderQueued: true,
-      renderJob,
-    },
-    _meta: { renderJob },
-  };
+      _meta: { renderJob },
+    };
+  } catch {
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: "Evlumba render kartı açılıyor. Görsel Evlumba kartında yüklenecek; tool argümanlarını veya JSON'u cevap olarak yazma.",
+        },
+      ],
+      structuredContent: {
+        query: prompt,
+        appliedFilters: [] as string[],
+        designers: [],
+        projects: [],
+        renderQueued: true,
+        renderJob,
+      },
+      _meta: { renderJob },
+    };
+  }
 }
 
 async function runGeneralEvlumbaSearch({
