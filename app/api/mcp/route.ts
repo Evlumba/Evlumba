@@ -19,7 +19,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const WIDGET_URI = "ui://evlumba/search-results.html";
+const WIDGET_URI = "ui://evlumba/search-results-v4.html";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -42,6 +42,11 @@ const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
 const DEFAULT_RENDER_QUALITY: "low" | "medium" | "high" = "low";
 const RENDER_FUNCTION_URL = "https://vgtgcjnrsladdharzkwn.supabase.co/functions/v1/render-room-design";
 const RENDER_FUNCTION_ORIGIN = "https://vgtgcjnrsladdharzkwn.supabase.co";
+const TOOL_UI_META = {
+  ui: { resourceUri: WIDGET_URI },
+  "openai/outputTemplate": WIDGET_URI,
+  "openai/widgetAccessible": true,
+};
 const roomRenderInputSchema = {
   prompt: z.string().min(3).describe("Kullanıcının tasarım isteği. Örn: Bu salonu japandi stilde tasarla ve görsel ver."),
   style: z.string().optional().describe("Varsa stil: Japandi, Modern, Minimalist, Akdeniz, vb."),
@@ -419,6 +424,8 @@ function createEvlumbaMcpServer() {
           text: widgetHtml,
           _meta: {
             ui: {
+              description: "Evlumba sonuç ve render kartı. Arama sonuçlarını, harita markerlarını ve oda renderlarını gösterir.",
+              domain: "https://www.evlumba.com",
               csp: {
                 resourceDomains: [
                   "https://www.evlumba.com",
@@ -428,6 +435,17 @@ function createEvlumbaMcpServer() {
                 ],
                 connectDomains: ["https://www.evlumba.com", RENDER_FUNCTION_ORIGIN],
               },
+            },
+            "openai/widgetDescription": "Evlumba sonuç ve render kartı. Arama sonuçlarını, harita markerlarını ve oda renderlarını gösterir.",
+            "openai/widgetDomain": "https://www.evlumba.com",
+            "openai/widgetCSP": {
+              resource_domains: [
+                "https://www.evlumba.com",
+                "https://*.supabase.co",
+                "https://images.unsplash.com",
+                "https://i.pravatar.cc",
+              ],
+              connect_domains: ["https://www.evlumba.com", RENDER_FUNCTION_ORIGIN],
             },
           },
         },
@@ -450,7 +468,7 @@ function createEvlumbaMcpServer() {
         openWorldHint: false,
         idempotentHint: true,
       },
-      _meta: { ui: { resourceUri: WIDGET_URI } },
+      _meta: TOOL_UI_META,
     },
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
       return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });
@@ -472,7 +490,7 @@ function createEvlumbaMcpServer() {
         openWorldHint: false,
         idempotentHint: true,
       },
-      _meta: { ui: { resourceUri: WIDGET_URI } },
+      _meta: TOOL_UI_META,
     },
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
       return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });
@@ -507,7 +525,7 @@ function createEvlumbaMcpServer() {
       },
       outputSchema: evlumbaSearchOutputSchema,
       annotations: evlumbaReadOnlyAnnotations,
-      _meta: { ui: { resourceUri: WIDGET_URI } },
+      _meta: TOOL_UI_META,
     },
     runGeneralEvlumbaSearch
   );
@@ -540,7 +558,7 @@ function createEvlumbaMcpServer() {
       },
       outputSchema: evlumbaSearchOutputSchema,
       annotations: evlumbaReadOnlyAnnotations,
-      _meta: { ui: { resourceUri: WIDGET_URI } },
+      _meta: TOOL_UI_META,
     },
     runGeneralEvlumbaSearch
   );
@@ -568,7 +586,7 @@ function createEvlumbaMcpServer() {
       },
       outputSchema: designerOutputSchema,
       annotations: evlumbaReadOnlyAnnotations,
-      _meta: { ui: { resourceUri: WIDGET_URI } },
+      _meta: TOOL_UI_META,
     },
     async (args) => {
       const result = await searchEvlumbaDesigners(args ?? {});
@@ -595,7 +613,7 @@ function createEvlumbaMcpServer() {
       },
       outputSchema: projectOutputSchema,
       annotations: evlumbaReadOnlyAnnotations,
-      _meta: { ui: { resourceUri: WIDGET_URI } },
+      _meta: TOOL_UI_META,
     },
     async (args) => {
       const result = await searchEvlumbaProjects(args ?? {});
@@ -613,7 +631,7 @@ function createEvlumbaMcpServer() {
         slugOrId: z.string().min(1).describe("Profesyonel slug, supa_<id>, profil URL'i veya profil id."),
       },
       annotations: evlumbaReadOnlyAnnotations,
-      _meta: { ui: { resourceUri: WIDGET_URI } },
+      _meta: TOOL_UI_META,
     },
     async ({ slugOrId }) => {
       const designer = await getEvlumbaDesignerProfile(slugOrId);
@@ -635,7 +653,7 @@ function createEvlumbaMcpServer() {
         projectId: z.string().min(1).describe("Proje id, live-<id> veya proje URL'i."),
       },
       annotations: evlumbaReadOnlyAnnotations,
-      _meta: { ui: { resourceUri: WIDGET_URI } },
+      _meta: TOOL_UI_META,
     },
     async ({ projectId }) => {
       const project = await getEvlumbaProjectDetail(projectId);
