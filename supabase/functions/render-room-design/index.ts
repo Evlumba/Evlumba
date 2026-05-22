@@ -39,9 +39,20 @@ function normalizeQuality(value: unknown): ImageQuality {
 }
 
 function normalizeSize(value: unknown): ImageSize {
-  return value === '1024x1536' || value === '1536x1024' || value === '1024x1024'
-    ? value
-    : '1024x1024';
+  if (value === '1024x1536' || value === '1536x1024' || value === '1024x1024') {
+    return value;
+  }
+  if (typeof value !== 'string') return '1024x1024';
+
+  const match = value.match(/(\d{3,4})\s*x\s*(\d{3,4})/i);
+  if (!match) return '1024x1024';
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return '1024x1024';
+  if (width > height * 1.12) return '1536x1024';
+  if (height > width * 1.12) return '1024x1536';
+  return '1024x1024';
 }
 
 function parseDataUrl(value?: string) {

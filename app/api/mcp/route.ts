@@ -31,7 +31,7 @@ const widgetHtml = readFileSync(join(process.cwd(), "public", "evlumba-chatgpt-w
 const stringArray = z.array(z.string()).optional();
 const limitSchema = z.number().int().min(1).max(24).optional();
 const roomRenderQualitySchema = z.enum(["low", "medium", "high"]).optional();
-const roomRenderSizeSchema = z.enum(["1024x1024", "1024x1536", "1536x1024"]).optional();
+const roomRenderSizeSchema = z.string().optional();
 const evlumbaReadOnlyAnnotations = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -225,6 +225,21 @@ function inferStyle(query: string) {
   return styles.find((style) => normalized.includes(style.toLocaleLowerCase("tr-TR")));
 }
 
+function normalizeRenderSize(size?: string): "1024x1024" | "1024x1536" | "1536x1024" {
+  if (size === "1024x1536" || size === "1536x1024" || size === "1024x1024") return size;
+  if (!size) return "1024x1024";
+
+  const match = size.match(/(\d{3,4})\s*x\s*(\d{3,4})/i);
+  if (!match) return "1024x1024";
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return "1024x1024";
+  if (width > height * 1.12) return "1536x1024";
+  if (height > width * 1.12) return "1024x1536";
+  return "1024x1024";
+}
+
 function normalizeBase64Image(value?: string) {
   const parsed = parseDataUrl(value);
   return parsed ?? (value ? { base64: value, mimeType: "image/png" } : null);
@@ -266,7 +281,7 @@ async function generateRoomImage({
 }: {
   prompt: string;
   quality?: "low" | "medium" | "high";
-  size?: "1024x1024" | "1024x1536" | "1536x1024";
+  size?: string;
 }) {
   const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
@@ -278,7 +293,7 @@ async function generateRoomImage({
       model: OPENAI_IMAGE_MODEL,
       prompt,
       quality: quality || "high",
-      size: size || "1024x1024",
+      size: normalizeRenderSize(size),
       output_format: "png",
     }),
   });
@@ -302,7 +317,7 @@ async function editRoomImage({
   sourceImageBase64?: string;
   sourceImageUrl?: string;
   quality?: "low" | "medium" | "high";
-  size?: "1024x1024" | "1024x1536" | "1536x1024";
+  size?: string;
 }) {
   const imageBlob = await readImageReference({ sourceImageBase64, sourceImageUrl });
   if (!imageBlob) return generateRoomImage({ prompt, quality, size });
@@ -311,7 +326,7 @@ async function editRoomImage({
   form.append("model", OPENAI_IMAGE_MODEL);
   form.append("prompt", prompt);
   form.append("quality", quality || "high");
-  form.append("size", size || "1024x1024");
+  form.append("size", normalizeRenderSize(size));
   form.append("image[]", imageBlob, "evlumba-room-reference.png");
 
   const response = await fetch("https://api.openai.com/v1/images/edits", {
@@ -339,7 +354,7 @@ async function renderRoomImage({
   sourceImageBase64?: string;
   sourceImageUrl?: string;
   quality?: "low" | "medium" | "high";
-  size?: "1024x1024" | "1024x1536" | "1536x1024";
+  size?: string;
 }) {
   const supabase = publicSupabaseEnv();
   if (supabase) {
@@ -389,7 +404,7 @@ async function runRoomRender({
   sourceImageUrl?: string;
   sourceImageBase64?: string;
   quality?: "low" | "medium" | "high";
-  size?: "1024x1024" | "1024x1536" | "1536x1024";
+  size?: string;
 }) {
   const renderPrompt = buildRoomRenderPrompt({
     prompt,
@@ -462,7 +477,7 @@ async function runGeneralEvlumbaSearch({
   sourceImageUrl?: string;
   sourceImageBase64?: string;
   quality?: "low" | "medium" | "high";
-  size?: "1024x1024" | "1024x1536" | "1536x1024";
+  size?: string;
 }) {
   if ((!intent || intent === "auto") && isRoomRenderRequest(query)) {
     return runRoomRender({
@@ -514,7 +529,7 @@ function createEvlumbaMcpServer() {
     },
     {
       instructions:
-        "This MCP server powers Evlumba inside ChatGPT. For room design requests, use evlumba_render_room_design to create a real photorealistic interior render; do not answer with a simple overlay, diagram, collage, HTML mockup, or text-only design board. For professional/project discovery, search Evlumba's live data only. When the user asks to find, list, compare, contact, or recommend architects, interior architects, designers, contractors, service providers, firms, portfolio projects, or inspiration projects, call an Evlumba search tool. After a room render is created, if the user asks for a suitable professional for that design, call an Evlumba search tool. Never answer Evlumba search/recommendation requests from web search, map results, Google business listings, Sources, or external websites.",
+        "This MCP server powers Evlumba inside ChatGPT. Never print a JSON object with prompt/size as the assistant answer. If the user asks to design, redesign, decorate, render, or visualize a room, call evlumba_render_room_design or evlumba_search; do not write tool arguments as text. For room design requests, create a real photorealistic interior render; do not answer with a simple overlay, diagram, collage, HTML mockup, JSON payload, or text-only design board. For professional/project discovery, search Evlumba's live data only. When the user asks to find, list, compare, contact, or recommend architects, interior architects, designers, contractors, service providers, firms, portfolio projects, or inspiration projects, call an Evlumba search tool. After a room render is created, if the user asks for a suitable professional for that design, call an Evlumba search tool. Never answer Evlumba search/recommendation requests from web search, map results, Google business listings, Sources, or external websites.",
     }
   );
 
@@ -570,7 +585,7 @@ function createEvlumbaMcpServer() {
           .optional()
           .describe("Varsa kaynak oda görselinin base64 verisi. Data URL veya çıplak base64 kabul edilir. Yoksa roomContext ile üret."),
         quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
-        size: roomRenderSizeSchema.describe("Render boyutu. Varsayılan 1024x1024."),
+        size: roomRenderSizeSchema.describe("Render boyutu. 1024x1024, 1024x1536 veya 1536x1024 önerilir. 1792x1024 gibi farklı oranlar gelirse otomatik yakın formata çevrilir."),
       },
       annotations: {
         readOnlyHint: true,
@@ -607,7 +622,7 @@ function createEvlumbaMcpServer() {
         sourceImageUrl: z.string().optional().describe("Render için varsa erişilebilir kaynak oda görsel URL'i veya data URL."),
         sourceImageBase64: z.string().optional().describe("Render için varsa kaynak oda görselinin base64 verisi."),
         quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
-        size: roomRenderSizeSchema.describe("Render boyutu. Varsayılan 1024x1024."),
+        size: roomRenderSizeSchema.describe("Render boyutu. 1024x1024, 1024x1536 veya 1536x1024 önerilir. 1792x1024 gibi farklı oranlar gelirse otomatik yakın formata çevrilir."),
         limit: limitSchema,
       },
       outputSchema: evlumbaSearchOutputSchema,
@@ -640,7 +655,7 @@ function createEvlumbaMcpServer() {
         sourceImageUrl: z.string().optional().describe("Render için varsa erişilebilir kaynak oda görsel URL'i veya data URL."),
         sourceImageBase64: z.string().optional().describe("Render için varsa kaynak oda görselinin base64 verisi."),
         quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
-        size: roomRenderSizeSchema.describe("Render boyutu. Varsayılan 1024x1024."),
+        size: roomRenderSizeSchema.describe("Render boyutu. 1024x1024, 1024x1536 veya 1536x1024 önerilir. 1792x1024 gibi farklı oranlar gelirse otomatik yakın formata çevrilir."),
         limit: limitSchema,
       },
       outputSchema: evlumbaSearchOutputSchema,
