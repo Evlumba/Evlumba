@@ -164,6 +164,13 @@ function normalizeBase64Image(value?: string) {
   return parsed ?? (value ? { base64: value, mimeType: "image/png" } : null);
 }
 
+function publicSupabaseEnv() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return null;
+  return { url, anonKey };
+}
+
 async function readImageReference({
   sourceImageBase64,
   sourceImageUrl,
@@ -253,6 +260,50 @@ async function editRoomImage({
   const imageBase64 = result.data?.[0]?.b64_json;
   if (!imageBase64) throw new Error("OpenAI image edit returned no image");
   return imageBase64;
+}
+
+async function renderRoomImage({
+  prompt,
+  sourceImageBase64,
+  sourceImageUrl,
+  quality,
+  size,
+}: {
+  prompt: string;
+  sourceImageBase64?: string;
+  sourceImageUrl?: string;
+  quality?: "low" | "medium" | "high";
+  size?: "1024x1024" | "1024x1536" | "1536x1024";
+}) {
+  const supabase = publicSupabaseEnv();
+  if (supabase) {
+    const response = await fetch(`${supabase.url}/functions/v1/render-room-design`, {
+      method: "POST",
+      headers: {
+        apikey: supabase.anonKey,
+        authorization: `Bearer ${supabase.anonKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        sourceImageBase64,
+        sourceImageUrl,
+        quality,
+        size,
+      }),
+    });
+    const result = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      imageBase64?: string;
+      message?: string;
+    };
+    if (response.ok && result.ok && result.imageBase64) return result.imageBase64;
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error(result.message || `Supabase render failed (${response.status})`);
+    }
+  }
+
+  return editRoomImage({ prompt, sourceImageBase64, sourceImageUrl, quality, size });
 }
 
 async function runGeneralEvlumbaSearch({
@@ -371,7 +422,7 @@ function createEvlumbaMcpServer() {
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
       const renderPrompt = buildRoomRenderPrompt({ prompt, style, roomType, roomContext });
       try {
-        const imageBase64 = await editRoomImage({ prompt: renderPrompt, sourceImageBase64, sourceImageUrl, quality, size });
+        const imageBase64 = await renderRoomImage({ prompt: renderPrompt, sourceImageBase64, sourceImageUrl, quality, size });
         return {
           content: [
             {
