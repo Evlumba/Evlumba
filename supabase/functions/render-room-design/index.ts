@@ -79,17 +79,27 @@ function normalizeBase64Image(value?: string) {
 async function readImageReference(sourceImageBase64?: string, sourceImageUrl?: string) {
   const inlineImage = normalizeBase64Image(sourceImageBase64) || parseDataUrl(sourceImageUrl);
   if (inlineImage) {
-    return new Blob([base64ToBytes(inlineImage.base64)], { type: inlineImage.mimeType });
+    try {
+      return new Blob([base64ToBytes(inlineImage.base64)], { type: inlineImage.mimeType });
+    } catch (_) {
+      return null;
+    }
   }
 
   if (!sourceImageUrl) return null;
 
-  const imageResponse = await fetch(sourceImageUrl);
-  if (!imageResponse.ok) {
-    throw new Error(`Kaynak gorsel alinamadi (${imageResponse.status}).`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+  try {
+    const imageResponse = await fetch(sourceImageUrl, { signal: controller.signal });
+    if (!imageResponse.ok) return null;
+    const mimeType = imageResponse.headers.get('content-type') || 'image/png';
+    return new Blob([await imageResponse.arrayBuffer()], { type: mimeType });
+  } catch (_) {
+    return null;
+  } finally {
+    clearTimeout(timeout);
   }
-  const mimeType = imageResponse.headers.get('content-type') || 'image/png';
-  return new Blob([await imageResponse.arrayBuffer()], { type: mimeType });
 }
 
 async function readError(response: Response) {
