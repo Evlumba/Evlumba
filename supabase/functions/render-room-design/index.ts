@@ -35,7 +35,7 @@ function normalizePrompt(value: unknown) {
 }
 
 function normalizeQuality(value: unknown): ImageQuality {
-  return value === 'low' || value === 'medium' || value === 'high' ? value : 'high';
+  return value === 'low' || value === 'medium' || value === 'high' ? value : 'low';
 }
 
 function normalizeSize(value: unknown): ImageSize {

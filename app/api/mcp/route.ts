@@ -39,6 +39,7 @@ const evlumbaReadOnlyAnnotations = {
   idempotentHint: true,
 };
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
+const DEFAULT_RENDER_QUALITY: "low" | "medium" | "high" = "low";
 const roomRenderInputSchema = {
   prompt: z.string().min(3).describe("Kullanıcının tasarım isteği. Örn: Bu salonu japandi stilde tasarla ve görsel ver."),
   style: z.string().optional().describe("Varsa stil: Japandi, Modern, Minimalist, Akdeniz, vb."),
@@ -55,7 +56,9 @@ const roomRenderInputSchema = {
     .string()
     .optional()
     .describe("Varsa kaynak oda görselinin base64 verisi. Data URL veya çıplak base64 kabul edilir. Yoksa roomContext ile üret."),
-  quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
+  quality: roomRenderQualitySchema.describe(
+    "Render kalitesi. İlk cevap hızlı dönsün diye varsayılan low. Kullanıcı özellikle yüksek kalite isterse high gönder."
+  ),
   size: roomRenderSizeSchema.describe(
     "Render boyutu. 1024x1024, 1024x1536 veya 1536x1024 önerilir. 1792x1024 gibi farklı oranlar gelirse otomatik yakın formata çevrilir."
   ),
@@ -313,7 +316,7 @@ async function generateRoomImage({
     body: JSON.stringify({
       model: OPENAI_IMAGE_MODEL,
       prompt,
-      quality: quality || "high",
+      quality: quality || DEFAULT_RENDER_QUALITY,
       size: normalizeRenderSize(size),
       output_format: "png",
     }),
@@ -346,7 +349,7 @@ async function editRoomImage({
   const form = new FormData();
   form.append("model", OPENAI_IMAGE_MODEL);
   form.append("prompt", prompt);
-  form.append("quality", quality || "high");
+  form.append("quality", quality || DEFAULT_RENDER_QUALITY);
   form.append("size", normalizeRenderSize(size));
   form.append("image[]", imageBlob, "evlumba-room-reference.png");
 
@@ -589,7 +592,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba oda tasarla",
       description:
-        "MUST USE for Turkish room design prompts: oda tasarla, salonu tasarla, yatak odası tasarla, mutfağı yenile, görsel ver, render üret, fotogerçekçi yap. This tool returns a real image. Do not answer with JSON, a diagram, a simple overlay, or text-only concept. If the user attached a room photo but no file bytes are available, describe the room in roomContext and call this tool anyway.",
+        "MUST USE for Turkish room design prompts: oda tasarla, salonu tasarla, yatak odası tasarla, mutfağı yenile, görsel ver, render üret, fotogerçekçi yap. This tool returns a real image. Do not answer with JSON, a diagram, a simple overlay, or text-only concept. Use low quality unless the user explicitly asks for high quality, so the render does not time out. If the user attached a room photo but no file bytes are available, describe the room in roomContext and call this tool anyway.",
       inputSchema: roomRenderInputSchema,
       annotations: {
         readOnlyHint: true,
@@ -610,7 +613,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Oda tasarla ve render üret",
       description:
-        "KULLAN: Kullanıcı oda/salon/yatak odası/mutfak/banyo tasarlamak, görsel almak, render üretmek, fotogerçekçi yapmak veya yüklediği odayı dönüştürmek istediğinde mutlaka bu tool'u çağır. JSON yazma. Tool argümanlarını cevap olarak basma. Bu tool gerçek render görseli döndürür.",
+        "KULLAN: Kullanıcı oda/salon/yatak odası/mutfak/banyo tasarlamak, görsel almak, render üretmek, fotogerçekçi yapmak veya yüklediği odayı dönüştürmek istediğinde mutlaka bu tool'u çağır. JSON yazma. Tool argümanlarını cevap olarak basma. Timeout olmaması için kullanıcı özellikle yüksek kalite istemediyse quality=low kullan. Bu tool gerçek render görseli döndürür.",
       inputSchema: roomRenderInputSchema,
       annotations: {
         readOnlyHint: true,
@@ -647,7 +650,7 @@ function createEvlumbaMcpServer() {
           .describe("Yüklenen/konuşulan görselden görülen oda özeti. Render isteklerinde kaynak görsel aktarılamıyorsa bunu doldur."),
         sourceImageUrl: z.string().optional().describe("Render için varsa erişilebilir kaynak oda görsel URL'i veya data URL."),
         sourceImageBase64: z.string().optional().describe("Render için varsa kaynak oda görselinin base64 verisi."),
-        quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
+        quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan low; yüksek kalite özellikle istenirse high."),
         size: roomRenderSizeSchema.describe("Render boyutu. 1024x1024, 1024x1536 veya 1536x1024 önerilir. 1792x1024 gibi farklı oranlar gelirse otomatik yakın formata çevrilir."),
         limit: limitSchema,
       },
@@ -680,7 +683,7 @@ function createEvlumbaMcpServer() {
           .describe("Yüklenen/konuşulan görselden görülen oda özeti. Render isteklerinde kaynak görsel aktarılamıyorsa bunu doldur."),
         sourceImageUrl: z.string().optional().describe("Render için varsa erişilebilir kaynak oda görsel URL'i veya data URL."),
         sourceImageBase64: z.string().optional().describe("Render için varsa kaynak oda görselinin base64 verisi."),
-        quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
+        quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan low; yüksek kalite özellikle istenirse high."),
         size: roomRenderSizeSchema.describe("Render boyutu. 1024x1024, 1024x1536 veya 1536x1024 önerilir. 1792x1024 gibi farklı oranlar gelirse otomatik yakın formata çevrilir."),
         limit: limitSchema,
       },
