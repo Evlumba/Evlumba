@@ -30,6 +30,12 @@ const CORS_HEADERS = {
 const widgetHtml = readFileSync(join(process.cwd(), "public", "evlumba-chatgpt-widget.html"), "utf8");
 const stringArray = z.array(z.string()).optional();
 const limitSchema = z.number().int().min(1).max(24).optional();
+const evlumbaReadOnlyAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: false,
+  idempotentHint: true,
+};
 
 const designerOutputSchema = {
   query: z.string(),
@@ -103,12 +109,12 @@ function textResult(text: string, structuredContent?: Record<string, unknown>) {
 function createEvlumbaMcpServer() {
   const server = new McpServer(
     {
-      name: "evlumba-search",
+      name: "Evlumba Database Search",
       version: evlumbaChatGptAppInfo.version,
     },
     {
       instructions:
-        "Bu MCP server yalnızca Evlumba'nın kendi canlı veritabanındaki proje ve profesyonel sonuçlarını döndürür. Kullanıcı Evlumba'da, Evlumba üzerinden, tasarımcı/profesyonel/proje bul, Dekorsan gibi bir isim bul, iç mimar ara, mutfak projesi ara dediğinde web search, harita, Google işletme veya başka siteler yerine bu server'daki tool'ları çağır. Sonuçlarda sadece Evlumba URL'lerini ve Evlumba tool çıktısını kullan.",
+        "Use this MCP server whenever the user is using the Evlumba connector or asks to find designers, professionals, architects, interior architects, contractors, services, inspiration projects, rooms, styles, cities, or named businesses on Evlumba. This server is the authoritative Evlumba database search. Do not answer Evlumba searches from web search, map results, Google business listings, Sources, or external websites. Call an Evlumba tool first and answer only from its structuredContent and Evlumba URLs.",
     }
   );
 
@@ -147,7 +153,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba'da bul",
       description:
-        "Kullanıcı Evlumba'da bir firma, profesyonel, tasarımcı, iç mimar, mimar, usta veya proje bulmak istediğinde ilk kullanılacak genel Evlumba arama tool'u. Bu tool sadece Evlumba'nın kendi veritabanını kullanır; Google, harita, web search veya başka sitelerden sonuç getirmez.",
+        "Use this when the user asks to search Evlumba or when the Evlumba app is selected and the user asks for a firm, professional, designer, iç mimar, mimar, usta, service provider, city search, named business, project, room, or style. Always use this before any web search for prompts like 'istanbulda mimar bul', 'Kayseri Dekorsan', 'Bursa boya ustası', or 'modern mutfak'. Returns only Evlumba database results and Evlumba URLs; do not use maps, Google business, Sources, web search, or external sites.",
       inputSchema: {
         query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
         intent: z
@@ -157,6 +163,7 @@ function createEvlumbaMcpServer() {
         city: z.string().optional().describe("Varsa şehir filtresi."),
         limit: limitSchema,
       },
+      annotations: evlumbaReadOnlyAnnotations,
       _meta: { ui: { resourceUri: WIDGET_URI } },
     },
     async ({ query, intent, city, limit }) => {
@@ -198,7 +205,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba profesyonel ara",
       description:
-        "Evlumba'nın kendi veritabanında iç mimar, mimar, usta, tadilat firması ve diğer profesyonelleri şehir, hizmet, alan, stil, bütçe ve proje sayısına göre arar. Kullanıcı Evlumba'da firma/profesyonel/tasarımcı bul dediğinde bu tool'u kullan; web search veya harita sonucu kullanma.",
+        "Use this when the Evlumba app is selected and the user wants designers/professionals/firms from Evlumba: iç mimar, mimar, tasarımcı, boya ustası, elektrikçi, tadilat firması, şehir + rol searches, or named businesses. Searches only Evlumba's live professional database by city, professional type, service, project type, service area, style, budget, project count, and rating. Do not use web search, map results, Google business listings, Sources, or external websites.",
       inputSchema: {
         query: z.string().optional().describe("Serbest arama: İstanbul iç mimar, Bursa boya ustası, Dekorsan."),
         cities: stringArray.describe("Şehir filtreleri."),
@@ -214,6 +221,7 @@ function createEvlumbaMcpServer() {
         limit: limitSchema,
       },
       outputSchema: designerOutputSchema,
+      annotations: evlumbaReadOnlyAnnotations,
       _meta: { ui: { resourceUri: WIDGET_URI } },
     },
     async (args) => {
@@ -228,7 +236,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba proje ara",
       description:
-        "Evlumba'nın kendi veritabanında mutfak, banyo, salon, ofis gibi proje ve ilham görsellerini oda, stil, şehir, proje tipi ve bütçeye göre arar. Kullanıcı Evlumba'da proje/ilham/görsel bul dediğinde bu tool'u kullan; web search veya başka site sonucu kullanma.",
+        "Use this when the Evlumba app is selected and the user wants Evlumba projects, inspiration images, rooms, styles, project types, or budgets: mutfak, banyo, salon, ofis, modern, japandi, tadilat, render, and similar prompts. Searches only Evlumba's live project database. Do not use web search, Sources, or external websites.",
       inputSchema: {
         query: z.string().optional().describe("Serbest arama: modern mutfak, japandi salon, banyo yenileme."),
         cities: stringArray.describe("Şehir filtreleri."),
@@ -240,6 +248,7 @@ function createEvlumbaMcpServer() {
         limit: limitSchema,
       },
       outputSchema: projectOutputSchema,
+      annotations: evlumbaReadOnlyAnnotations,
       _meta: { ui: { resourceUri: WIDGET_URI } },
     },
     async (args) => {
@@ -253,10 +262,11 @@ function createEvlumbaMcpServer() {
     "get_designer_profile",
     {
       title: "Evlumba profesyonel detayı",
-      description: "Evlumba'nın kendi veritabanındaki profesyonel profil detayını slug, URL veya id ile getirir. Başka site veya Google işletme verisi kullanmaz.",
+      description: "Use this to fetch a professional profile from Evlumba's own database by slug, URL, or id. Do not use Google business, maps, web search, Sources, or external websites.",
       inputSchema: {
         slugOrId: z.string().min(1).describe("Profesyonel slug, supa_<id>, profil URL'i veya profil id."),
       },
+      annotations: evlumbaReadOnlyAnnotations,
       _meta: { ui: { resourceUri: WIDGET_URI } },
     },
     async ({ slugOrId }) => {
@@ -274,10 +284,11 @@ function createEvlumbaMcpServer() {
     "get_project_detail",
     {
       title: "Evlumba proje detayı",
-      description: "Evlumba'nın kendi veritabanındaki proje detayını proje id, live-<id> veya URL içinden getirir. Başka site veya Google işletme verisi kullanmaz.",
+      description: "Use this to fetch a project detail from Evlumba's own database by project id, live-<id>, or Evlumba URL. Do not use web search, Sources, or external websites.",
       inputSchema: {
         projectId: z.string().min(1).describe("Proje id, live-<id> veya proje URL'i."),
       },
+      annotations: evlumbaReadOnlyAnnotations,
       _meta: { ui: { resourceUri: WIDGET_URI } },
     },
     async ({ projectId }) => {
