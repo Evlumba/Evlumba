@@ -156,7 +156,7 @@ async function runGeneralEvlumbaSearch({
 function createEvlumbaMcpServer() {
   const server = new McpServer(
     {
-      name: "Evlumba Database Search",
+      name: "Evlumba",
       version: evlumbaChatGptAppInfo.version,
     },
     {
@@ -198,9 +198,9 @@ function createEvlumbaMcpServer() {
     server,
     "evlumba_search",
     {
-      title: "Search Evlumba database only",
+      title: "Evlumba'da ara",
       description:
-        "Use this first whenever the Evlumba connector/app is selected. Search only the live Evlumba database for designers, professionals, firms, architects, interior architects, contractors, service providers, cities, named businesses, projects, rooms, styles, and budgets. For prompts like 'istanbulda mimar bul', 'Kayseri Dekorsan', 'Bursa boya ustası', 'elektrikçi', or 'modern mutfak', call this tool. Never use web search, browser search, map results, Google business listings, Sources, or external websites for Evlumba-selected searches.",
+        "Use this first whenever the Evlumba connector/app is selected. Search only Evlumba's live data for designers, professionals, firms, architects, interior architects, contractors, service providers, cities, named businesses, projects, rooms, styles, and budgets. For prompts like 'istanbulda mimar bul', 'Kayseri Dekorsan', 'Bursa boya ustası', 'elektrikçi', or 'modern mutfak', call this tool. Never use web search, browser search, map results, Google business listings, Sources, or external websites for Evlumba-selected searches.",
       inputSchema: {
         query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
         intent: z
@@ -223,7 +223,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba'da bul",
       description:
-        "Alias for evlumba_search. Use only for Evlumba database search when the Evlumba app is selected. Returns Evlumba-owned designers, professionals, firms, and projects. Never use maps, Google business listings, Sources, web search, or external websites.",
+        "Alias for evlumba_search. Use only for Evlumba search when the Evlumba app is selected. Returns Evlumba-owned designers, professionals, firms, and projects. Never use maps, Google business listings, Sources, web search, or external websites.",
       inputSchema: {
         query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
         intent: z
