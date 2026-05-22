@@ -159,6 +159,72 @@ function buildRoomRenderPrompt({
     .join("\n");
 }
 
+function isRoomRenderRequest(value: string) {
+  const query = value.toLocaleLowerCase("tr-TR");
+  return [
+    "tasarla",
+    "yeniden tasarla",
+    "dekore et",
+    "dekorasyon yap",
+    "render",
+    "fotogerçekçi",
+    "fotogercekci",
+    "görsel ver",
+    "gorsel ver",
+    "görsel üret",
+    "gorsel uret",
+    "image üret",
+    "image uret",
+    "oda yap",
+    "salonu yap",
+    "mutfağı yap",
+    "banyoyu yap",
+  ].some((term) => query.includes(term));
+}
+
+function inferRoomType(query: string) {
+  const normalized = query.toLocaleLowerCase("tr-TR");
+  const roomTypes = [
+    "salon",
+    "oturma odası",
+    "mutfak",
+    "banyo",
+    "yatak odası",
+    "çocuk odası",
+    "bebek odası",
+    "çalışma odası",
+    "ofis",
+    "bahçe",
+    "balkon",
+    "teras",
+  ];
+  return roomTypes.find((room) => normalized.includes(room));
+}
+
+function inferStyle(query: string) {
+  const normalized = query.toLocaleLowerCase("tr-TR");
+  const styles = [
+    "Japandi",
+    "Modern",
+    "Minimalist",
+    "Klasik",
+    "Lüks",
+    "İskandinav",
+    "Rustik",
+    "Endüstriyel",
+    "Bohem",
+    "Akdeniz",
+    "Country",
+    "Retro",
+    "Eklektik",
+    "Çağdaş",
+    "Doğal / Organik",
+    "Sahil / Coastal",
+    "Geleneksel",
+  ];
+  return styles.find((style) => normalized.includes(style.toLocaleLowerCase("tr-TR")));
+}
+
 function normalizeBase64Image(value?: string) {
   const parsed = parseDataUrl(value);
   return parsed ?? (value ? { base64: value, mimeType: "image/png" } : null);
@@ -306,17 +372,111 @@ async function renderRoomImage({
   return editRoomImage({ prompt, sourceImageBase64, sourceImageUrl, quality, size });
 }
 
+async function runRoomRender({
+  prompt,
+  style,
+  roomType,
+  roomContext,
+  sourceImageUrl,
+  sourceImageBase64,
+  quality,
+  size,
+}: {
+  prompt: string;
+  style?: string;
+  roomType?: string;
+  roomContext?: string;
+  sourceImageUrl?: string;
+  sourceImageBase64?: string;
+  quality?: "low" | "medium" | "high";
+  size?: "1024x1024" | "1024x1536" | "1536x1024";
+}) {
+  const renderPrompt = buildRoomRenderPrompt({
+    prompt,
+    style: style || inferStyle(prompt),
+    roomType: roomType || inferRoomType(prompt),
+    roomContext,
+  });
+
+  try {
+    const imageBase64 = await renderRoomImage({ prompt: renderPrompt, sourceImageBase64, sourceImageUrl, quality, size });
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: "Evlumba render hazır. Bu görsele uygun profesyonel/mimar bulmamı istersen Evlumba sonuçlarını da çıkarabilirim.",
+        },
+        { type: "image" as const, data: imageBase64, mimeType: "image/png" },
+      ],
+      structuredContent: {
+        query: prompt,
+        appliedFilters: [] as string[],
+        designers: [],
+        projects: [],
+        render: {
+          prompt: renderPrompt,
+          model: OPENAI_IMAGE_MODEL,
+          mimeType: "image/png",
+          hasSourceImage: Boolean(sourceImageBase64 || sourceImageUrl),
+        },
+      },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Bilinmeyen render hatası";
+    return textResult(
+      message === "OPENAI_API_KEY missing"
+        ? "Evlumba render aracı hazır ama sunucuda OPENAI_API_KEY tanımlı değil. Supabase veya Vercel/Web deployment ortamına OPENAI_API_KEY eklenince oda render üretimi çalışır."
+        : `Evlumba render üretilemedi: ${message}`,
+      {
+        query: prompt,
+        appliedFilters: [] as string[],
+        designers: [],
+        projects: [],
+        error: true,
+        model: OPENAI_IMAGE_MODEL,
+      }
+    );
+  }
+}
+
 async function runGeneralEvlumbaSearch({
   query,
   intent,
   city,
   limit,
+  style,
+  roomType,
+  roomContext,
+  sourceImageUrl,
+  sourceImageBase64,
+  quality,
+  size,
 }: {
   query: string;
   intent?: "auto" | "designers" | "projects";
   city?: string;
   limit?: number;
+  style?: string;
+  roomType?: string;
+  roomContext?: string;
+  sourceImageUrl?: string;
+  sourceImageBase64?: string;
+  quality?: "low" | "medium" | "high";
+  size?: "1024x1024" | "1024x1536" | "1536x1024";
 }) {
+  if ((!intent || intent === "auto") && isRoomRenderRequest(query)) {
+    return runRoomRender({
+      prompt: query,
+      style,
+      roomType,
+      roomContext,
+      sourceImageUrl,
+      sourceImageBase64,
+      quality,
+      size,
+    });
+  }
+
   const searchQuery = city && !query.toLocaleLowerCase("tr-TR").includes(city.toLocaleLowerCase("tr-TR")) ? `${city} ${query}` : query;
   const take = limit ?? 6;
   const shouldSearchDesigners = !intent || intent === "auto" || intent === "designers";
@@ -420,33 +580,7 @@ function createEvlumbaMcpServer() {
       },
     },
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
-      const renderPrompt = buildRoomRenderPrompt({ prompt, style, roomType, roomContext });
-      try {
-        const imageBase64 = await renderRoomImage({ prompt: renderPrompt, sourceImageBase64, sourceImageUrl, quality, size });
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "Evlumba render hazır. Bu görsele uygun profesyonel/mimar bulmamı istersen Evlumba sonuçlarını da çıkarabilirim.",
-            },
-            { type: "image" as const, data: imageBase64, mimeType: "image/png" },
-          ],
-          structuredContent: {
-            prompt: renderPrompt,
-            model: OPENAI_IMAGE_MODEL,
-            mimeType: "image/png",
-            hasSourceImage: Boolean(sourceImageBase64 || sourceImageUrl),
-          },
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Bilinmeyen render hatası";
-        return textResult(
-          message === "OPENAI_API_KEY missing"
-            ? "Evlumba render aracı hazır ama sunucuda OPENAI_API_KEY tanımlı değil. Vercel/Web deployment ortamına OPENAI_API_KEY eklenince oda render üretimi çalışır."
-            : `Evlumba render üretilemedi: ${message}`,
-          { error: true, model: OPENAI_IMAGE_MODEL }
-        );
-      }
+      return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });
     }
   );
 
@@ -456,7 +590,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba'da ara",
       description:
-        "Use this for Evlumba search and recommendations only: finding/listing/comparing architects, interior architects, designers, contractors, service providers, firms, named businesses, portfolio projects, inspiration projects, cities, rooms, styles, and budgets inside Evlumba. For prompts like 'istanbulda mimar bul', 'bu tasarıma uygun iç mimar bul', 'Kayseri Dekorsan', 'Bursa boya ustası', 'elektrikçi bul', or 'Evlumba'da modern mutfak projesi göster', call this tool. Do not call this tool for creative/image tasks like 'oda tasarla', 'salon tasarla', 'bu fotoğrafı japandi yap', 'fotogerçekçi render üret', 'görsel ver', or general decoration advice unless the user also asks to find Evlumba professionals/projects. This tool cannot generate room-design visuals; ChatGPT should use its native image generation for that step. Never use web search, map results, Google business listings, Sources, or external websites for Evlumba search/recommendation requests.",
+        "Primary Evlumba tool. If the user asks to design/redesign/decorate/render a room or uploaded room photo and wants a visual, call this tool; it will route to Evlumba's photorealistic room render pipeline. If the user asks to find/list/compare architects, interior architects, designers, contractors, service providers, firms, named businesses, portfolio projects, inspiration projects, cities, rooms, styles, or budgets inside Evlumba, call this tool. Examples: 'bu salonu japandi tasarla ve görsel ver', 'fotogerçekçi render üret', 'istanbulda mimar bul', 'bu tasarıma uygun iç mimar bul', 'Kayseri Dekorsan', 'Bursa boya ustası', 'elektrikçi bul', or 'Evlumba'da modern mutfak projesi göster'. Do not answer room visual requests with simple overlays, diagrams, HTML mockups, collages, or text-only design boards. Never use web search, map results, Google business listings, Sources, or external websites for Evlumba search/recommendation requests.",
       inputSchema: {
         query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
         intent: z
@@ -464,6 +598,16 @@ function createEvlumbaMcpServer() {
           .optional()
           .describe("Arama tipi. Firma/profesyonel için designers, proje/ilham için projects, emin değilsen auto."),
         city: z.string().optional().describe("Varsa şehir filtresi."),
+        style: z.string().optional().describe("Render veya arama için stil. Örn: Japandi, Modern, Minimalist."),
+        roomType: z.string().optional().describe("Render veya arama için oda/mekan tipi. Örn: salon, mutfak, banyo."),
+        roomContext: z
+          .string()
+          .optional()
+          .describe("Yüklenen/konuşulan görselden görülen oda özeti. Render isteklerinde kaynak görsel aktarılamıyorsa bunu doldur."),
+        sourceImageUrl: z.string().optional().describe("Render için varsa erişilebilir kaynak oda görsel URL'i veya data URL."),
+        sourceImageBase64: z.string().optional().describe("Render için varsa kaynak oda görselinin base64 verisi."),
+        quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
+        size: roomRenderSizeSchema.describe("Render boyutu. Varsayılan 1024x1024."),
         limit: limitSchema,
       },
       outputSchema: evlumbaSearchOutputSchema,
@@ -479,7 +623,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba'da bul",
       description:
-        "Alias for evlumba_search. Use only when the user wants Evlumba search/recommendation results. Do not use for pure room design or image generation. Returns Evlumba-owned designers, professionals, firms, and projects. Never use maps, Google business listings, Sources, web search, or external websites for Evlumba searches.",
+        "Alias for evlumba_search. Use for Evlumba room render requests and Evlumba search/recommendation results. For 'oda tasarla', 'salon tasarla', 'görsel ver', or 'render üret' prompts, this returns Evlumba's photorealistic render instead of a simple overlay. For professional/project requests, it returns Evlumba-owned designers, professionals, firms, and projects. Never use maps, Google business listings, Sources, web search, or external websites for Evlumba searches.",
       inputSchema: {
         query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
         intent: z
@@ -487,6 +631,16 @@ function createEvlumbaMcpServer() {
           .optional()
           .describe("Arama tipi. Firma/profesyonel için designers, proje/ilham için projects, emin değilsen auto."),
         city: z.string().optional().describe("Varsa şehir filtresi."),
+        style: z.string().optional().describe("Render veya arama için stil. Örn: Japandi, Modern, Minimalist."),
+        roomType: z.string().optional().describe("Render veya arama için oda/mekan tipi. Örn: salon, mutfak, banyo."),
+        roomContext: z
+          .string()
+          .optional()
+          .describe("Yüklenen/konuşulan görselden görülen oda özeti. Render isteklerinde kaynak görsel aktarılamıyorsa bunu doldur."),
+        sourceImageUrl: z.string().optional().describe("Render için varsa erişilebilir kaynak oda görsel URL'i veya data URL."),
+        sourceImageBase64: z.string().optional().describe("Render için varsa kaynak oda görselinin base64 verisi."),
+        quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
+        size: roomRenderSizeSchema.describe("Render boyutu. Varsayılan 1024x1024."),
         limit: limitSchema,
       },
       outputSchema: evlumbaSearchOutputSchema,
