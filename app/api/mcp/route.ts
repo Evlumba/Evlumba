@@ -161,7 +161,7 @@ function createEvlumbaMcpServer() {
     },
     {
       instructions:
-        "Use this MCP server whenever the user is using the Evlumba connector or asks to find designers, professionals, architects, interior architects, contractors, services, inspiration projects, rooms, styles, cities, or named businesses on Evlumba. This server is the authoritative Evlumba database search. Do not answer Evlumba searches from web search, map results, Google business listings, Sources, or external websites. Call an Evlumba tool first and answer only from its structuredContent and Evlumba URLs.",
+        "This MCP server searches Evlumba's live data for professionals and projects. Use Evlumba tools when the user wants to find, list, compare, contact, or recommend architects, interior architects, designers, contractors, service providers, firms, portfolio projects, or Evlumba inspiration results. Do not use Evlumba tools for pure creative/design-generation requests such as 'odamı tasarla', 'salon tasarla', 'bu odayı modern yap', 'görsel üret', or general decoration advice. For those, let ChatGPT design/generate/advise normally first. If the user then asks to find a suitable professional for that design, call an Evlumba tool. Never answer Evlumba search/recommendation requests from web search, map results, Google business listings, Sources, or external websites.",
     }
   );
 
@@ -200,7 +200,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba'da ara",
       description:
-        "Use this first whenever the Evlumba connector/app is selected. Search only Evlumba's live data for designers, professionals, firms, architects, interior architects, contractors, service providers, cities, named businesses, projects, rooms, styles, and budgets. For prompts like 'istanbulda mimar bul', 'Kayseri Dekorsan', 'Bursa boya ustası', 'elektrikçi', or 'modern mutfak', call this tool. Never use web search, browser search, map results, Google business listings, Sources, or external websites for Evlumba-selected searches.",
+        "Use this for Evlumba search and recommendations only: finding/listing/comparing architects, interior architects, designers, contractors, service providers, firms, named businesses, portfolio projects, inspiration projects, cities, rooms, styles, and budgets inside Evlumba. For prompts like 'istanbulda mimar bul', 'bu tasarıma uygun iç mimar bul', 'Kayseri Dekorsan', 'Bursa boya ustası', 'elektrikçi bul', or 'Evlumba'da modern mutfak projesi göster', call this tool. Do not call this tool for pure creative tasks like 'oda tasarla', 'salon tasarla', 'görsel üret', or general decoration advice unless the user also asks to find Evlumba professionals/projects. Never use web search, map results, Google business listings, Sources, or external websites for Evlumba search/recommendation requests.",
       inputSchema: {
         query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
         intent: z
@@ -223,7 +223,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba'da bul",
       description:
-        "Alias for evlumba_search. Use only for Evlumba search when the Evlumba app is selected. Returns Evlumba-owned designers, professionals, firms, and projects. Never use maps, Google business listings, Sources, web search, or external websites.",
+        "Alias for evlumba_search. Use only when the user wants Evlumba search/recommendation results. Do not use for pure room design or image generation. Returns Evlumba-owned designers, professionals, firms, and projects. Never use maps, Google business listings, Sources, web search, or external websites for Evlumba searches.",
       inputSchema: {
         query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
         intent: z
@@ -246,7 +246,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba profesyonel ara",
       description:
-        "Use this when the Evlumba app is selected and the user wants designers/professionals/firms from Evlumba: iç mimar, mimar, tasarımcı, boya ustası, elektrikçi, tadilat firması, şehir + rol searches, or named businesses. Searches only Evlumba's live professional database by city, professional type, service, project type, service area, style, budget, project count, and rating. Do not use web search, map results, Google business listings, Sources, or external websites.",
+        "Use this when the Evlumba app is selected and the user wants designers/professionals/firms from Evlumba: iç mimar, mimar, tasarımcı, boya ustası, elektrikçi, tadilat firması, şehir + rol searches, named businesses, or a professional suitable for a design ChatGPT already created. Searches only Evlumba's live professional database by city, professional type, service, project type, service area, style, budget, project count, and rating. Do not use this for pure creative design/image generation. Do not use web search, map results, Google business listings, Sources, or external websites.",
       inputSchema: {
         query: z.string().optional().describe("Serbest arama: İstanbul iç mimar, Bursa boya ustası, Dekorsan."),
         cities: stringArray.describe("Şehir filtreleri."),
@@ -277,7 +277,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba proje ara",
       description:
-        "Use this when the Evlumba app is selected and the user wants Evlumba projects, inspiration images, rooms, styles, project types, or budgets: mutfak, banyo, salon, ofis, modern, japandi, tadilat, render, and similar prompts. Searches only Evlumba's live project database. Do not use web search, Sources, or external websites.",
+        "Use this when the Evlumba app is selected and the user wants to find/list/show Evlumba projects, inspiration images, rooms, styles, project types, or budgets: mutfak projesi bul, banyo örnekleri göster, modern salon ilhamı, japandi proje ara. Searches only Evlumba's live project database. Do not use this for pure creative prompts like 'mutfak tasarla' or 'oda görseli üret' unless the user asks for Evlumba examples/projects. Do not use web search, Sources, or external websites.",
       inputSchema: {
         query: z.string().optional().describe("Serbest arama: modern mutfak, japandi salon, banyo yenileme."),
         cities: stringArray.describe("Şehir filtreleri."),
