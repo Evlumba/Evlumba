@@ -30,12 +30,15 @@ const CORS_HEADERS = {
 const widgetHtml = readFileSync(join(process.cwd(), "public", "evlumba-chatgpt-widget.html"), "utf8");
 const stringArray = z.array(z.string()).optional();
 const limitSchema = z.number().int().min(1).max(24).optional();
+const roomRenderQualitySchema = z.enum(["low", "medium", "high"]).optional();
+const roomRenderSizeSchema = z.enum(["1024x1024", "1024x1536", "1536x1024"]).optional();
 const evlumbaReadOnlyAnnotations = {
   readOnlyHint: true,
   destructiveHint: false,
   openWorldHint: false,
   idempotentHint: true,
 };
+const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
 
 const designerOutputSchema = {
   query: z.string(),
@@ -113,6 +116,145 @@ function textResult(text: string, structuredContent?: Record<string, unknown>) {
   };
 }
 
+function getOpenAiApiKey() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY missing");
+  }
+  return apiKey;
+}
+
+function parseDataUrl(value?: string) {
+  const match = value?.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match?.[2]) return null;
+  return {
+    base64: match[2],
+    mimeType: match[1] || "image/png",
+  };
+}
+
+function buildRoomRenderPrompt({
+  prompt,
+  style,
+  roomType,
+  roomContext,
+}: {
+  prompt: string;
+  style?: string;
+  roomType?: string;
+  roomContext?: string;
+}) {
+  return [
+    "Create a polished, photorealistic interior design render for Evlumba.",
+    "Do not make a diagram, collage, flat overlay, sketch, wireframe, text-on-image mockup, or semi-transparent furniture plan.",
+    "The final image must look like a real finished interior photograph with coherent perspective, realistic lighting, materials, furniture scale, shadows, and architectural details.",
+    "Keep the room type and layout constraints from the user's request/source photo as much as possible.",
+    roomType ? `Room type: ${roomType}.` : "",
+    style ? `Requested style: ${style}.` : "",
+    roomContext ? `Observed/source room context: ${roomContext}.` : "",
+    `User request: ${prompt}.`,
+    "Use a premium Turkish interior design sensibility: warm natural materials, clean detailing, practical circulation, and livable styling.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function normalizeBase64Image(value?: string) {
+  const parsed = parseDataUrl(value);
+  return parsed ?? (value ? { base64: value, mimeType: "image/png" } : null);
+}
+
+async function readImageReference({
+  sourceImageBase64,
+  sourceImageUrl,
+}: {
+  sourceImageBase64?: string;
+  sourceImageUrl?: string;
+}) {
+  const inlineImage = normalizeBase64Image(sourceImageBase64) || parseDataUrl(sourceImageUrl);
+  if (inlineImage) {
+    return new Blob([Buffer.from(inlineImage.base64, "base64")], { type: inlineImage.mimeType });
+  }
+
+  if (!sourceImageUrl) return null;
+
+  const imageResponse = await fetch(sourceImageUrl);
+  if (!imageResponse.ok) {
+    throw new Error(`Source image could not be fetched (${imageResponse.status})`);
+  }
+  const mimeType = imageResponse.headers.get("content-type") || "image/png";
+  return new Blob([await imageResponse.arrayBuffer()], { type: mimeType });
+}
+
+async function generateRoomImage({
+  prompt,
+  quality,
+  size,
+}: {
+  prompt: string;
+  quality?: "low" | "medium" | "high";
+  size?: "1024x1024" | "1024x1536" | "1536x1024";
+}) {
+  const response = await fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getOpenAiApiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: OPENAI_IMAGE_MODEL,
+      prompt,
+      quality: quality || "high",
+      size: size || "1024x1024",
+      output_format: "png",
+    }),
+  });
+  const result = (await response.json()) as { data?: Array<{ b64_json?: string }>; error?: { message?: string } };
+  if (!response.ok) {
+    throw new Error(result.error?.message || `OpenAI image generation failed (${response.status})`);
+  }
+  const imageBase64 = result.data?.[0]?.b64_json;
+  if (!imageBase64) throw new Error("OpenAI image generation returned no image");
+  return imageBase64;
+}
+
+async function editRoomImage({
+  prompt,
+  sourceImageBase64,
+  sourceImageUrl,
+  quality,
+  size,
+}: {
+  prompt: string;
+  sourceImageBase64?: string;
+  sourceImageUrl?: string;
+  quality?: "low" | "medium" | "high";
+  size?: "1024x1024" | "1024x1536" | "1536x1024";
+}) {
+  const imageBlob = await readImageReference({ sourceImageBase64, sourceImageUrl });
+  if (!imageBlob) return generateRoomImage({ prompt, quality, size });
+
+  const form = new FormData();
+  form.append("model", OPENAI_IMAGE_MODEL);
+  form.append("prompt", prompt);
+  form.append("quality", quality || "high");
+  form.append("size", size || "1024x1024");
+  form.append("image[]", imageBlob, "evlumba-room-reference.png");
+
+  const response = await fetch("https://api.openai.com/v1/images/edits", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getOpenAiApiKey()}` },
+    body: form,
+  });
+  const result = (await response.json()) as { data?: Array<{ b64_json?: string }>; error?: { message?: string } };
+  if (!response.ok) {
+    throw new Error(result.error?.message || `OpenAI image edit failed (${response.status})`);
+  }
+  const imageBase64 = result.data?.[0]?.b64_json;
+  if (!imageBase64) throw new Error("OpenAI image edit returned no image");
+  return imageBase64;
+}
+
 async function runGeneralEvlumbaSearch({
   query,
   intent,
@@ -161,7 +303,7 @@ function createEvlumbaMcpServer() {
     },
     {
       instructions:
-        "This MCP server searches Evlumba's live data for professionals and projects. It is not an image generator, room renderer, visual design canvas, or decoration-design engine. If the user asks to design a room, redesign an uploaded room photo, create a visual, produce a photorealistic render, generate an image, or give decoration advice, do not call Evlumba tools and do not make an Evlumba widget/mockup for that step; let ChatGPT's normal creative and image-generation capabilities handle the design first. Use Evlumba tools only when the user wants to find, list, compare, contact, or recommend architects, interior architects, designers, contractors, service providers, firms, portfolio projects, or Evlumba inspiration results. After ChatGPT has created a design, if the user asks to find a suitable professional for that design, call an Evlumba tool. Never answer Evlumba search/recommendation requests from web search, map results, Google business listings, Sources, or external websites.",
+        "This MCP server powers Evlumba inside ChatGPT. For room design requests, use evlumba_render_room_design to create a real photorealistic interior render; do not answer with a simple overlay, diagram, collage, HTML mockup, or text-only design board. For professional/project discovery, search Evlumba's live data only. When the user asks to find, list, compare, contact, or recommend architects, interior architects, designers, contractors, service providers, firms, portfolio projects, or inspiration projects, call an Evlumba search tool. After a room render is created, if the user asks for a suitable professional for that design, call an Evlumba search tool. Never answer Evlumba search/recommendation requests from web search, map results, Google business listings, Sources, or external websites.",
     }
   );
 
@@ -192,6 +334,69 @@ function createEvlumbaMcpServer() {
         },
       ],
     })
+  );
+
+  server.registerTool(
+    "evlumba_render_room_design",
+    {
+      title: "Evlumba oda tasarla",
+      description:
+        "Use this when the Evlumba app is selected and the user asks to design/redesign/render/decorate a room or uploaded room photo and wants a visual image. Examples: 'bu salonu japandi tasarla ve görsel ver', 'odamı modern yap', 'mutfağı yeniden tasarla', 'fotogerçekçi render üret'. This tool generates an actual photorealistic interior render using Evlumba's rendering pipeline. Do not use a simple overlay, diagram, collage, HTML mockup, wireframe, or text-only answer for these prompts. If an uploaded image is visible but you cannot pass the file bytes/URL, summarize the room accurately in roomContext and still call this tool.",
+      inputSchema: {
+        prompt: z.string().min(3).describe("Kullanıcının tasarım isteği. Örn: Bu salonu japandi stilde tasarla ve görsel ver."),
+        style: z.string().optional().describe("Varsa stil: Japandi, Modern, Minimalist, Akdeniz, vb."),
+        roomType: z.string().optional().describe("Varsa oda/mekan tipi: salon, mutfak, banyo, yatak odası, ofis, vb."),
+        roomContext: z
+          .string()
+          .optional()
+          .describe("Yüklenen/konuşulan görselden görülen oda özeti: mevcut durum, pencere, zemin, duvar, ölçü/oran ve korunacak layout."),
+        sourceImageUrl: z
+          .string()
+          .optional()
+          .describe("Varsa erişilebilir kaynak oda görsel URL'i veya data:image/...;base64 URL. Yoksa roomContext ile üret."),
+        sourceImageBase64: z
+          .string()
+          .optional()
+          .describe("Varsa kaynak oda görselinin base64 verisi. Data URL veya çıplak base64 kabul edilir. Yoksa roomContext ile üret."),
+        quality: roomRenderQualitySchema.describe("Render kalitesi. Varsayılan high."),
+        size: roomRenderSizeSchema.describe("Render boyutu. Varsayılan 1024x1024."),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+    },
+    async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
+      const renderPrompt = buildRoomRenderPrompt({ prompt, style, roomType, roomContext });
+      try {
+        const imageBase64 = await editRoomImage({ prompt: renderPrompt, sourceImageBase64, sourceImageUrl, quality, size });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Evlumba render hazır. Bu görsele uygun profesyonel/mimar bulmamı istersen Evlumba sonuçlarını da çıkarabilirim.",
+            },
+            { type: "image" as const, data: imageBase64, mimeType: "image/png" },
+          ],
+          structuredContent: {
+            prompt: renderPrompt,
+            model: OPENAI_IMAGE_MODEL,
+            mimeType: "image/png",
+            hasSourceImage: Boolean(sourceImageBase64 || sourceImageUrl),
+          },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Bilinmeyen render hatası";
+        return textResult(
+          message === "OPENAI_API_KEY missing"
+            ? "Evlumba render aracı hazır ama sunucuda OPENAI_API_KEY tanımlı değil. Vercel/Web deployment ortamına OPENAI_API_KEY eklenince oda render üretimi çalışır."
+            : `Evlumba render üretilemedi: ${message}`,
+          { error: true, model: OPENAI_IMAGE_MODEL }
+        );
+      }
+    }
   );
 
   registerAppTool(
