@@ -133,6 +133,7 @@ const evlumbaSearchOutputSchema = {
   appliedFilters: z.array(z.string()),
   designers: designerOutputSchema.designers,
   projects: projectOutputSchema.projects,
+  renderQueued: z.boolean().optional(),
   renderJob: z
     .object({
       endpoint: z.string(),
@@ -261,6 +262,15 @@ function normalizeRenderSize(size?: string): "1024x1024" | "1024x1536" | "1536x1
   return "1024x1024";
 }
 
+function shouldUseHighQuality(prompt: string, quality?: "low" | "medium" | "high") {
+  if (quality !== "high") return quality || DEFAULT_RENDER_QUALITY;
+  const normalized = prompt.toLocaleLowerCase("tr-TR");
+  const explicitlyHigh = ["yüksek kalite", "yuksek kalite", "high quality", "4k", "ultra", "çok detaylı", "cok detayli"].some((term) =>
+    normalized.includes(term)
+  );
+  return explicitlyHigh ? "high" : DEFAULT_RENDER_QUALITY;
+}
+
 async function runRoomRender({
   prompt,
   style,
@@ -286,23 +296,35 @@ async function runRoomRender({
     roomType: roomType || inferRoomType(prompt),
     roomContext,
   });
+  const safeQuality = shouldUseHighQuality(prompt, quality);
+  const renderJob = {
+    endpoint: RENDER_FUNCTION_URL,
+    prompt: renderPrompt,
+    sourceImageUrl,
+    sourceImageBase64,
+    quality: safeQuality,
+    size: normalizeRenderSize(size),
+    model: OPENAI_IMAGE_MODEL,
+    hasSourceImage: Boolean(sourceImageBase64 || sourceImageUrl),
+  };
 
-  return textResult("Evlumba render hazırlanıyor. Görsel birkaç saniye içinde Evlumba kartında görünecek.", {
-    query: prompt,
-    appliedFilters: [] as string[],
-    designers: [],
-    projects: [],
-    renderJob: {
-      endpoint: RENDER_FUNCTION_URL,
-      prompt: renderPrompt,
-      sourceImageUrl,
-      sourceImageBase64,
-      quality: quality || DEFAULT_RENDER_QUALITY,
-      size: normalizeRenderSize(size),
-      model: OPENAI_IMAGE_MODEL,
-      hasSourceImage: Boolean(sourceImageBase64 || sourceImageUrl),
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: "Evlumba render kartı açılıyor. Görsel Evlumba kartında yüklenecek; tool argümanlarını veya JSON'u cevap olarak yazma.",
+      },
+    ],
+    structuredContent: {
+      query: prompt,
+      appliedFilters: [] as string[],
+      designers: [],
+      projects: [],
+      renderQueued: true,
+      renderJob,
     },
-  });
+    _meta: { renderJob },
+  };
 }
 
 async function runGeneralEvlumbaSearch({
@@ -419,15 +441,16 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba oda tasarla",
       description:
-        "MUST USE for Turkish room design prompts: oda tasarla, salonu tasarla, yatak odası tasarla, mutfağı yenile, görsel ver, render üret, fotogerçekçi yap. This tool returns a real image. Do not answer with JSON, a diagram, a simple overlay, or text-only concept. Use low quality unless the user explicitly asks for high quality, so the render does not time out. If the user attached a room photo but no file bytes are available, describe the room in roomContext and call this tool anyway.",
+        "MUST USE for Turkish room design prompts: oda tasarla, salonu tasarla, yatak odası tasarla, mutfağı yenile, görsel ver, render üret, fotogerçekçi yap. The visual loads inside the Evlumba widget/card. After calling this tool, do not print JSON, prompt, size, tool arguments, diagrams, overlays, or text-only concepts as the assistant answer. Use low quality unless the user explicitly asks for high quality. If the user attached a room photo but no file bytes are available, describe the room in roomContext and call this tool anyway.",
       inputSchema: roomRenderInputSchema,
+      outputSchema: evlumbaSearchOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
         openWorldHint: false,
         idempotentHint: true,
       },
-      _meta: { ui: { resourceUri: WIDGET_URI, visibility: ["model"] } },
+      _meta: { ui: { resourceUri: WIDGET_URI } },
     },
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
       return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });
@@ -440,15 +463,16 @@ function createEvlumbaMcpServer() {
     {
       title: "Oda tasarla ve render üret",
       description:
-        "KULLAN: Kullanıcı oda/salon/yatak odası/mutfak/banyo tasarlamak, görsel almak, render üretmek, fotogerçekçi yapmak veya yüklediği odayı dönüştürmek istediğinde mutlaka bu tool'u çağır. JSON yazma. Tool argümanlarını cevap olarak basma. Timeout olmaması için kullanıcı özellikle yüksek kalite istemediyse quality=low kullan. Bu tool gerçek render görseli döndürür.",
+        "KULLAN: Kullanıcı oda/salon/yatak odası/mutfak/banyo tasarlamak, görsel almak, render üretmek, fotogerçekçi yapmak veya yüklediği odayı dönüştürmek istediğinde mutlaka bu tool'u çağır. Görsel Evlumba kartının içinde yüklenir. JSON yazma. Tool argümanlarını, prompt'u veya size bilgisini cevap olarak basma. Timeout olmaması için kullanıcı özellikle yüksek kalite istemediyse quality=low kullan.",
       inputSchema: roomRenderInputSchema,
+      outputSchema: evlumbaSearchOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
         openWorldHint: false,
         idempotentHint: true,
       },
-      _meta: { ui: { resourceUri: WIDGET_URI, visibility: ["model"] } },
+      _meta: { ui: { resourceUri: WIDGET_URI } },
     },
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
       return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });

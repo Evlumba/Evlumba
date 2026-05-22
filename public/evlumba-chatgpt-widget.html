@@ -601,8 +601,9 @@
       }
       function updateFromResponse(response) {
         const structured = response?.structuredContent ?? response ?? {};
-        if (structured.renderJob?.endpoint && structured.renderJob?.prompt) {
-          void renderAsyncJob(structured.renderJob);
+        const renderJob = response?._meta?.renderJob || structured.renderJob;
+        if (renderJob?.endpoint && renderJob?.prompt) {
+          void renderAsyncJob(renderJob);
           return;
         }
         const designers = Array.isArray(structured.designers) ? structured.designers : [];
