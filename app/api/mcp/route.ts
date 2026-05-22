@@ -139,6 +139,7 @@ const evlumbaSearchOutputSchema = {
   designers: designerOutputSchema.designers,
   projects: projectOutputSchema.projects,
   renderQueued: z.boolean().optional(),
+  renderError: z.string().optional(),
   renderJob: z
     .object({
       endpoint: z.string(),
@@ -377,12 +378,13 @@ async function runRoomRender({
       },
       _meta: { renderJob },
     };
-  } catch {
+  } catch (error) {
+    const renderError = error instanceof Error ? error.message : "Bilinmeyen render hatası";
     return {
       content: [
         {
           type: "text" as const,
-          text: "Evlumba render kartı açılıyor. Görsel Evlumba kartında yüklenecek; tool argümanlarını veya JSON'u cevap olarak yazma.",
+          text: `Evlumba render kartı açılıyor. Görsel Evlumba kartında yüklenecek; tool argümanlarını veya JSON'u cevap olarak yazma. Render fallback nedeni: ${renderError}`,
         },
       ],
       structuredContent: {
@@ -391,6 +393,7 @@ async function runRoomRender({
         designers: [],
         projects: [],
         renderQueued: true,
+        renderError,
         renderJob,
       },
       _meta: { renderJob },
