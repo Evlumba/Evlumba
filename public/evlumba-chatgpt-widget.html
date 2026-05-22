@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Evlumba Sonuçları</title>
+    <style>
+      :root {
+        color: #10211b;
+        background: #fbfaf6;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #fbfaf6;
+      }
+      main {
+        width: 100%;
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      .shell {
+        border: 1px solid rgba(42, 71, 62, 0.12);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 18px 50px rgba(15, 35, 29, 0.1);
+        overflow: hidden;
+      }
+      .header {
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(42, 71, 62, 0.1);
+        background: linear-gradient(135deg, #ffffff 0%, #f4fbf6 100%);
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 10px;
+        color: #057a50;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: #10b981;
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.12);
+      }
+      h1 {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.2;
+      }
+      .subtitle {
+        margin: 8px 0 0;
+        color: #607065;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 14px 20px 0;
+      }
+      .chip {
+        border-radius: 999px;
+        border: 1px solid rgba(5, 122, 80, 0.16);
+        background: #ecfdf5;
+        color: #066144;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .grid {
+        display: grid;
+        gap: 12px;
+        padding: 16px 20px 20px;
+      }
+      .card {
+        display: grid;
+        grid-template-columns: 84px 1fr;
+        gap: 14px;
+        min-height: 106px;
+        padding: 12px;
+        border: 1px solid rgba(42, 71, 62, 0.1);
+        border-radius: 18px;
+        background: #fff;
+        color: inherit;
+        text-decoration: none;
+      }
+      .thumb {
+        width: 84px;
+        height: 84px;
+        border-radius: 16px;
+        object-fit: cover;
+        background: #eef3ef;
+      }
+      .type {
+        margin: 0 0 4px;
+        color: #057a50;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .title {
+        margin: 0;
+        color: #10211b;
+        font-size: 16px;
+        line-height: 1.25;
+        font-weight: 800;
+      }
+      .meta,
+      .description {
+        margin: 6px 0 0;
+        color: #617167;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .description {
+        color: #415149;
+      }
+      .empty {
+        padding: 24px 20px 26px;
+        color: #617167;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .footer {
+        display: flex;
+        justify-content: flex-end;
+        padding: 0 20px 20px;
+      }
+      .open {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 0 16px;
+        border-radius: 14px;
+        background: #0b6b46;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 750;
+        text-decoration: none;
+      }
+      @media (max-width: 520px) {
+        body {
+          padding: 10px;
+        }
+        .card {
+          grid-template-columns: 72px 1fr;
+        }
+        .thumb {
+          width: 72px;
+          height: 72px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="shell">
+        <div class="header">
+          <p class="eyebrow"><span class="dot"></span>Evlumba</p>
+          <h1>Proje ve profesyonel sonuçları</h1>
+          <p class="subtitle" id="subtitle">ChatGPT bir Evlumba araması yaptığında sonuçlar burada kartlar halinde görünür.</p>
+        </div>
+        <div class="filters" id="filters" hidden></div>
+        <div class="grid" id="results"></div>
+        <p class="empty" id="empty">Örn. “İstanbul’da modern mutfak projesi bul” veya “Bursa iç mimar öner” diyebilirsin.</p>
+        <div class="footer">
+          <a class="open" href="https://www.evlumba.com" target="_blank" rel="noreferrer">Evlumba’yı aç</a>
+        </div>
+      </section>
+    </main>
+    <script type="module">
+      const resultsEl = document.querySelector("#results");
+      const filtersEl = document.querySelector("#filters");
+      const emptyEl = document.querySelector("#empty");
+      const subtitleEl = document.querySelector("#subtitle");
+      let rpcId = 0;
+      const pendingRequests = new Map();
+      const escapeHtml = (value) =>
+        String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      const rpcNotify = (method, params) => window.parent.postMessage({ jsonrpc: "2.0", method, params }, "*");
+      const rpcRequest = (method, params) =>
+        new Promise((resolve, reject) => {
+          const id = ++rpcId;
+          pendingRequests.set(id, { resolve, reject });
+          window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+        });
+      function renderChips(filters = []) {
+        filtersEl.innerHTML = "";
+        if (!filters.length) {
+          filtersEl.hidden = true;
+          return;
+        }
+        filtersEl.hidden = false;
+        filters.forEach((item) => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = item;
+          filtersEl.appendChild(chip);
+        });
+      }
+      function cardImage(item) {
+        return item.imageUrl || item.coverUrl || "https://www.evlumba.com/web_icon2.png";
+      }
+      function renderCard(item, kind) {
+        const meta =
+          kind === "designer"
+            ? [item.title, item.city, item.projectCount ? `${item.projectCount} proje` : "", item.rating ? `${item.rating} puan` : ""]
+                .filter(Boolean)
+                .join(" • ")
+            : [item.room, item.style, item.city, item.budget, item.designer?.name].filter(Boolean).join(" • ");
+        const description = kind === "designer" ? item.about : item.description;
+        return `
+          <a class="card" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
+            <img class="thumb" src="${escapeHtml(cardImage(item))}" alt="" loading="lazy" />
+            <div>
+              <p class="type">${kind === "designer" ? "Profesyonel" : "Proje"}</p>
+              <h2 class="title">${escapeHtml(item.name || item.title)}</h2>
+              <p class="meta">${escapeHtml(meta)}</p>
+              ${description ? `<p class="description">${escapeHtml(description)}</p>` : ""}
+            </div>
+          </a>
+        `;
+      }
+      function updateFromResponse(response) {
+        const structured = response?.structuredContent ?? response ?? {};
+        const designers = Array.isArray(structured.designers) ? structured.designers : [];
+        const projects = Array.isArray(structured.projects) ? structured.projects : [];
+        const filters = Array.isArray(structured.appliedFilters) ? structured.appliedFilters : [];
+        const cards = [...designers.map((item) => renderCard(item, "designer")), ...projects.map((item) => renderCard(item, "project"))];
+        renderChips(filters);
+        subtitleEl.textContent = cards.length
+          ? `${cards.length} sonuç bulundu. Karttan Evlumba’daki canlı sayfaya geçebilirsin.`
+          : "Bu arama için uygun sonuç bulunamadı.";
+        resultsEl.innerHTML = cards.join("");
+        emptyEl.hidden = cards.length > 0;
+      }
+      window.addEventListener(
+        "message",
+        (event) => {
+          if (event.source !== window.parent) return;
+          const message = event.data;
+          if (!message || message.jsonrpc !== "2.0") return;
+          if (typeof message.id === "number") {
+            const pending = pendingRequests.get(message.id);
+            if (!pending) return;
+            pendingRequests.delete(message.id);
+            if (message.error) pending.reject(message.error);
+            else pending.resolve(message.result);
+            return;
+          }
+          if (message.method === "ui/notifications/tool-result") updateFromResponse(message.params);
+        },
+        { passive: true }
+      );
+      async function initializeBridge() {
+        try {
+          await rpcRequest("ui/initialize", {
+            appInfo: { name: "evlumba-results", version: "0.1.0" },
+            appCapabilities: {},
+            protocolVersion: "2026-01-26",
+          });
+          rpcNotify("ui/notifications/initialized", {});
+        } catch (error) {
+          console.error("Evlumba widget bridge failed:", error);
+        }
+      }
+      void initializeBridge();
+    </script>
+  </body>
+</html>
