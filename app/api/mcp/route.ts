@@ -19,8 +19,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const WIDGET_URI = "ui://evlumba/search-results-v10.html";
-const OPENAI_WIDGET_MIME_TYPE = "text/html";
+const WIDGET_URI = "ui://evlumba/search-results-v11.html";
+const OPENAI_WIDGET_MIME_TYPE = "text/html+skybridge";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
