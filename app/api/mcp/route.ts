@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { RESOURCE_MIME_TYPE, registerAppResource, registerAppTool } from "@modelcontextprotocol/ext-apps/server";
+import { registerAppResource, registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import * as z from "zod/v4";
@@ -19,7 +19,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const WIDGET_URI = "ui://evlumba/search-results-v4.html";
+const WIDGET_URI = "ui://evlumba/search-results-v5.html";
+const OPENAI_WIDGET_MIME_TYPE = "text/html+skybridge";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -46,6 +47,8 @@ const TOOL_UI_META = {
   ui: { resourceUri: WIDGET_URI },
   "openai/outputTemplate": WIDGET_URI,
   "openai/widgetAccessible": true,
+  "openai/toolInvocation/invoking": "Evlumba hazırlıyor",
+  "openai/toolInvocation/invoked": "Evlumba hazır",
 };
 const roomRenderInputSchema = {
   prompt: z.string().min(3).describe("Kullanıcının tasarım isteği. Örn: Bu salonu japandi stilde tasarla ve görsel ver."),
@@ -484,12 +487,15 @@ function createEvlumbaMcpServer() {
     server,
     "Evlumba sonuç kartları",
     WIDGET_URI,
-    { description: "Evlumba proje ve profesyonel arama sonuçlarını kartlar halinde gösterir." },
+    {
+      description: "Evlumba proje, profesyonel ve render sonuçlarını kartlar halinde gösterir.",
+      mimeType: OPENAI_WIDGET_MIME_TYPE,
+    },
     async () => ({
       contents: [
         {
           uri: WIDGET_URI,
-          mimeType: RESOURCE_MIME_TYPE,
+          mimeType: OPENAI_WIDGET_MIME_TYPE,
           text: widgetHtml,
           _meta: {
             ui: {
