@@ -19,7 +19,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const WIDGET_URI = "ui://evlumba/search-results-v5.html";
+const WIDGET_URI = "ui://evlumba/search-results-v6.html";
 const OPENAI_WIDGET_MIME_TYPE = "text/html+skybridge";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -363,12 +363,7 @@ async function runRoomRender({
       content: [
         {
           type: "text" as const,
-          text: "Evlumba render hazır. Görsel aşağıda gösteriliyor.",
-        },
-        {
-          type: "image" as const,
-          data: rendered.imageBase64,
-          mimeType: rendered.mimeType,
+          text: "Evlumba render hazır. Görsel Evlumba kartında gösteriliyor.",
         },
       ],
       structuredContent: {
@@ -377,9 +372,14 @@ async function runRoomRender({
         designers: [],
         projects: [],
         renderQueued: false,
-        renderJob,
       },
-      _meta: { renderJob },
+      _meta: {
+        renderJob,
+        image: {
+          base64: rendered.imageBase64,
+          mimeType: rendered.mimeType,
+        },
+      },
     };
   } catch (error) {
     const renderError = error instanceof Error ? error.message : "Bilinmeyen render hatası";

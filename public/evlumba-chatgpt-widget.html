@@ -599,9 +599,35 @@
           `;
         }
       }
+      function renderReadyImage(image) {
+        renderChips([]);
+        mapWrapEl.hidden = true;
+        emptyEl.hidden = true;
+        subtitleEl.textContent = "Fotogerçekçi Evlumba render hazır.";
+        const mimeType = image.mimeType || "image/png";
+        resultsEl.innerHTML = `
+          <div class="render-panel">
+            <div class="render-head">
+              <span class="render-icon">ev</span>
+              <div>
+                <p class="type">Evlumba Render</p>
+                <h2 class="title">Oda tasarımı hazır</h2>
+                <p class="render-status">Bu görsele uygun profesyonel veya proje aramak için sohbette devam edebilirsin.</p>
+              </div>
+            </div>
+            <img class="render-image" src="data:${escapeHtml(mimeType)};base64,${image.base64}" alt="Evlumba oda renderı" />
+          </div>
+        `;
+      }
       function updateFromResponse(response) {
         const structured = response?.structuredContent ?? response ?? {};
-        const renderJob = response?._meta?.renderJob || structured.renderJob;
+        const meta = response?._meta ?? {};
+        const readyImage = meta.image || structured.image;
+        if (readyImage?.base64) {
+          renderReadyImage(readyImage);
+          return;
+        }
+        const renderJob = meta.renderJob || structured.renderJob;
         if (renderJob?.endpoint && renderJob?.prompt) {
           void renderAsyncJob(renderJob);
           return;
