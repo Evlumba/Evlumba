@@ -19,8 +19,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const WIDGET_URI = "ui://evlumba/search-results-v7.html";
-const OPENAI_WIDGET_MIME_TYPE = "text/html+skybridge";
+const WIDGET_URI = "ui://evlumba/search-results-v8.html";
+const OPENAI_WIDGET_MIME_TYPE = "text/html";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -169,7 +169,7 @@ function createEvlumbaMcpServer() {
     },
     {
       instructions:
-        "This MCP server powers Evlumba inside ChatGPT. Use these tools only to search Evlumba's own live database of architects, interior designers, contractors, service providers, firms, portfolio projects, and inspiration projects. When the user asks to find, list, compare, contact, or recommend any such professional or project, call an Evlumba search tool. Never answer Evlumba search/recommendation requests from web search, map results, Google business listings, Sources, or external websites. Do not generate or render room images here; image generation is handled natively by ChatGPT.",
+        "This MCP server is ONLY for searching Evlumba's existing professionals and portfolio projects. CRITICAL: if the user asks to design, create, render, draw, or visualize a room ('oda tasarla', 'salon tasarla', 'modern oturma odası tasarla', 'görsel ver', 'render üret', 'çiz', 'oluştur'), DO NOT call any Evlumba tool — instead let ChatGPT generate the image natively with its own image model. Only call Evlumba tools when the user explicitly wants to find Evlumba-listed professionals (architects, designers, contractors, firms) or browse existing Evlumba portfolio projects. Never use web search, Google business listings, or external websites for Evlumba lookups.",
     }
   );
 
@@ -224,7 +224,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba'da ara",
       description:
-        "Primary Evlumba tool. Use when the user asks to find/list/compare architects, interior architects, designers, contractors, service providers, firms, named businesses, portfolio projects, inspiration projects, or wants to filter by city, room, style, or budget inside Evlumba. Examples: 'istanbulda mimar bul', 'Kayseri Dekorsan', 'Bursa boya ustası', 'elektrikçi bul', 'Evlumba'da modern mutfak projesi göster', 'bu tasarıma uygun iç mimar bul'. Never use web search, map results, Google business listings, Sources, or external websites.",
+        "Use ONLY to search Evlumba's own database of architects, interior designers, contractors, service providers, firms, and existing portfolio/inspiration projects. Valid examples: 'istanbulda iç mimar bul', 'Bursa boya ustası', 'Kayseri Dekorsan', 'modern mutfak projesi göster' (= showing existing Evlumba projects). DO NOT call this tool for image generation, image creation, render requests, or any 'tasarla / oluştur / üret / görsel ver / çiz / yap' style creation prompts — those must be handled by ChatGPT's native image generation, not by this MCP. If the user asks to design/create/render a room and does not explicitly ask for Evlumba professionals or Evlumba portfolio projects, do NOT call this tool at all.",
       inputSchema: {
         query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
         intent: z
@@ -247,7 +247,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba'da bul",
       description:
-        "Alias for evlumba_search. Use to find Evlumba-owned designers, professionals, firms, and projects. Never use maps, Google business listings, Sources, web search, or external websites.",
+        "Alias for evlumba_search. Same rule: only for Evlumba professional/project lookup. Never call for image generation or room design creation requests — ChatGPT handles those natively.",
       inputSchema: {
         query: z.string().describe("Evlumba içinde aranacak ifade. Örn: Kayseri Dekorsan, İstanbul iç mimar, modern mutfak."),
         intent: z
@@ -270,7 +270,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba profesyonel ara",
       description:
-        "Use this when the Evlumba app is selected and the user wants designers/professionals/firms from Evlumba: iç mimar, mimar, tasarımcı, boya ustası, elektrikçi, tadilat firması, şehir + rol searches, named businesses, or a professional suitable for a design ChatGPT already created. Searches only Evlumba's live professional database by city, professional type, service, project type, service area, style, budget, project count, and rating. Do not use this for pure creative design/image generation. Do not use web search, map results, Google business listings, Sources, or external websites.",
+        "Use when the user explicitly asks to find a real-world professional from Evlumba's database: iç mimar bul, mimar öner, boya ustası, elektrikçi, tadilat firması, named businesses, professionals filtered by city/service/budget. Never call for image generation, rendering, or pure 'design a room' creation prompts.",
       inputSchema: {
         query: z.string().optional().describe("Serbest arama: İstanbul iç mimar, Bursa boya ustası, Dekorsan."),
         cities: stringArray.describe("Şehir filtreleri."),
@@ -301,7 +301,7 @@ function createEvlumbaMcpServer() {
     {
       title: "Evlumba proje ara",
       description:
-        "Use this when the Evlumba app is selected and the user wants to find/list/show Evlumba projects, inspiration images, rooms, styles, project types, or budgets: mutfak projesi bul, banyo örnekleri göster, modern salon ilhamı, japandi proje ara. Searches only Evlumba's live project database. Do not use this for pure creative prompts like 'mutfak tasarla' or 'oda görseli üret' unless the user asks for Evlumba examples/projects. Do not use web search, Sources, or external websites.",
+        "Use only when the user wants to browse existing Evlumba portfolio/inspiration projects (already photographed real projects in Evlumba's database). Examples: 'banyo örnekleri göster', 'japandi proje ara'. Never call for image generation or 'design me a room' creation prompts — those are handled by ChatGPT natively.",
       inputSchema: {
         query: z.string().optional().describe("Serbest arama: modern mutfak, japandi salon, banyo yenileme."),
         cities: stringArray.describe("Şehir filtreleri."),
