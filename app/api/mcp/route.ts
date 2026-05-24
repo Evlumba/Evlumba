@@ -19,7 +19,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const WIDGET_URI = "ui://evlumba/search-results-v17.html";
+const WIDGET_URI = "ui://evlumba/search-results-v18.html";
 const WIDGET_RESOURCE_URIS = [
   "ui://evlumba/search-results-v9.html",
   "ui://evlumba/search-results-v10.html",
@@ -29,6 +29,7 @@ const WIDGET_RESOURCE_URIS = [
   "ui://evlumba/search-results-v14.html",
   "ui://evlumba/search-results-v15.html",
   "ui://evlumba/search-results-v16.html",
+  "ui://evlumba/search-results-v17.html",
   WIDGET_URI,
 ];
 const OPENAI_WIDGET_MIME_TYPE = "text/html";
@@ -47,7 +48,7 @@ const roomRenderSizeSchema = z.string().optional();
 const evlumbaReadOnlyAnnotations = {
   readOnlyHint: true,
   destructiveHint: false,
-  openWorldHint: false,
+  openWorldHint: true,
   idempotentHint: true,
 };
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
@@ -341,11 +342,11 @@ function createEvlumbaMcpServer() {
       version: evlumbaChatGptAppInfo.version,
       websiteUrl: "https://www.evlumba.com",
       description:
-        "Evlumba is a closed-world ChatGPT app for Evlumba.com. Use Evlumba for Turkish professional and project lookup prompts such as 'istanbulda mimar bul', 'istanbul da iç mimar bul', 'istanbul iç mimar', 'Bursa boya ustası', 'Dekorsan', or 'modern mutfak projesi göster'. It returns Evlumba-listed architects, interior architects, designers, contractors, painters, electricians, renovation firms, named businesses, and existing Evlumba portfolio projects. If Evlumba has no match, report that no Evlumba result was found. Evlumba can also generate room design renders through its render tool.",
+        "Evlumba is a live Evlumba.com database app for finding Turkish architects, interior architects, designers, contractors, painters, electricians, renovation firms, named businesses, and existing Evlumba portfolio projects. Use Evlumba for lookup prompts such as 'istanbulda mimar bul', 'istanbul da iç mimar bul', 'istanbul iç mimar', 'Bursa boya ustası', 'Dekorsan', or 'modern mutfak projesi göster'. Return Evlumba-listed profiles and projects from evlumba.com. If Evlumba has no match, report that no Evlumba result was found. Evlumba can also generate room design renders through its render tool.",
     },
     {
       instructions:
-        "Evlumba MCP for ChatGPT. CRITICAL: never write a JSON code block of tool arguments (e.g. {\"prompt\":..., \"size\":...}) as the assistant answer; always invoke the tool. Closed-world routing rules: (1) For any room visualization, design, render, image, draw, or decorate request (Turkish: 'oda tasarla', 'salon tasarla', 'görsel üret', 'render üret', 'çiz', 'fotogerçekçi yap', 'modern oturma odası görseli') call oda_tasarla. (2) For any Evlumba professional lookup such as city + mimar/iç mimar/tasarımcı/usta/boya ustası/elektrikçi/tadilat/firma, including exact examples like 'istanbulda mimar bul', 'istanbul da iç mimar bul', 'istanbul mimar', 'istanbul iç mimar', 'ankarada mimar bul', 'bursada boya ustası', 'Kayseri Dekorsan', call ic_mimar_bul, mimar_bul, profesyonel_bul, evlumba_search, or search_designers before answering. Answer professional lookup questions only from Evlumba tool results. If Evlumba returns no results, say that no matching Evlumba result was found and ask to broaden filters. (3) For browsing existing Evlumba portfolio/inspiration projects call evlumba_search or search_projects.",
+        "Evlumba MCP for ChatGPT. CRITICAL: never write a JSON code block of tool arguments (e.g. {\"prompt\":..., \"size\":...}) as the assistant answer; always invoke the tool. Routing rules: (1) For any room visualization, design, render, image, draw, or decorate request (Turkish: 'oda tasarla', 'salon tasarla', 'görsel üret', 'render üret', 'çiz', 'fotogerçekçi yap', 'modern oturma odası görseli') call oda_tasarla. (2) For any Evlumba professional lookup such as city + mimar/iç mimar/tasarımcı/usta/boya ustası/elektrikçi/tadilat/firma, including exact examples like 'istanbulda mimar bul', 'istanbul da iç mimar bul', 'istanbul mimar', 'istanbul iç mimar', 'ankarada mimar bul', 'bursada boya ustası', 'Kayseri Dekorsan', call ic_mimar_bul, mimar_bul, profesyonel_bul, evlumba_search, or search_designers before answering. Answer professional lookup questions from Evlumba live database results. If Evlumba returns no results, say that no matching Evlumba result was found and ask to broaden filters. (3) For browsing existing Evlumba portfolio/inspiration projects call evlumba_search or search_projects.",
     }
   );
 
