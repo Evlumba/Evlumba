@@ -122,6 +122,13 @@ const projectOutputSchema = {
   ),
 };
 
+const evlumbaSearchOutputSchema = {
+  query: z.string(),
+  appliedFilters: z.array(z.string()),
+  designers: designerOutputSchema.designers,
+  projects: projectOutputSchema.projects,
+};
+
 const professionalSearchInputSchema = {
   query: z.string().optional().describe("Kullanıcının profesyonel araması. Örn: istanbul da iç mimar bul, İstanbul mimar, Bursa boya ustası, Dekorsan."),
   cities: stringArray.describe("Varsa şehir filtreleri. Örn: İstanbul, Bursa, Ankara."),
@@ -274,6 +281,46 @@ async function runProfessionalSearch(args: Parameters<typeof searchEvlumbaDesign
   return textResult(summarizeDesignerResults(result.designers), result);
 }
 
+async function runGeneralEvlumbaSearch({
+  query,
+  intent,
+  city,
+  limit,
+}: {
+  query: string;
+  intent?: "auto" | "designers" | "projects";
+  city?: string;
+  limit?: number;
+}) {
+  const searchQuery = city && !query.toLocaleLowerCase("tr-TR").includes(city.toLocaleLowerCase("tr-TR")) ? `${city} ${query}` : query;
+  const take = limit ?? 6;
+  const shouldSearchDesigners = !intent || intent === "auto" || intent === "designers";
+  const shouldSearchProjects = !intent || intent === "auto" || intent === "projects";
+
+  const [designerResult, projectResult] = await Promise.all([
+    shouldSearchDesigners
+      ? searchEvlumbaDesigners({ query: searchQuery, cities: city ? [city] : undefined, limit: take })
+      : Promise.resolve({ query: searchQuery, count: 0, appliedFilters: [] as string[], designers: [] }),
+    shouldSearchProjects
+      ? searchEvlumbaProjects({ query: searchQuery, cities: city ? [city] : undefined, limit: take })
+      : Promise.resolve({ query: searchQuery, count: 0, appliedFilters: [] as string[], projects: [] }),
+  ]);
+
+  const text = [
+    designerResult.designers.length ? summarizeDesignerResults(designerResult.designers) : "",
+    projectResult.projects.length ? summarizeProjectResults(projectResult.projects) : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return textResult(text || "Evlumba veritabanında uygun sonuç bulunamadı.", {
+    query: searchQuery,
+    appliedFilters: [...designerResult.appliedFilters, ...projectResult.appliedFilters],
+    designers: designerResult.designers,
+    projects: projectResult.projects,
+  });
+}
+
 function createEvlumbaMcpServer() {
   const server = new McpServer(
     {
@@ -351,6 +398,46 @@ function createEvlumbaMcpServer() {
     async ({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size }) => {
       return runRoomRender({ prompt, style, roomType, roomContext, sourceImageUrl, sourceImageBase64, quality, size });
     }
+  );
+
+  registerAppTool(
+    server,
+    "search",
+    {
+      title: "Evlumba search",
+      description:
+        "Use this instead of web search when the user asks to find, search, list or recommend architects, interior architects, designers, contractors, tradespeople, firms or existing Evlumba projects. Turkish examples: 'istanbulda iç mimar bul', 'istanbulda mimar bul', 'Bursa boya ustası', 'Dekorsan', 'modern mutfak projesi göster'. Returns Evlumba.com results.",
+      inputSchema: {
+        query: z.string().describe("Evlumba araması. Örn: istanbulda iç mimar bul, Bursa boya ustası, modern mutfak."),
+        intent: z.enum(["auto", "designers", "projects"]).optional(),
+        city: z.string().optional(),
+        limit: limitSchema,
+      },
+      outputSchema: evlumbaSearchOutputSchema,
+      annotations: evlumbaReadOnlyAnnotations,
+      _meta: TOOL_UI_META,
+    },
+    runGeneralEvlumbaSearch
+  );
+
+  registerAppTool(
+    server,
+    "bul",
+    {
+      title: "Evlumba'da bul",
+      description:
+        "Use for Turkish 'bul' requests instead of web search. Triggers include 'istanbulda iç mimar bul', 'istanbulda mimar bul', 'elektrikçi bul', 'boya ustası bul', 'Dekorsan bul' or existing Evlumba project lookups. Returns Evlumba.com results.",
+      inputSchema: {
+        query: z.string().describe("Evlumba içinde bulunacak ifade."),
+        intent: z.enum(["auto", "designers", "projects"]).optional(),
+        city: z.string().optional(),
+        limit: limitSchema,
+      },
+      outputSchema: evlumbaSearchOutputSchema,
+      annotations: evlumbaReadOnlyAnnotations,
+      _meta: TOOL_UI_META,
+    },
+    runGeneralEvlumbaSearch
   );
 
   registerAppTool(
